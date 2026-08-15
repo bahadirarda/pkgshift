@@ -1,0 +1,69 @@
+---
+type: Capability Matrix
+title: Package Manager Capability Matrix
+description: Defines normalized capability dimensions and how planning decisions gate MVP execution.
+tags: [support, capabilities, adapters, testing]
+status: draft
+stale_after: 2026-11-15
+generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+sources:
+  - id: package-managers
+    resource: /support/package-managers.md
+    title: Package Manager Support
+---
+
+# Classification
+
+Each adapter declares every capability using one of these values:
+
+| Value | Meaning |
+| --- | --- |
+| `native` | The adapter represents the behavior directly. |
+| `transform` | The behavior can be preserved through a deterministic transformation. |
+| `lossy` | A transformation exists but changes semantics or removes information. |
+| `unsupported` | The target has no safe representation in the supported boundary. |
+| `unknown` | The adapter lacks enough evidence or coverage to decide. |
+| `not-applicable` | The capability does not apply to the adapter mode. |
+
+# Required Capability Dimensions
+
+| Group | Capabilities |
+| --- | --- |
+| Identity | Detection evidence, version selection, package manager pin, runtime compatibility. |
+| Manifests | Dependency sections, aliases, URL and VCS sources, local paths, optional dependencies, peer metadata. |
+| Workspaces | Membership, exclusions, workspace protocol, root behavior, focused commands, catalogs. |
+| Resolution policy | Overrides, resolutions, constraints, deduplication policy, peer policy, lockfile semantics. |
+| Installation | Frozen mode, offline mode, production mode, script policy, linker and install layout. |
+| Extensions | Patches, plugins, hooks, package extensions, custom fetchers. |
+| Registries | Default registry, scoped registries, authentication references, certificates, proxies. |
+| Execution | Script invocation, binary execution, recursive or filtered execution, environment behavior. |
+| Repository integration | CI setup, caches, containers, release tooling, task runners, contributor commands. |
+| Verification | Install checks, graph extraction, integrity evidence, script checks, rollback support. |
+
+# MVP Execution Matrix
+
+This matrix identifies the implemented planning focus. Individual plans still fail closed when a feature-specific execution renderer is unavailable.
+
+| Adapter | Workspaces | Catalog-like policy | Override policy | Patches or plugins | Linker or layout modes | Preview gate |
+| --- | --- | --- | --- | --- | --- | --- |
+| npm | Required | Analyze/transform | Required | Detect and diagnose | Detect assumptions | No |
+| pnpm | Required | Required | Required | Required | Required | No |
+| Yarn Classic | Required | Analyze/transform | Required | Detect and diagnose | Detect assumptions | No |
+| Yarn Modern | Required | Analyze/transform | Required | Required | Required | No |
+| Bun | Required | Required where available | Required | Detect and diagnose | Detect assumptions | No |
+| vlt | Required for preview scenarios | Unknown until adapter research | Required for preview scenarios | Unknown until adapter research | Unknown until adapter research | Yes |
+| Deno dependency mode | Required for preview scenarios | Analyze/transform | Analyze/transform | Not applicable to MVP | Not applicable to MVP | Yes |
+
+# Rule Shape
+
+A capability rule should contain:
+
+- A stable capability identifier.
+- Source evidence requirements.
+- Source and target classifications.
+- A deterministic transformation identifier when available.
+- Risk level and user-facing diagnostic codes.
+- Preconditions, postconditions, and fixture references.
+- A statement of expected dependency graph effects.
+
+Adapters must not infer support from syntax similarity alone. A shared manifest field may have different resolution, peer, lifecycle, or workspace semantics. Capability support in the target does not imply renderer coverage: `TRANSFORMATION_UNIMPLEMENTED` blocks apply when the MVP cannot render an otherwise valid target feature safely.

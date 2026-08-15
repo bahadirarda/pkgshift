@@ -1,0 +1,65 @@
+---
+type: Reliability Architecture
+title: Recovery and Verification
+description: Defines snapshot integrity, verification checks, rollback scope, and failure behavior for migration runs.
+tags: [architecture, recovery, verification, rollback, integrity]
+status: draft
+generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+sources:
+  - id: transactional-decision
+    resource: /decisions/transactional-migrations.md
+    title: Transactional Migrations
+  - id: run-journal
+    resource: /architecture/run-journal.md
+    title: Run Journal
+  - id: migration-workflow
+    resource: /workflows/pkgshift.md
+    title: Package Manager Migration
+---
+
+# Recovery Snapshot
+
+Apply snapshots every planned mutation path and every possible target lockfile before the first repository write. Each entry records whether the path existed, its content digest, file mode, and private backup reference. Missing paths are significant because rollback must remove target files created during apply.
+
+Snapshot manifests and backup files live under the run directory. Manifests are integrity-checked JSON; backup files are verified against their recorded digests before restoration. Symbolic links, symbolic-link parent traversal, non-regular files, and paths outside the selected project root fail closed.
+
+# Apply Preconditions
+
+Apply requires:
+
+- A verified immutable plan bundle.
+- An executable production-target plan.
+- Exact `--approve <plan-id>` authorization.
+- Exclusive ownership of the repository-scoped transaction lock.
+- A current repository fingerprint equal to the plan baseline.
+- Mutation paths whose current digests equal their planned before digests.
+- Writable journal and snapshot state.
+
+Every write uses atomic replacement and verifies its after digest. Delete operations verify absence. The target install command runs only after configuration mutations and before source artifact cleanup.
+
+Apply, verify, and rollback share a non-blocking repository-scoped transaction lock. A second agent receives `REPOSITORY_TRANSACTION_BUSY` instead of racing snapshots, journal transitions, or repository writes. A lock whose recorded process no longer exists can be recovered safely.
+
+# Verification Report
+
+Verify reads the plan, journal, and repository. It records these MVP checks:
+
+| Check | Blocking condition |
+| --- | --- |
+| Planned file digests | Any write or deletion differs from the plan. |
+| Target selection | Detection does not select the planned target. |
+| Target lockfile | No registered target lockfile exists. |
+| Workspace membership | Package paths differ from the source Project IR. |
+| Target install | The journaled install operation is not successful. |
+| Dependency graph drift | Never blocking in the MVP because it is explicitly skipped. |
+
+A failed check moves the verification operation and run to `failed`. A successful report moves both to `succeeded`. Reports carry their own identity and integrity digest.
+
+# Rollback
+
+Rollback requires exact `--approve <run-id>` authorization. It may recover applying, verifying, succeeded, failed, or retryable rollback-failed runs. Recovery restores or removes every snapshot entry, marks completed or failed operations as rolled back, and re-inspects the repository.
+
+The run reaches `rolled-back` only when the restored repository fingerprint equals the plan baseline. Snapshot corruption, unsafe path types, missing backup metadata, or fingerprint mismatch produces `rollback-failed`.
+
+# External Effects
+
+The repository transaction does not snapshot `node_modules`, package-manager caches, global stores, or downloaded content. A successful rollback therefore emits `ROLLBACK_EXTERNAL_EFFECTS_REMAIN`. Reinstall the source dependency state when exact local dependency parity is required.
