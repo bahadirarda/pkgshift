@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/pkgshift-hero.png" alt="A mechanical routing switch moving package blocks through a controlled migration" width="100%" />
+  <img src="docs/assets/pkgshift-hero.png" alt="pkgshift brand mark and wordmark" width="100%" />
 </p>
 
 <h1 align="center">pkgshift</h1>
