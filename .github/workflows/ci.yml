@@ -9,6 +9,23 @@ permissions:
   contents: read
 
 jobs:
+  conventional-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - name: Validate pull request title
+        shell: bash
+        run: |
+          pattern='^(feat|fix|docs|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?(!)?: .+'
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo "Pull request titles must follow Conventional Commits."
+            echo "Example: feat(cli): add a migration preview option"
+            exit 1
+          fi
+
   typescript-and-knowledge:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -41,7 +58,17 @@ jobs:
         run: rustup toolchain install 1.97.1 --profile minimal --component clippy,rustfmt
 
       - name: Validate Rust workspace
-        run: cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+        run: cargo fmt --all --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace --locked
+
+      - name: Validate Rust documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked
+
+      - name: Validate publishable packages
+        run: |
+          cargo package --package pkgshift-core --locked
+          cargo package --workspace --locked --no-verify
 
       - name: Build Rust release binary
         run: cargo build --workspace --release --locked

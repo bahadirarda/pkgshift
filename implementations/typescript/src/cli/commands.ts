@@ -1,3 +1,4 @@
+import packageMetadata from "../../package.json";
 import {
   PACKAGE_MANAGERS,
   normalizePackageManagerId,
@@ -992,7 +993,7 @@ function helpCommand(): CommandExecution {
 function versionCommand(): CommandExecution {
   return {
     exitCode: 0,
-    result: result("version", "completed", { version: "0.1.0" }),
+    result: result("version", "completed", { version: packageMetadata.version }),
   };
 }
 

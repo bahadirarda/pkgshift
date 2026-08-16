@@ -1,12 +1,12 @@
 {
-  "name": "pkgshift-ts",
+  "name": "@bahadirarda/pkgshift-typescript",
   "version": "0.1.0",
   "description": "TypeScript reference implementation of pkgshift.",
   "private": true,
   "type": "module",
   "author": "bahadirarda",
   "bin": {
-    "pkgshift-ts": "./src/cli.ts"
+    "pkgshift-typescript": "./src/cli.ts"
   },
   "scripts": {
     "build": "bun build src/cli.ts --target=bun --outfile=dist/pkgshift.js",

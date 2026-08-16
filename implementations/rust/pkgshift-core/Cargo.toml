@@ -7,6 +7,12 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+documentation = "https://docs.rs/pkgshift-core"
+readme = "README.md"
+keywords = ["package-manager", "migration", "codemod", "automation"]
+categories = ["development-tools", "filesystem"]
 
 [dependencies]
 serde.workspace = true

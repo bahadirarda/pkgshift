@@ -6,6 +6,28 @@ process.chdir(repositoryRoot);
 
 const errors: string[] = [];
 
+interface PackageMetadata {
+  name?: string;
+  version?: string;
+  private?: boolean;
+}
+
+interface CargoManifest {
+  package?: {
+    name?: string;
+  };
+  workspace?: {
+    package?: {
+      version?: string;
+    };
+  };
+  dependencies?: {
+    "pkgshift-core"?: {
+      version?: string;
+    };
+  };
+}
+
 async function filesMatching(pattern: string): Promise<string[]> {
   return (await Array.fromAsync(
     new Bun.Glob(pattern).scan({ cwd: ".", onlyFiles: true }),
@@ -178,10 +200,87 @@ async function validateSkill(): Promise<void> {
   }
 }
 
+async function validateReleaseMetadata(): Promise<void> {
+  const rootCargo = Bun.TOML.parse(
+    await Bun.file("Cargo.toml").text(),
+  ) as CargoManifest;
+  const coreCargo = Bun.TOML.parse(
+    await Bun.file("implementations/rust/pkgshift-core/Cargo.toml").text(),
+  ) as CargoManifest;
+  const cliCargo = Bun.TOML.parse(
+    await Bun.file("implementations/rust/pkgshift-cli/Cargo.toml").text(),
+  ) as CargoManifest;
+  const rootPackage = await Bun.file("package.json").json() as PackageMetadata;
+  const typescriptPackage = await Bun.file(
+    "implementations/typescript/package.json",
+  ).json() as PackageMetadata;
+
+  const version = rootCargo.workspace?.package?.version;
+  const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/;
+  if (!version || !semver.test(version)) {
+    errors.push("Cargo.toml: workspace.package.version must be valid SemVer");
+    return;
+  }
+
+  const synchronizedVersions = [
+    ["package.json", rootPackage.version],
+    ["implementations/typescript/package.json", typescriptPackage.version],
+    [
+      "implementations/rust/pkgshift-cli/Cargo.toml pkgshift-core dependency",
+      cliCargo.dependencies?.["pkgshift-core"]?.version,
+    ],
+  ] as const;
+  for (const [path, candidate] of synchronizedVersions) {
+    if (candidate !== version) {
+      errors.push(`${path}: expected version ${version}, found ${candidate ?? "missing"}`);
+    }
+  }
+
+  if (rootPackage.name !== "pkgshift-workspace" || rootPackage.private !== true) {
+    errors.push("package.json: root package must remain the private pkgshift-workspace");
+  }
+  if (
+    typescriptPackage.name !== "@bahadirarda/pkgshift-typescript"
+    || typescriptPackage.private !== true
+  ) {
+    errors.push(
+      "implementations/typescript/package.json: reference package must remain private and explicitly named",
+    );
+  }
+  if (coreCargo.package?.name !== "pkgshift-core") {
+    errors.push("implementations/rust/pkgshift-core/Cargo.toml: public crate must be named pkgshift-core");
+  }
+  if (cliCargo.package?.name !== "pkgshift") {
+    errors.push("implementations/rust/pkgshift-cli/Cargo.toml: public CLI crate must be named pkgshift");
+  }
+
+  const changelog = await Bun.file("CHANGELOG.md").text();
+  const escapedVersion = version.replaceAll(".", "\\.");
+  if (!new RegExp(`^## \\[${escapedVersion}\\] - \\d{4}-\\d{2}-\\d{2}$`, "m").test(changelog)) {
+    errors.push(`CHANGELOG.md: missing dated ${version} release section`);
+  }
+
+  const releaseTag = Bun.env.RELEASE_TAG;
+  if (releaseTag && releaseTag !== `v${version}`) {
+    errors.push(`release tag ${releaseTag} does not match canonical version v${version}`);
+  }
+
+  const rootLicense = await Bun.file("LICENSE").text();
+  for (const path of [
+    "implementations/rust/pkgshift-cli/LICENSE",
+    "implementations/rust/pkgshift-core/LICENSE",
+  ]) {
+    if (await Bun.file(path).text() !== rootLicense) {
+      errors.push(`${path}: packaged license must match the repository license`);
+    }
+  }
+}
+
 async function validateEnglishOnly(): Promise<void> {
-  const roots = ["AGENTS.md", "README.md"];
+  const roots = ["AGENTS.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "README.md"];
   const patterns = [
     "implementations/rust/**/*.rs",
+    "implementations/rust/**/LICENSE",
     "docs/**/*.md",
     "implementations/typescript/scripts/**/*.ts",
     "skills/**/*.{md,yaml,yml}",
@@ -203,6 +302,7 @@ async function validateEnglishOnly(): Promise<void> {
 
 const conceptCount = await validateOkf();
 await validateSkill();
+await validateReleaseMetadata();
 await validateLinks("README.md", await Bun.file("README.md").text(), null);
 await validateEnglishOnly();
 
@@ -211,4 +311,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Validated ${conceptCount} OKF Markdown files, the portable Agent Skill, internal links, and English-only content.`);
+console.log(`Validated ${conceptCount} OKF Markdown files, release metadata, the portable Agent Skill, internal links, and English-only content.`);

@@ -2,6 +2,7 @@
 
 ## 2026-08-16
 
+* **Release**: Defined synchronized Semantic Versioning, Conventional Commit titles, curated changelogs, public crate identities, native artifact names, checksums, provenance, and ordered crates.io publication.
 * **Architecture**: Established a Rust-primary polyglot monorepo with sibling `implementations/rust` and `implementations/typescript` boundaries.
 * **Decision**: Added the accepted Rust-primary monorepo decision, parity-gate policy, and shared schema boundary.
 * **Implementation**: Ported weighted detection, Project IR, capability analysis, deterministic planning, exact approval, state persistence, apply, verification, and rollback into Rust.

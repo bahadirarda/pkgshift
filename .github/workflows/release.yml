@@ -1,0 +1,194 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify release tag
+        shell: bash
+        run: |
+          if [[ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" != "tag" ]]; then
+            echo "Release tags must be annotated."
+            exit 1
+          fi
+          git fetch origin main
+          tag_commit="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
+            echo "Release tag must point to a commit reachable from main."
+            exit 1
+          fi
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate release metadata and TypeScript reference
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bun run check:typescript
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.97.1 --profile minimal --component clippy,rustfmt
+
+      - name: Validate Rust workspace
+        run: cargo fmt --all --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace --locked
+
+      - name: Validate publishable packages
+        run: |
+          cargo package --package pkgshift-core --locked
+          cargo package --workspace --locked --no-verify
+
+  build:
+    needs: validate
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            archive: tar.gz
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: rustup toolchain install 1.97.1 --profile minimal --target "$TARGET"
+
+      - name: Build release binary
+        shell: bash
+        run: cargo build --locked --release --package pkgshift --target "$TARGET"
+
+      - name: Create Unix release archive
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          staging="pkgshift-v${version}-${TARGET}"
+          mkdir -p "$staging" dist
+          cp "target/${TARGET}/release/pkgshift" "$staging/pkgshift"
+          cp README.md LICENSE "$staging/"
+          tar -czf "dist/${staging}.tar.gz" "$staging"
+
+      - name: Create Windows release archive
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $Version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $Staging = "pkgshift-v$Version-$env:TARGET"
+          New-Item -ItemType Directory -Force -Path $Staging, dist | Out-Null
+          Copy-Item "target/$env:TARGET/release/pkgshift.exe" "$Staging/pkgshift.exe"
+          Copy-Item README.md, LICENSE $Staging
+          Compress-Archive -Path $Staging -DestinationPath "dist/$Staging.zip"
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: pkgshift-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download release archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: pkgshift-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create and verify checksum manifest
+        shell: bash
+        run: |
+          cd dist
+          sha256sum pkgshift-v* > SHA256SUMS
+          sha256sum --check SHA256SUMS
+
+      - name: Attest release artifacts
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*
+          show-summary: true
+
+      - name: Extract curated release notes
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v version="$version" '
+            index($0, "## [" version "] - ") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [[ ! -s release-notes.md ]]; then
+            echo "The changelog does not contain release notes for $version."
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "pkgshift $GITHUB_REF_NAME" \
+              --notes-file release-notes.md \
+              --latest
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --verify-tag \
+              --title "pkgshift $GITHUB_REF_NAME" \
+              --notes-file release-notes.md \
+              --latest
+          fi

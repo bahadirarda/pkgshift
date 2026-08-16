@@ -1,5 +1,5 @@
 [package]
-name = "pkgshift-cli"
+name = "pkgshift"
 description = "Transactional package manager migration CLI"
 version.workspace = true
 edition.workspace = true
@@ -7,6 +7,12 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+documentation = "https://docs.rs/pkgshift"
+readme = "README.md"
+keywords = ["package-manager", "migration", "cli", "codemod", "automation"]
+categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
 name = "pkgshift"
@@ -14,7 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
-pkgshift-core = { path = "../pkgshift-core" }
+pkgshift-core = { version = "0.1.0", path = "../pkgshift-core" }
 serde_json.workspace = true
 
 [dev-dependencies]

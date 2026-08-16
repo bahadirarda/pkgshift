@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/bahadirarda/pkgshift/actions/workflows/ci.yml"><img alt="ci" src="https://img.shields.io/github/actions/workflow/status/bahadirarda/pkgshift/ci.yml?branch=main&style=flat-square&label=ci&labelColor=27251f&color=c45124"></a>
+  <a href="https://github.com/bahadirarda/pkgshift/releases"><img alt="latest release" src="https://img.shields.io/github/v/release/bahadirarda/pkgshift?display_name=tag&sort=semver&style=flat-square&label=release&labelColor=27251f&color=c45124"></a>
   <img alt="technical mvp" src="https://img.shields.io/badge/status-technical_mvp-c45124?style=flat-square&labelColor=27251f">
   <img alt="rust 1.97.1" src="https://img.shields.io/badge/rust-1.97.1-e1a523?style=flat-square&labelColor=27251f">
   <img alt="bun 1.3.14" src="https://img.shields.io/badge/bun-1.3.14-a29b58?style=flat-square&labelColor=27251f">
@@ -21,7 +22,25 @@
 </p>
 
 > [!NOTE]
-> pkgshift is a tested technical MVP and is not published to a package registry yet. Both implementations live under `implementations/`: Rust is the primary CLI, while TypeScript remains an executable compatibility reference.
+> pkgshift is a tested technical MVP. GitHub Releases is the native binary channel, while the `pkgshift` and `pkgshift-core` crates use crates.io. Registry publication is an explicit, separately approved step because published crate versions are permanent. Both implementations live under `implementations/`: Rust is the primary CLI, while TypeScript remains an executable compatibility reference.
+
+## Install
+
+Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, and place `pkgshift` on your `PATH`. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations.
+
+The registry package installs with Cargo once the matching version is available on crates.io:
+
+```bash
+cargo install pkgshift --locked
+```
+
+To build the current source directly:
+
+```bash
+git clone https://github.com/bahadirarda/pkgshift.git
+cd pkgshift
+cargo install --locked --path implementations/rust/pkgshift-cli
+```
 
 ## One command from the project root
 
@@ -131,7 +150,7 @@ Both engines cover all 20 basic directions between the five production adapters 
 
 See the full [support policy](docs/support/package-managers.md) and [capability matrix](docs/support/capability-matrix.md).
 
-## Build from source
+## Build and validate the monorepo
 
 Requirements: Rust `1.97.1` and Bun `1.3.14` or newer. Bun is used for the TypeScript reference, documentation validation, and workspace orchestration.
 
@@ -141,7 +160,7 @@ cd pkgshift
 bun install --frozen-lockfile
 bun run check
 bun run build
-cargo install --path implementations/rust/pkgshift-cli
+cargo install --locked --path implementations/rust/pkgshift-cli
 ```
 
 Then run it from the repository you want to migrate:
@@ -183,6 +202,7 @@ bun run check:typescript  # strict types, 57 reference tests, and bundle validat
 bun run validate          # OKF, links, Agent Skill, and English-only content
 bun run check             # complete polyglot validation suite
 bun run build             # Rust release binary and TypeScript reference bundle
+bun run version:check     # synchronized SemVer, package identities, changelog, and release tag
 ```
 
 Neither implementation delegates repository analysis or edit generation to an AI model.
@@ -197,6 +217,7 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 - [Agent interface](docs/architecture/agent-interface.md)
 - [Recovery and verification](docs/architecture/recovery-and-verification.md)
 - [Package manager workflow](docs/workflows/pkgshift.md)
+- [Release system](docs/governance/release-system.md)
 
 ## Current boundaries
 

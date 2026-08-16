@@ -8,6 +8,7 @@
     "noEmit": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
     "strict": true,
     "target": "ES2022",
     "types": ["bun"]

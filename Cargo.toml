@@ -12,6 +12,8 @@ rust-version = "1.97.1"
 authors = ["bahadirarda"]
 license = "MIT"
 repository = "https://github.com/bahadirarda/pkgshift"
+homepage = "https://github.com/bahadirarda/pkgshift"
+publish = ["crates-io"]
 
 [workspace.dependencies]
 clap = { version = "4.6.6", features = ["derive"] }
@@ -38,3 +40,8 @@ result_large_err = "allow"
 struct_excessive_bools = "allow"
 too_many_arguments = "allow"
 too_many_lines = "allow"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "symbols"

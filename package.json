@@ -1,5 +1,5 @@
 {
-  "name": "pkgshift",
+  "name": "pkgshift-workspace",
   "version": "0.1.0",
   "description": "Polyglot workspace for deterministic, transactional package manager migrations.",
   "private": true,
@@ -28,17 +28,18 @@
     "agent-skill"
   ],
   "scripts": {
-    "build": "bun run build:typescript && cargo build --workspace --release",
+    "build": "bun run build:typescript && cargo build --workspace --release --locked",
     "build:typescript": "bun run --cwd implementations/typescript build",
     "check": "bun run check:typescript && bun run check:rust && bun run validate",
-    "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
+    "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo test --workspace --locked",
     "check:typescript": "bun run --cwd implementations/typescript check",
-    "cli": "cargo run -p pkgshift-cli --",
+    "cli": "cargo run -p pkgshift --",
     "cli:typescript": "bun run --cwd implementations/typescript cli",
-    "test": "bun run test:typescript && cargo test --workspace",
+    "test": "bun run test:typescript && cargo test --workspace --locked",
     "test:typescript": "bun run --cwd implementations/typescript test",
     "typecheck": "bun run --cwd implementations/typescript typecheck",
-    "validate": "bun run --cwd implementations/typescript validate"
+    "validate": "bun run --cwd implementations/typescript validate",
+    "version:check": "bun run --cwd implementations/typescript validate"
   },
   "engines": {
     "bun": ">=1.3.14"
