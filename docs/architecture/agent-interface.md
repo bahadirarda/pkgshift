@@ -4,7 +4,7 @@ title: Agent Interface
 description: Defines a simple keyword-based CLI and deterministic output contract for coding agents and humans.
 tags: [architecture, cli, json, agents]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T16:00:00Z}
+generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
 sources:
   - id: agent-first-decision
     resource: /decisions/agent-first-cli.md
@@ -27,11 +27,13 @@ pkgshift to <target>
 
 It performs deterministic inspection, Project IR construction, capability analysis, and planning before presenting an approval prompt. Planning remains read-only. On approval, the command persists the immutable plan to `.pkgshift/state`, applies it, and verifies the resulting run. `--dry-run` stops after planning.
 
+`pkgshift to <target> --trial` preserves the same plan and approval identifier but changes the authorized side effect to process execution in a disposable repository copy. A trial returns no source run identifier and does not authorize later repository mutation.
+
 Humans do not need to provide repository or state paths when running from the intended repository root.
 
 # Implementation Availability
 
-The Rust CLI is the primary interface and implements `to`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, and `rollback`. The TypeScript reference preserves the same migration contract and additionally retains `explain` plus managed `skill` lifecycle commands while their long-term ownership is decided. This temporary command difference does not change approval, result-envelope, or side-effect semantics.
+The Rust CLI is the primary interface and implements `to`, isolated `to --trial`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, and `rollback`. The TypeScript reference preserves native-import planning and the established migration contract, and additionally retains `explain` plus managed `skill` lifecycle commands while their long-term ownership is decided. Isolated trial and blocking lock-graph comparison are currently Rust-primary trust features.
 
 # Agent Flow
 
@@ -42,6 +44,8 @@ pkgshift to bun --json --no-color --non-interactive
 ```
 
 When the plan is executable but unapproved, the command returns exit code `7`, `status: planned`, and one exact approval-bound `nextActions[].argv`. The agent presents the plan and waits for the user. After approval, it executes that argument array without reconstructing it. The approved call persists, applies, and verifies the exact plan in one invocation.
+
+For `--trial`, `nextActions[].sideEffect` is `process-execution` and the returned argument array retains `--trial`. A passing trial returns a `trial-report`, `repositoryUnchanged: true`, and `runId: null`. Agents must request a separate normal preview and repository-write approval before apply.
 
 # Advanced Command Surface
 
@@ -78,6 +82,7 @@ This shortcut is equivalent to `pkgshift plan package-manager --to bun`. Neither
 - Signals and cancellation produce a journal status when an apply run has started.
 - Authentication values and matching environment variables are redacted before rendering or persistence.
 - The guided command uses `.pkgshift/state` only after approval; `--state-dir <path>` can override it.
+- Trial uses private state inside its temporary copy and never creates the default state directory in the source repository.
 - Advanced planning persists an artifact only when `--state-dir <path>` is explicitly supplied.
 
 # Result Envelope
@@ -121,8 +126,8 @@ The result `status` describes the domain outcome; the process exit code describe
 | `2` | Command or option input is invalid. |
 | `3` | Requested target or capability is unsupported. |
 | `4` | Artifact preconditions conflict with the current repository. |
-| `5` | Apply failed after a run journal was created. |
-| `6` | Verification completed with blocking failures. |
+| `5` | Apply or isolated trial execution failed after approval. |
+| `6` | Verification completed with blocking failures, including inside a trial. |
 | `7` | Explicit approval or additional user input is required. |
 | `8` | An internal error prevented a trustworthy result. |
 
@@ -134,8 +139,10 @@ Planning emits Project IR, capability analysis, exact file mutations, and plan a
 
 Apply persists the run journal, recovery snapshot, and redacted process report. Verify persists a report tied to the run and plan. Explain can load diagnostic codes, plan bundles, run journals, process reports, and verification reports without mutation.
 
+Planning with a source lockfile also emits a redacted `source-lock-graph` artifact. Verification emits `lockGraphComparison` inside its report. Trial emits a `trial-report` containing withheld process records and nested verification.
+
 # Approval Contract
 
 An agent may run a guided preview, inspect, plan, explain, status, and doctor operations without migration approval. It must present the plan summary, warnings, and side effects before executing an approval-bound next action. Guided execution and advanced apply require `--approve <plan-id>`; rollback requires `--approve <run-id>`. Skill install and uninstall require the exact `skill:pkgshift:<scope>:<client>` approval token.
 
-Apply runs the declared target installation without lifecycle scripts. Verify is filesystem- and artifact-read-only in the MVP and therefore does not need a second approval.
+Apply and trial run declared native import and target installation commands without lifecycle scripts. Verify is filesystem- and artifact-read-only and therefore does not need a second approval.

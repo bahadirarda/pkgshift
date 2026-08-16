@@ -4,7 +4,7 @@ title: Migration Engine
 description: Defines a capability-aware migration engine built around a shared project intermediate representation.
 tags: [architecture, engine, ir, transactions]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -23,6 +23,9 @@ repository evidence
         |
         v
 source adapter -> Project IR -> capability analysis -> target adapter
+       |                                                   |
+       v                                                   v
+ source lock graph                                native import strategy
                                            |                |
                                            v                v
                                       diagnostics       operations
@@ -84,6 +87,8 @@ Produce an immutable plan containing:
 
 The plan identifier is derived from normalized plan content. A production-target plan is executable only when no blocking diagnostic remains and lossy decisions were explicitly accepted during planning. Apply rejects a plan when relevant repository evidence no longer matches its preconditions.
 
+When a source lockfile exists, planning also binds its normalized graph identifier and selects a registered target-native importer where official package manager behavior supports one. Dedicated import commands run before target installation. Source artifacts remain available until both import and installation finish.
+
 ## Target Adapter
 
 Render target-native configuration and commands from the Project IR and capability decisions. Rendering must be deterministic for the same normalized inputs.
@@ -102,7 +107,11 @@ The MVP evaluates declared postconditions at these levels:
 4. Workspace membership preservation.
 5. Planned integration file digests.
 
-Resolved dependency graph comparison and representative script execution are explicit post-MVP extensions. The verification report records graph comparison as skipped until a normalized source lock graph and drift policy exist.
+The Rust verifier independently extracts the target lock graph and applies `resolution-set-v1`. Added or removed `name@version` resolutions and comparable integrity mismatches block completion. Edge changes remain evidence because package managers encode peer placement, optional dependencies, hoisting, and deduplication differently. When no source lockfile existed, graph comparison is explicitly skipped. Representative project script execution remains a post-MVP extension.
+
+## Trial Executor
+
+An approved guided plan may execute through `--trial`. The Rust CLI copies regular repository files into a disposable directory, rejects symbolic links, omits repository metadata and generated dependency or build directories, executes the same plan and verifier there, and deletes the sandbox automatically. The source repository receives no persistent plan or run state. Trial still declares process execution and possible network or cache effects.
 
 ## Recovery
 
@@ -127,4 +136,5 @@ Render the same result model as structured JSON or concise terminal text. Render
 - Plans bind to repository evidence.
 - Apply emits a journal even when it fails.
 - Verification results reference the exact run they evaluate.
+- Trial approval authorizes sandbox process execution but not repository mutation.
 - Secrets never enter the Project IR as clear text.

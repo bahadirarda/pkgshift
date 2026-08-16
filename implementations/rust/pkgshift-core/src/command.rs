@@ -6,13 +6,16 @@ use serde_json::{Value, json};
 
 use crate::catalog::{PACKAGE_MANAGERS, normalize_package_manager_id};
 use crate::inspect::{build_project_ir, inspect_project};
+use crate::lock_graph::extract_lock_graph;
 use crate::model::{
     CapabilityAnalysis, CommandExecution, CommandResult, CommandStatus, Diagnostic,
-    DiagnosticSeverity, MigrationPlan, NextAction, PackageManagerId, ProjectInspection, ProjectIr,
-    ResultArtifact, SCHEMA_VERSION, SideEffect, StoredPlan, VerificationStatus,
+    DiagnosticSeverity, LockGraph, MigrationPlan, NextAction, PackageManagerId, ProjectInspection,
+    ProjectIr, ResultArtifact, SCHEMA_VERSION, SideEffect, StoredPlan, VerificationStatus,
 };
 use crate::plan::{analyze_capabilities, plan_package_manager_migration};
-use crate::transaction::{apply_stored_plan, rollback_stored_run, save_plan, verify_stored_run};
+use crate::transaction::{
+    apply_stored_plan, rollback_stored_run, save_plan, trial_stored_plan, verify_stored_run,
+};
 use crate::util::{PkgshiftError, Result, resolve_root};
 
 #[derive(Debug, Clone)]
@@ -34,6 +37,7 @@ pub struct CommandOptions {
     pub accept_lossy: bool,
     pub approval: Option<String>,
     pub dry_run: bool,
+    pub trial: bool,
 }
 
 impl CommandOptions {
@@ -45,6 +49,7 @@ impl CommandOptions {
             accept_lossy: false,
             approval: None,
             dry_run: false,
+            trial: false,
         }
     }
 }
@@ -247,6 +252,7 @@ fn inspect_command(cwd: &Path) -> Result<CommandExecution> {
 struct PlannedMigration {
     project_ir: ProjectIr,
     analysis: CapabilityAnalysis,
+    source_lock_graph: Option<LockGraph>,
     plan: MigrationPlan,
 }
 
@@ -262,20 +268,32 @@ fn create_plan(
     let Some(analysis) = analyze_capabilities(&project_ir, target)? else {
         return Ok(None);
     };
-    let Some(plan) =
-        plan_package_manager_migration(&inspection, &project_ir, &analysis, target, accept_lossy)?
+    let source_lock_graph = project_ir
+        .source
+        .map(|source| extract_lock_graph(Path::new(&inspection.root), source))
+        .transpose()?
+        .flatten();
+    let Some(plan) = plan_package_manager_migration(
+        &inspection,
+        &project_ir,
+        &analysis,
+        source_lock_graph.as_ref(),
+        target,
+        accept_lossy,
+    )?
     else {
         return Ok(None);
     };
     Ok(Some(PlannedMigration {
         project_ir,
         analysis,
+        source_lock_graph,
         plan,
     }))
 }
 
 fn planned_artifacts(planned: &PlannedMigration) -> Result<Vec<ResultArtifact>> {
-    Ok(vec![
+    let mut artifacts = vec![
         artifact(
             planned.project_ir.project_ir_id.clone(),
             "project-ir",
@@ -294,7 +312,16 @@ fn planned_artifacts(planned: &PlannedMigration) -> Result<Vec<ResultArtifact>> 
             "application/vnd.pkgshift.plan+json",
             &planned.plan,
         )?,
-    ])
+    ];
+    if let Some(graph) = &planned.source_lock_graph {
+        artifacts.push(artifact(
+            graph.graph_id.clone(),
+            "source-lock-graph",
+            "application/vnd.pkgshift.lock-graph+json",
+            graph,
+        )?);
+    }
+    Ok(artifacts)
 }
 
 fn blocked_plan(cwd: &Path, command: &str, target: PackageManagerId) -> Result<CommandExecution> {
@@ -338,6 +365,7 @@ fn persist_planned(state_directory: &Path, planned: &PlannedMigration) -> Result
             plan: planned.plan.clone(),
             project_ir: planned.project_ir.clone(),
             capability_analysis: planned.analysis.clone(),
+            source_lock_graph: planned.source_lock_graph.clone(),
         },
     )?;
     Ok(())
@@ -421,6 +449,14 @@ fn plan_command(options: &CommandOptions, target_value: &str) -> Result<CommandE
                     ),
                 ),
                 ("capabilities", json!(planned.plan.capability_summary)),
+                (
+                    "sourceLockGraph",
+                    json!(planned.plan.source_lock_graph_id.is_some()),
+                ),
+                (
+                    "nativeImport",
+                    json!(planned.plan.native_import.as_ref().map(|entry| &entry.id)),
+                ),
                 ("artifactStored", json!(artifact_stored)),
                 ("executionAvailable", json!(planned.plan.executable)),
             ]),
@@ -464,7 +500,12 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
     if options.accept_lossy {
         approved_argv.push("--accept-lossy".to_owned());
     }
-    if let Some(value) = options.state_directory.as_deref() {
+    if options.trial {
+        approved_argv.push("--trial".to_owned());
+    }
+    if !options.trial
+        && let Some(value) = options.state_directory.as_deref()
+    {
         approved_argv.push("--state-dir".to_owned());
         approved_argv.push(value.to_string_lossy().into_owned());
     }
@@ -478,12 +519,17 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
     let next_action = NextAction {
         argv: approved_argv,
         requires_approval: true,
-        side_effect: SideEffect::RepositoryWrite,
+        side_effect: if options.trial {
+            SideEffect::ProcessExecution
+        } else {
+            SideEffect::RepositoryWrite
+        },
     };
     if options.dry_run || options.approval.as_deref() != Some(planned.plan.plan_id.as_str()) {
         let approval_missing = !options.dry_run;
         let mut diagnostics = planned.plan.diagnostics.clone();
         if approval_missing {
+            let trial_flag = if options.trial { " --trial" } else { "" };
             diagnostics.push(Diagnostic::blocking(
                 "APPROVAL_REQUIRED",
                 format!(
@@ -491,8 +537,8 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
                     planned.plan.plan_id
                 ),
                 vec![format!(
-                    "Retry with pkgshift to {} --approve {}.",
-                    planned.plan.target, planned.plan.plan_id
+                    "Retry with pkgshift to {}{} --approve {}.",
+                    planned.plan.target, trial_flag, planned.plan.plan_id
                 )],
             ));
         }
@@ -505,8 +551,17 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
                     ("source", json!(planned.plan.source)),
                     ("target", json!(planned.plan.target)),
                     ("guided", json!(true)),
+                    ("trial", json!(options.trial)),
                     ("dryRun", json!(options.dry_run)),
                     ("files", json!(files)),
+                    (
+                        "sourceLockGraph",
+                        json!(planned.plan.source_lock_graph_id.is_some()),
+                    ),
+                    (
+                        "nativeImport",
+                        json!(planned.plan.native_import.as_ref().map(|entry| &entry.id)),
+                    ),
                     ("repositoryChanged", json!(false)),
                 ]),
                 diagnostics,
@@ -514,6 +569,58 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
                 Some(planned.plan.plan_id.clone()),
                 None,
                 vec![next_action],
+            ),
+        });
+    }
+
+    if options.trial {
+        let stored_plan = StoredPlan {
+            schema_version: SCHEMA_VERSION.to_owned(),
+            plan: planned.plan.clone(),
+            project_ir: planned.project_ir.clone(),
+            capability_analysis: planned.analysis.clone(),
+            source_lock_graph: planned.source_lock_graph.clone(),
+        };
+        let report = trial_stored_plan(&root, &stored_plan, options.approval.as_deref())?;
+        let failed = report.status == VerificationStatus::Failed;
+        let exit_code = if !failed {
+            0
+        } else if report.verification.is_some() {
+            6
+        } else {
+            5
+        };
+        let mut artifacts = planned_artifacts(&planned)?;
+        artifacts.push(artifact(
+            report.report_id.clone(),
+            "trial-report",
+            "application/vnd.pkgshift.trial+json",
+            &report,
+        )?);
+        return Ok(CommandExecution {
+            exit_code,
+            result: result(
+                command_name,
+                if failed {
+                    CommandStatus::Failed
+                } else {
+                    CommandStatus::Completed
+                },
+                summary([
+                    ("source", json!(planned.plan.source)),
+                    ("target", json!(planned.plan.target)),
+                    ("guided", json!(true)),
+                    ("trial", json!(true)),
+                    ("files", json!(files)),
+                    ("repositoryChanged", json!(!report.repository_unchanged)),
+                    ("repositoryUnchanged", json!(report.repository_unchanged)),
+                    ("processes", json!(report.processes.len())),
+                ]),
+                report.diagnostics.clone(),
+                artifacts,
+                Some(planned.plan.plan_id.clone()),
+                None,
+                Vec::new(),
             ),
         });
     }

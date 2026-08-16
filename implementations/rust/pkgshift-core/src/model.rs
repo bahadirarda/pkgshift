@@ -260,6 +260,39 @@ pub struct ProjectIr {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LockGraphNode {
+    pub locator: String,
+    pub name: String,
+    pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub integrity: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LockGraphEdge {
+    pub from: String,
+    pub dependency: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LockGraph {
+    pub schema_version: String,
+    pub graph_id: String,
+    pub manager: PackageManagerId,
+    pub lockfile_path: String,
+    pub lockfile_digest: String,
+    pub format: String,
+    pub complete: bool,
+    pub nodes: Vec<LockGraphNode>,
+    pub edges: Vec<LockGraphEdge>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CapabilityClassification {
@@ -356,6 +389,24 @@ pub struct PlannedOperation {
     pub mutations: Vec<PlannedFileMutation>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NativeImportMode {
+    DedicatedCommand,
+    InstallIntegrated,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeImportStrategy {
+    pub id: String,
+    pub source: PackageManagerId,
+    pub target: PackageManagerId,
+    pub mode: NativeImportMode,
+    pub command: Vec<String>,
+    pub summary: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MigrationPlan {
@@ -370,6 +421,10 @@ pub struct MigrationPlan {
     pub project_ir_id: String,
     pub capability_analysis_id: String,
     pub capability_summary: CapabilitySummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_lock_graph_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_import: Option<NativeImportStrategy>,
     pub operations: Vec<PlannedOperation>,
     pub diagnostics: Vec<Diagnostic>,
     pub verification: Vec<String>,
@@ -444,6 +499,8 @@ pub struct StoredPlan {
     pub plan: MigrationPlan,
     pub project_ir: ProjectIr,
     pub capability_analysis: CapabilityAnalysis,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_lock_graph: Option<LockGraph>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -485,6 +542,23 @@ pub struct VerificationCheck {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LockGraphComparison {
+    pub comparison_id: String,
+    pub policy: String,
+    pub status: VerificationStatus,
+    pub source_graph_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_graph_id: Option<String>,
+    pub source_resolutions: usize,
+    pub target_resolutions: usize,
+    pub added_resolutions: Vec<String>,
+    pub removed_resolutions: Vec<String>,
+    pub integrity_mismatches: Vec<String>,
+    pub edge_changes: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VerificationReport {
     pub schema_version: String,
     pub report_id: String,
@@ -493,6 +567,8 @@ pub struct VerificationReport {
     pub status: VerificationStatus,
     pub checks: Vec<VerificationCheck>,
     pub diagnostics: Vec<Diagnostic>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock_graph_comparison: Option<LockGraphComparison>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -500,4 +576,18 @@ pub struct VerificationReport {
 pub struct ApplyOutcome {
     pub run: StoredRun,
     pub verification: Option<VerificationReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrialReport {
+    pub schema_version: String,
+    pub report_id: String,
+    pub plan_id: String,
+    pub status: VerificationStatus,
+    pub repository_unchanged: bool,
+    pub processes: Vec<ProcessExecutionRecord>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verification: Option<VerificationReport>,
+    pub diagnostics: Vec<Diagnostic>,
 }

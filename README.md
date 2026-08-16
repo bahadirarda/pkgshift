@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  Inspect the repository. Review an immutable plan. Approve the exact change. Apply, verify, and roll back from one deterministic CLI.
+  Inspect the repository. Review an immutable plan. Trial it in isolation or approve the exact change. Apply, prove, and roll back from one deterministic CLI.
 </p>
 
 > [!NOTE]
@@ -78,6 +78,14 @@ pkgshift to pnpm --dry-run
 pkgshift to pnpm --json --no-color --non-interactive
 ```
 
+Execute the exact plan, native importer, target installer, and verification in a disposable copy before authorizing repository writes:
+
+```bash
+pkgshift to pnpm --trial
+```
+
+A successful trial returns `repositoryUnchanged: true`, a nested verification report, and no source `runId`. Trial approval covers sandbox process execution only; run the normal preview again before approving apply.
+
 ## Why pkgshift
 
 A package manager migration is larger than replacing a lockfile. Workspaces, dependency protocols, catalogs, overrides, patches, linker policy, registry configuration, CI, containers, runtime pins, and contributor commands can all carry package-manager semantics.
@@ -88,7 +96,8 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Semantic planning | Builds a versioned Project IR and evaluates every observed capability against the target adapter. |
 | Approval boundary | Produces an immutable plan identifier and requires approval for that exact plan before mutation. |
 | Transactional execution | Rechecks preconditions, snapshots affected files, journals operations, and stops at the first unsafe transition. |
-| Verification | Checks planned digests, target selection, lockfile creation, workspace membership, integrations, and installer completion. |
+| Verification | Normalizes source and target lock graphs, blocks resolution or comparable integrity drift, and checks planned digests, target selection, workspace membership, and installer completion. |
+| Isolated trial | Runs the exact accepted plan in a disposable repository copy and proves the source remained unchanged. |
 | Recovery | Restores repository files from integrity-checked snapshots and verifies the original fingerprint. |
 
 Unsupported, unknown, unsafe, or unimplemented semantics block execution. pkgshift does not hide uncertainty behind a successful exit code.
@@ -106,7 +115,7 @@ flowchart LR
     G -->|failure| H[rollback]
 ```
 
-The normal command orchestrates this pipeline without exposing repository or state paths. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The TypeScript reference also retains diagnostic explanation and managed Agent Skill lifecycle commands during the port transition.
+The normal command orchestrates this pipeline without exposing repository or state paths. Target-native importers run before installation when available; source-only lockfiles remain until both complete. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The TypeScript reference also retains diagnostic explanation and managed Agent Skill lifecycle commands during the port transition.
 
 ## Monorepo layout
 
@@ -131,7 +140,7 @@ Rust and TypeScript share product terminology, adapter baselines, approval seman
 
 | Implementation | Role | Toolchain | Validation boundary |
 | --- | --- | --- | --- |
-| Rust | Primary product engine and CLI | Rust 1.97.1 | Core tests, 20-direction planning matrix, subprocess migrations, integrity failures, rollback, and release build |
+| Rust | Primary product engine and CLI | Rust 1.97.1 | Lock graph format tests, 20-direction planning, subprocess migrations, isolated trial, drift failure, rollback, and release build |
 | TypeScript | Executable compatibility and parity reference | Bun 1.3.14, strict TypeScript | 57 unit, integration, safety, skill, and real CLI transaction tests |
 
 ## Agent workflow
@@ -148,6 +157,8 @@ pkgshift is designed for Codex, Claude Code, and other coding agents, but the en
 pkgshift to bun --json --no-color --non-interactive
 ```
 
+When a user asks for proof before mutation, the agent previews with `--trial`, obtains separate approval for its `process-execution` action, and reports the `trial-report`. A trial never authorizes the later repository-write action.
+
 The model does not author migration edits. Detection, capability analysis, transformation, execution, and verification are implemented by pkgshift.
 
 ## Package manager support
@@ -162,7 +173,7 @@ The model does not author migration edits. Detection, capability analysis, trans
 | vlt | Preview, planning only | `vlt@1.0.2` |
 | Deno dependency mode | Preview, planning only | `deno@2.9.5` |
 
-Both engines cover all 20 basic directions between the five production adapters at planning level. Rust subprocess fixtures execute `pnpm -> bun -> rollback` and `npm -> pnpm`; a separate live check uses the real Bun installer. The TypeScript reference retains the broader complex-capability fixture set while remaining the parity oracle during the port.
+Both engines cover all 20 basic directions between the five production adapters at planning level. The planner selects `pnpm import`, `bun pm migrate`, Bun's pnpm migration path, `yarn import`, or a verified install-integrated path where applicable. Rust subprocess fixtures execute `pnpm -> bun -> rollback`, `npm -> pnpm`, isolated trial, and deliberate graph drift; live Bun checks cover dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback. The TypeScript reference retains the broader complex-capability fixture set and native-import planning while remaining the renderer parity oracle during the port.
 
 See the full [support policy](docs/support/package-managers.md) and [capability matrix](docs/support/capability-matrix.md).
 
@@ -203,6 +214,9 @@ The TypeScript reference still exposes managed copy, symlink, status, doctor, an
 - Apply and rollback require artifact-bound approval identifiers.
 - Plans bind to the repository fingerprint and exact before/after file digests.
 - Recovery snapshots are created before the first repository write.
+- Source lock graphs are bound to plans; target graphs are extracted independently after installation.
+- Added, removed, or comparably integrity-mismatched resolutions block successful verification.
+- Trial sandboxes reject symbolic links and never persist migration state in the source repository.
 - Target installs run without a shell and with lifecycle scripts disabled.
 - Credentials are redacted from repository evidence, and Rust process output is withheld from persisted artifacts.
 - Symbolic-link traversal outside the selected repository root is rejected.
@@ -234,10 +248,12 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 - [Migration engine](docs/architecture/migration-engine.md)
 - [Agent interface](docs/architecture/agent-interface.md)
 - [Recovery and verification](docs/architecture/recovery-and-verification.md)
+- [Lock graph proof](docs/architecture/lock-graph-proof.md)
 - [Package manager workflow](docs/workflows/pkgshift.md)
+- [Isolated migration trial](docs/workflows/isolated-trial.md)
 - [Release system](docs/governance/release-system.md)
 - [Website delivery](docs/governance/website-delivery.md)
 
 ## Current boundaries
 
-Resolved source-to-target lock graph comparison and automatic representative project-script execution are not part of the MVP. Verification records graph comparison as skipped rather than claiming coverage. Preview adapters cannot be applied, and lossy decisions require explicit acceptance when the plan is created. Rust target rendering currently fails closed for advanced transformations that have not crossed the parity gate; the TypeScript reference documents and tests the intended behavior until each renderer is ported.
+Automatic representative project-script execution is not part of the MVP. `resolution-set-v1` makes resolved version and comparable integrity drift blocking, while dependency edge differences remain evidence for later platform-aware policies. Binary `bun.lockb` graph extraction fails closed until converted to text. Preview adapters cannot be applied, and lossy decisions require explicit acceptance when the plan is created. Rust target rendering currently fails closed for advanced transformations that have not crossed the parity gate; the TypeScript reference documents and tests the intended behavior until each renderer is ported.

@@ -2,6 +2,13 @@
 
 ## 2026-08-16
 
+* **Trust**: Added normalized npm, pnpm, Yarn Classic, Yarn Modern, and text Bun lock graphs with blocking resolution-set and comparable-integrity verification.
+* **Execution**: Added target-native importer selection, including `pnpm import`, `bun pm migrate`, Bun's pnpm migration path, and `yarn import`, while preserving source locks until target installation completes.
+* **Trial**: Added exact-approval `pkgshift to <target> --trial` execution in a disposable repository copy with no source state, a nested verification report, and repository-preservation evidence.
+* **Safety**: Added fail-closed malformed and binary lockfile diagnostics, symbolic-link rejection in trial copies, lifecycle-script suppression, and empty-resolution proof when a target legitimately omits an empty lockfile.
+* **Parity**: Added native-import planning to the TypeScript reference and preserved source workspace pattern order in both engines.
+* **Verification**: Added isolated trial, importer ordering, graph drift, lock format, empty graph, and live Bun 1.3.14 npm-to-Bun trial, apply, proof, and rollback coverage.
+* **Documentation**: Added the lock graph proof and isolated trial concepts, refreshed the Agent Skill, and surfaced both trust features in the README and product website.
 * **Website**: Added a responsive product website with semantic content, canonical metadata, social previews, structured software data, crawl directives, a root sitemap, and a curated agent discovery index.
 * **Distribution**: Added a version-pinnable Linux and macOS shell installer that verifies GitHub Release checksums before installing a native executable.
 * **Deployment**: Added a least-privilege GitHub Pages artifact workflow with repository-owned website validation.

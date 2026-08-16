@@ -68,7 +68,7 @@ async function createPnpmWorkspaceFixture(): Promise<string> {
       "  - local-tool",
       "",
     ].join("\n"),
-    "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    "pnpm-lock.yaml": "lockfileVersion: '9.0'\nimporters:\n  .: {}\npackages: {}\nsnapshots: {}\n",
     "apps/web/package.json": `${JSON.stringify({
       name: "@fixture/web",
       version: "1.0.0",
@@ -112,7 +112,7 @@ async function createPnpmExcludedWorkspaceFixture(): Promise<string> {
       "  - '!packages/legacy'",
       "",
     ].join("\n"),
-    "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    "pnpm-lock.yaml": "lockfileVersion: '9.0'\nimporters:\n  .: {}\npackages: {}\nsnapshots: {}\n",
     ".npmrc": "registry=https://registry.npmjs.org\n",
     "services/api/package.json": `${JSON.stringify({
       name: "@fixture/api",
@@ -151,7 +151,7 @@ async function runApprovedGuidedMigration(root: string): Promise<{
   expect(preview.result.summary.repositoryChanged).toBeFalse();
   const nextAction = preview.result.nextActions[0] as { argv: string[] };
   const completed = await jsonCommand(nextAction.argv.slice(1), root);
-  expect(completed.exitCode).toBe(0);
+  expect(completed.exitCode, JSON.stringify(completed.result, null, 2)).toBe(0);
   expect(completed.result.status).toBe("completed");
   expect(completed.result.summary.runStatus).toBe("succeeded");
   expect(completed.result.summary.failed).toBe(0);
@@ -309,11 +309,11 @@ describe("CLI transaction", () => {
     expect(await Bun.file(join(root, "pnpm-lock.yaml")).exists()).toBeFalse();
     const manifest = await Bun.file(join(root, "package.json")).json();
     expect(manifest.packageManager).toBe("bun@1.3.14");
-    expect(manifest.workspaces).toEqual([
-      "!packages/legacy",
-      "packages/*",
-      "services/*",
-    ]);
+  expect(manifest.workspaces).toEqual([
+    "services/*",
+    "packages/*",
+    "!packages/legacy",
+  ]);
     expect(await Bun.file(join(root, ".npmrc")).exists()).toBeTrue();
     expect(await Bun.file(join(root, ".gitlab-ci.yml")).text()).toContain("bun install");
     expect(await Bun.file(join(root, "Containerfile")).text()).toContain("bun install");

@@ -4,7 +4,7 @@ title: Recovery and Verification
 description: Defines snapshot integrity, verification checks, rollback scope, and failure behavior for migration runs.
 tags: [architecture, recovery, verification, rollback, integrity]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
 sources:
   - id: transactional-decision
     resource: /decisions/transactional-migrations.md
@@ -50,9 +50,15 @@ Verify reads the plan, journal, and repository. It records these MVP checks:
 | Target lockfile | No registered target lockfile exists. |
 | Workspace membership | Package paths differ from the source Project IR. |
 | Target install | The journaled install operation is not successful. |
-| Dependency graph drift | Never blocking in the MVP because it is explicitly skipped. |
+| Dependency graph drift | Added or removed resolutions, comparable integrity mismatches, a missing non-empty target graph, or incomplete parsing. |
 
 A failed check moves the verification operation and run to `failed`. A successful report moves both to `succeeded`. Reports carry their own identity and integrity digest.
+
+The source graph is extracted before planning and persisted with the accepted plan. The target graph is extracted after installation. `resolution-set-v1` blocks version-set and comparable integrity drift while recording edge differences as non-blocking evidence. A dependency-free target may omit its lockfile only when the accepted source graph proves an empty resolved set. See [Lock Graph Proof](/architecture/lock-graph-proof.md).
+
+# Isolated Trial
+
+`pkgshift to <target> --trial` executes the accepted plan and verifier in a disposable repository copy. It returns a `trial-report` containing process records, nested verification, and `repositoryUnchanged`. It creates no source run identifier or recovery state because the source repository is not the mutation target. Package manager network and cache effects remain external.
 
 # Rollback
 

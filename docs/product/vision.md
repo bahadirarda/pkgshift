@@ -4,7 +4,7 @@ title: pkgshift Product Vision
 description: Defines an agent-first product for safe and explainable JavaScript package manager migrations.
 tags: [product, migration, package-management, agents]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
 sources:
   - id: founding-discussion
     resource: "founding product discussion on 2026-08-15"
@@ -49,11 +49,12 @@ The MVP covers:
 - Source and target capability comparison.
 - Reviewable plan artifacts with preconditions and risk annotations.
 - Transactional file changes and a run journal.
-- Install completion, planned digest, target lockfile, workspace, and integration verification.
+- Native lockfile import where supported, install completion, planned digest, target lockfile behavior, workspace, integration, and normalized resolution-set verification.
+- Approved isolated migration trials that execute outside the source repository.
 - Structured diagnostics, explanations, and rollback.
 - Project and user installation of a portable Agent Skill.
 
-Normalized resolved-graph comparison and representative project-script execution are post-MVP extensions because they require explicit source graph and script-selection policies.
+Representative project-script execution remains a post-MVP extension because it requires an explicit selection and trust policy. Platform-aware optional resolution and strict edge-equivalence policies extend the MVP's blocking `resolution-set-v1` proof.
 
 # Non-goals
 
@@ -68,7 +69,7 @@ Normalized resolved-graph comparison and representative project-script execution
 - An agent can discover the current state and produce a plan with one read-only command sequence.
 - The same repository state and options produce the same normalized plan.
 - No mutation occurs without an explicit apply operation referencing a concrete plan.
-- Verification identifies blocking structural drift and records unsupported graph checks as skipped.
+- Verification identifies blocking structural and resolution drift; graph comparison is skipped only when no source lockfile existed.
 - Every failure returns a stable diagnostic code and an actionable next step.
 - A failed or rejected run leaves an inspectable journal and, where possible, a tested rollback path.
 
