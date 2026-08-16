@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { symlink } from "node:fs/promises";
+import { join } from "node:path";
 import { analyzeCapabilities } from "../src/capabilities/analyze-capabilities.ts";
 import type { PackageManagerId, PlannedFileMutation } from "../src/domain/models.ts";
 import { inspectProject } from "../src/inspect/inspect-project.ts";
@@ -30,6 +32,16 @@ async function planFixture(
   );
   return { root, plan: plan!, analysis: analysis! };
 }
+
+const TEXT_PATCH = [
+  "diff --git a/index.js b/index.js",
+  "--- a/index.js",
+  "+++ b/index.js",
+  "@@ -1 +1 @@",
+  "-old",
+  "+new",
+  "",
+].join("\n");
 
 describe("target transformations", () => {
   test("plans every basic production source-to-target direction", async () => {
@@ -270,6 +282,327 @@ describe("target transformations", () => {
     expect(JSON.parse(manifest?.content ?? "{}").overrides).toEqual({
       "@scope/package": "1.2.3",
     });
+  });
+
+  test("renders npm package extensions in pnpm workspace configuration", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "npm@12.0.2",
+        packageExtensions: {
+          "bare-package": {
+            dependencies: { "bare-runtime-dep": "1.0.0" },
+          },
+          "broken-package@^1": {
+            dependencies: { "missing-runtime-dep": "^2.0.0" },
+            peerDependencies: { react: "*" },
+            peerDependenciesMeta: { react: { optional: true } },
+          },
+        },
+      }),
+      "package-lock.json": "{}",
+    }, "pnpm");
+
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    expect(JSON.parse(manifest?.content ?? "{}").packageExtensions).toBeUndefined();
+    const configuration = mutations(plan).find((entry) => entry.path === "pnpm-workspace.yaml");
+    const parsed = Bun.YAML.parse(configuration?.content ?? "") as {
+      packageExtensions: Record<string, {
+        dependencies: Record<string, string>;
+        peerDependenciesMeta: Record<string, { optional: boolean }>;
+      }>;
+    };
+    expect(parsed.packageExtensions["broken-package@^1"]!.dependencies).toEqual({
+      "missing-runtime-dep": "^2.0.0",
+    });
+    expect(parsed.packageExtensions["bare-package"]!.dependencies).toEqual({
+      "bare-runtime-dep": "1.0.0",
+    });
+    expect(parsed.packageExtensions["broken-package@^1"]!.peerDependenciesMeta).toEqual({
+      react: { optional: true },
+    });
+  });
+
+  test("renders pnpm package extensions in Yarn configuration", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "pnpm@11.21.0",
+      }),
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "pnpm-workspace.yaml": [
+        "packageExtensions:",
+        "  'broken-package@1':",
+        "    optionalDependencies:",
+        "      optional-runtime: '^3.0.0'",
+        "",
+      ].join("\n"),
+    }, "yarn-modern");
+
+    expect(plan.executable).toBeTrue();
+    const configuration = mutations(plan).find((entry) => entry.path === ".yarnrc.yml");
+    const parsed = Bun.YAML.parse(configuration?.content ?? "") as {
+      packageExtensions: Record<string, {
+        optionalDependencies: Record<string, string>;
+      }>;
+    };
+    expect(parsed.packageExtensions["broken-package@1"]!.optionalDependencies).toEqual({
+      "optional-runtime": "^3.0.0",
+    });
+  });
+
+  test("reads Yarn package extensions and renders them for npm", async () => {
+    const { plan, analysis } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "yarn@4.18.0",
+      }),
+      "yarn.lock": "# fixture\n",
+      ".yarnrc.yml": [
+        "nodeLinker: node-modules",
+        "packageExtensions:",
+        "  '@scope/broken@^2':",
+        "    peerDependencies:",
+        "      react: '>=18'",
+        "",
+      ].join("\n"),
+    }, "npm");
+
+    expect(analysis.decisions.map((entry) => entry.featureId)).toContain(
+      "resolution.package-extensions",
+    );
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    expect(JSON.parse(manifest?.content ?? "{}").packageExtensions).toEqual({
+      "@scope/broken@^2": { peerDependencies: { react: ">=18" } },
+    });
+  });
+
+  test("blocks package extensions outside the shared schema", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        packageManager: "npm@12.0.2",
+        packageExtensions: {
+          "broken-package@1": { scripts: { postinstall: "node build.js" } },
+        },
+      }),
+      "package-lock.json": "{}",
+    }, "pnpm");
+
+    expect(plan.executable).toBeFalse();
+    expect(plan.diagnostics.map((entry) => entry.code)).toContain(
+      "PACKAGE_EXTENSIONS_UNSUPPORTED",
+    );
+    expect(JSON.stringify(plan)).not.toContain("postinstall");
+  });
+
+  test("converts a Yarn patch protocol dependency to Bun policy", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "yarn@4.18.0",
+        dependencies: {
+          "left-pad": "patch:left-pad@npm%3A1.3.0#~/.yarn/patches/left-pad.patch",
+        },
+      }),
+      "yarn.lock": "# fixture\n",
+      ".yarnrc.yml": "nodeLinker: node-modules\n",
+      ".yarn/patches/left-pad.patch": TEXT_PATCH,
+    }, "bun");
+
+    expect(plan.executable).toBeTrue();
+    expect(plan.diagnostics.map((entry) => entry.code)).not.toContain(
+      "TRANSFORMATION_UNIMPLEMENTED",
+    );
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    const parsed = JSON.parse(manifest?.content ?? "{}") as {
+      dependencies: Record<string, string>;
+      patchedDependencies: Record<string, string>;
+    };
+    expect(parsed.dependencies["left-pad"]).toBe("1.3.0");
+    expect(parsed.patchedDependencies).toEqual({
+      "left-pad@1.3.0": ".yarn/patches/left-pad.patch",
+    });
+  });
+
+  test("converts a scoped Yarn patch protocol dependency to pnpm policy", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "yarn@4.18.0",
+        devDependencies: {
+          "@scope/tool": "patch:@scope/tool@npm%3A2.1.0#~/.yarn/patches/tool.patch",
+        },
+      }),
+      "yarn.lock": "# fixture\n",
+      ".yarnrc.yml": "nodeLinker: node-modules\n",
+      ".yarn/patches/tool.patch": TEXT_PATCH,
+    }, "pnpm");
+
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    const parsedManifest = JSON.parse(manifest?.content ?? "{}") as {
+      devDependencies: Record<string, string>;
+    };
+    expect(parsedManifest.devDependencies["@scope/tool"]).toBe("2.1.0");
+    const configuration = mutations(plan).find((entry) => entry.path === "pnpm-workspace.yaml");
+    const parsed = Bun.YAML.parse(configuration?.content ?? "") as {
+      patchedDependencies: Record<string, string>;
+    };
+    expect(parsed.patchedDependencies).toEqual({
+      "@scope/tool@2.1.0": ".yarn/patches/tool.patch",
+    });
+  });
+
+  test("converts a transitive Yarn patch resolution to Bun policy", async () => {
+    const { plan, analysis } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "yarn@4.18.0",
+        dependencies: { parent: "1.0.0" },
+        resolutions: {
+          "left-pad@npm:1.3.0":
+            "patch:left-pad@npm%3A1.3.0#~/.yarn/patches/left-pad.patch",
+        },
+      }),
+      "yarn.lock": "# fixture\n",
+      ".yarnrc.yml": "nodeLinker: node-modules\n",
+      ".yarn/patches/left-pad.patch": TEXT_PATCH,
+    }, "bun");
+
+    expect(analysis.decisions.map((entry) => entry.featureId)).toContain(
+      "dependency.patch-protocol",
+    );
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    const parsed = JSON.parse(manifest?.content ?? "{}") as {
+      resolutions?: Record<string, string>;
+      patchedDependencies: Record<string, string>;
+    };
+    expect(parsed.resolutions).toBeUndefined();
+    expect(parsed.patchedDependencies).toEqual({
+      "left-pad@1.3.0": ".yarn/patches/left-pad.patch",
+    });
+  });
+
+  test("converts pnpm patched dependencies to Yarn resolutions", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "pnpm@11.21.0",
+        dependencies: { "left-pad": "^1.3.0" },
+      }),
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "pnpm-workspace.yaml": [
+        "patchedDependencies:",
+        "  'left-pad@1.3.0': 'patches/left-pad.patch'",
+        "",
+      ].join("\n"),
+      "patches/left-pad.patch": TEXT_PATCH,
+    }, "yarn-modern");
+
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    const parsed = JSON.parse(manifest?.content ?? "{}") as {
+      dependencies: Record<string, string>;
+      resolutions: Record<string, string>;
+    };
+    expect(parsed.dependencies["left-pad"]).toBe("^1.3.0");
+    expect(parsed.resolutions).toEqual({
+      "left-pad@npm:1.3.0": "patch:left-pad@npm%3A1.3.0#~/patches/left-pad.patch",
+    });
+  });
+
+  test("carries Bun patched dependencies into pnpm configuration", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "bun@1.3.14",
+        patchedDependencies: { "left-pad@1.3.0": "patches/left-pad.patch" },
+      }),
+      "bun.lock": "{}\n",
+      "patches/left-pad.patch": TEXT_PATCH,
+    }, "pnpm");
+
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    expect(JSON.parse(manifest?.content ?? "{}").patchedDependencies).toBeUndefined();
+    const configuration = mutations(plan).find((entry) => entry.path === "pnpm-workspace.yaml");
+    const parsed = Bun.YAML.parse(configuration?.content ?? "") as {
+      patchedDependencies: Record<string, string>;
+    };
+    expect(parsed.patchedDependencies).toEqual({
+      "left-pad@1.3.0": "patches/left-pad.patch",
+    });
+  });
+
+  test("blocks patch ranges and missing patch files", async () => {
+    const range = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        packageManager: "yarn@4.18.0",
+        dependencies: {
+          "left-pad": "patch:left-pad@npm%3A%5E1.3.0#~/.yarn/patches/left-pad.patch",
+        },
+      }),
+      "yarn.lock": "# fixture\n",
+      ".yarnrc.yml": "nodeLinker: node-modules\n",
+    }, "bun");
+    expect(range.plan.executable).toBeFalse();
+    expect(range.plan.diagnostics.map((entry) => entry.code)).toContain(
+      "PATCH_SELECTOR_UNSUPPORTED",
+    );
+
+    const missing = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        packageManager: "bun@1.3.14",
+        patchedDependencies: { "left-pad@1.3.0": "patches/missing.patch" },
+      }),
+      "bun.lock": "{}\n",
+    }, "pnpm");
+    expect(missing.plan.executable).toBeFalse();
+    expect(missing.plan.diagnostics.map((entry) => entry.code)).toContain(
+      "PATCH_FILE_NOT_FOUND",
+    );
+  });
+
+  test("blocks patch paths backed by symbolic links", async () => {
+    if (process.platform === "win32") return;
+    const root = await createProject({
+      "package.json": JSON.stringify({
+        name: "root",
+        packageManager: "bun@1.3.14",
+        patchedDependencies: { "left-pad@1.3.0": "patches/linked.patch" },
+      }),
+      "bun.lock": "{}\n",
+      "patches/real.patch": TEXT_PATCH,
+    });
+    await symlink("real.patch", join(root, "patches/linked.patch"));
+    const inspection = await inspectProject(root);
+    const projectIr = await buildProjectIR(inspection);
+    const analysis = analyzeCapabilities(projectIr!, "pnpm");
+    const plan = await planPackageManagerMigration(
+      inspection,
+      projectIr!,
+      analysis!,
+      "pnpm",
+    );
+
+    expect(plan?.executable).toBeFalse();
+    expect(plan?.diagnostics.map((entry) => entry.code)).toContain(
+      "PATCH_PATH_UNSUPPORTED",
+    );
   });
 
   test("renders executable baseline plans for both Yarn families and Bun", async () => {

@@ -5,7 +5,7 @@ description: Defines normalized capability dimensions and how planning decisions
 tags: [support, capabilities, adapters, testing]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T23:32:12Z}
 sources:
   - id: package-managers
     resource: /support/package-managers.md
@@ -50,7 +50,7 @@ This matrix identifies the implemented planning focus. Individual plans still fa
 | pnpm | Required | Required | Required | Required | Required | No |
 | Yarn Classic | Required | Analyze/transform | Required | Detect and diagnose | Detect assumptions | No |
 | Yarn Modern | Required | Analyze/transform | Required | Required | Required | No |
-| Bun | Required | Required where available | Required | Detect and diagnose | Detect assumptions | No |
+| Bun | Required | Required where available | Required | Required for exact text patches | Detect assumptions | No |
 | vlt | Required for preview scenarios | Unknown until adapter research | Required for preview scenarios | Unknown until adapter research | Unknown until adapter research | Yes |
 | Deno dependency mode | Required for preview scenarios | Analyze/transform | Analyze/transform | Not applicable to MVP | Not applicable to MVP | Yes |
 
@@ -67,3 +67,5 @@ A capability rule should contain:
 - A statement of expected dependency graph effects.
 
 Adapters must not infer support from syntax similarity alone. A shared manifest field may have different resolution, peer, lifecycle, or workspace semantics. Capability support in the target does not imply renderer coverage: `TRANSFORMATION_UNIMPLEMENTED` blocks apply when the MVP cannot render an otherwise valid target feature safely.
+
+The production patch boundary converts exact `name@version` entries backed by one project-relative, text-only git unified diff among Yarn Modern, pnpm, and Bun. Range selectors, binary patches, missing files, parent-directory paths, multiple patch sources, and optional or parameterized Yarn locators fail closed.

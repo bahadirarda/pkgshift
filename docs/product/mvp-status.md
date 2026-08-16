@@ -5,7 +5,7 @@ description: Records the completed technical MVP, its validation evidence, and e
 tags: [product, mvp, status, delivery]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-16T22:38:36Z}
+generated: { by: bahadirarda, at: 2026-08-16T23:32:12Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -14,7 +14,7 @@ sources:
     resource: /architecture/repository-layout.md
     title: Repository Layout
   - id: repository-source
-    resource: "repository source tree at 2026-08-16"
+    resource: "repository source tree at 2026-08-17"
     title: Repository source tree
 ---
 
@@ -41,6 +41,9 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Rust-primary Plug and Play and isolated linker translation across pnpm, Yarn Modern, Bun, npm, and Yarn Classic target layouts.
 - Secret-safe `.npmrc` translation into Yarn Modern registry, scope, authentication-policy, and environment-token configuration.
 - Bidirectional Bun, pnpm, and Yarn Modern lifecycle allow-list rendering using current `trustedDependencies`, `allowBuilds`, and `dependenciesMeta` contracts.
+- Shared-schema `packageExtensions` rendering among npm, pnpm, and Yarn Modern.
+- Exact-version, text-only patch conversion among Yarn Modern, pnpm, and Bun for direct dependencies and transitive Yarn resolutions.
+- Repository fingerprints and exact approval preconditions that include project patch files regardless of their directory.
 - Opt-in atomic plan bundle persistence with digest verification.
 - Exact plan and run approval tokens before mutation.
 - Owner-only recovery snapshots created before the first repository write.
@@ -78,7 +81,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, and Bun produce executable plans when every observed feature has a safe implemented path. |
 | Rust primary path | MVP complete | Inspect, plan, exact approval, apply, verify, and rollback pass subprocess and real-installer acceptance coverage. |
 | Polyglot workspace | MVP complete | Cargo crates and the TypeScript reference run from isolated workspace boundaries under one CI contract. |
-| Advanced Rust renderer parity | In progress | Override, resolution, linker, Yarn registry, and Bun/pnpm/Yarn lifecycle policy rendering have crossed the parity gate; remaining unported transformations fail closed and the TypeScript suite remains their executable specification. |
+| Advanced Rust renderer parity | Production parity complete | Override, resolution, package-extension, exact text-patch, linker, Yarn registry, and Bun/pnpm/Yarn lifecycle policy rendering pass Rust and TypeScript parity fixtures; preview and manual-only transformations remain fail-closed. |
 
 # Explicit Boundaries
 
@@ -92,13 +95,14 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Resolution-set proof does not yet make dependency edges blocking because peer, optional, hoisting, and deduplication representations differ between managers.
 - Representative project scripts are not selected or executed automatically.
 - The Rust CLI does not yet own TypeScript reference commands for managed Agent Skill lifecycle or artifact explanation.
-- Advanced Rust renderers that have not crossed the parity gate emit blocking diagnostics instead of delegating edits to a model.
+- Preview-target and manual-only transformations emit blocking diagnostics instead of delegating edits to a model.
 - Registry tokens must use `${NAME}` references for Yarn Modern translation; literal credentials and unrecognized `.npmrc` settings fail closed without entering plan artifacts.
 - pnpm output uses the current `allowBuilds` map while inspection continues to accept legacy `onlyBuiltDependencies` input.
 - Yarn per-dependency build denials outside global allow-list mode remain blocking because other targets cannot preserve them safely.
 - Override nesting beyond one deterministic parent-child selector level and Yarn resolution selectors that cannot map to a bare npm package remain blocking.
+- Patch conversion requires one exact `name@version`, one project-relative `.patch` file, and a text-only git unified diff; ranges, binary patches, missing files, and multiple or parameterized Yarn patch sources remain blocking.
 - Documentation remains `draft` until a human verifier records review evidence.
 
 # Post-MVP Work
 
-Close patch and package-extension renderer parity, add configurable platform-aware and edge-aware graph policies, explicit representative-script selection, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.
+Expand patch conversion beyond the exact text-only subset, add configurable platform-aware and edge-aware graph policies, explicit representative-script selection, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.

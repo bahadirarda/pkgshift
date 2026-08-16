@@ -8,6 +8,8 @@ use std::process::{Command, Output};
 use serde_json::Value;
 use tempfile::TempDir;
 
+const TEXT_PATCH: &str = "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+// pkgshift patch fixture\n+new\n";
+
 fn write(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("fixture parent directory");
@@ -235,6 +237,151 @@ fn migrates_an_npm_workspace_to_pnpm() {
 }
 
 #[test]
+fn carries_package_extensions_from_npm_through_pnpm_to_yarn_modern() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "package-extensions-fixture",
+  "private": true,
+  "packageManager": "npm@12.0.2",
+  "packageExtensions": {
+    "broken-package@^1": {
+      "dependencies": { "missing-runtime-dep": "^2.0.0" },
+      "peerDependencies": { "react": "*" },
+      "peerDependenciesMeta": { "react": { "optional": true } }
+    }
+  }
+}
+"#,
+    );
+    write(
+        &root.join("package-lock.json"),
+        "{\"lockfileVersion\":3,\"packages\":{\"\":{}}}\n",
+    );
+
+    let pnpm = plan_and_apply(&root, &binaries, "pnpm");
+    assert_eq!(pnpm["status"], "completed");
+    let pnpm_configuration =
+        fs::read_to_string(root.join("pnpm-workspace.yaml")).expect("pnpm workspace configuration");
+    assert!(pnpm_configuration.contains("packageExtensions:"));
+    assert!(pnpm_configuration.contains("'broken-package@^1':"));
+    assert!(pnpm_configuration.contains("missing-runtime-dep: '^2.0.0'"));
+
+    let yarn = plan_and_apply(&root, &binaries, "yarn-modern");
+    assert_eq!(yarn["status"], "completed");
+    let yarn_configuration =
+        fs::read_to_string(root.join(".yarnrc.yml")).expect("Yarn Modern configuration");
+    assert!(yarn_configuration.contains("packageExtensions:"));
+    assert!(yarn_configuration.contains("peerDependenciesMeta:"));
+    assert!(yarn_configuration.contains("optional: true"));
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("package.json")).expect("migrated manifest"),
+    )
+    .expect("migrated manifest JSON");
+    assert!(manifest.get("packageExtensions").is_none());
+}
+
+#[test]
+fn migrates_a_yarn_patch_protocol_dependency_to_bun_policy() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "yarn-patch-fixture",
+  "private": true,
+  "packageManager": "yarn@4.18.0",
+  "dependencies": {
+    "left-pad": "patch:left-pad@npm%3A1.3.0#~/.yarn/patches/left-pad.patch"
+  }
+}
+"#,
+    );
+    write(&root.join(".yarnrc.yml"), "nodeLinker: node-modules\n");
+    write(&root.join(".yarn/patches/left-pad.patch"), TEXT_PATCH);
+
+    let applied = plan_and_apply(&root, &binaries, "bun");
+    assert_eq!(applied["status"], "completed");
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("package.json")).expect("migrated manifest"),
+    )
+    .expect("migrated manifest JSON");
+    assert_eq!(manifest["dependencies"]["left-pad"], "1.3.0");
+    assert_eq!(
+        manifest["patchedDependencies"]["left-pad@1.3.0"],
+        ".yarn/patches/left-pad.patch"
+    );
+    assert!(root.join(".yarn/patches/left-pad.patch").is_file());
+    assert!(!root.join(".yarnrc.yml").exists());
+}
+
+#[test]
+fn rejects_a_patch_change_after_exact_plan_approval() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0","dependencies":{"left-pad":"patch:left-pad@npm%3A1.3.0#~/.yarn/patches/left-pad.patch"}}
+"#,
+    );
+    write(&root.join(".yarnrc.yml"), "nodeLinker: node-modules\n");
+    let patch_path = root.join(".yarn/patches/left-pad.patch");
+    write(&patch_path, TEXT_PATCH);
+
+    let planned = run(&root, &binaries, &["to", "bun"]);
+    assert_eq!(planned.status.code(), Some(7));
+    let planned = json_output(&planned);
+    let plan_id = planned["planId"].as_str().expect("plan identifier");
+
+    write(
+        &patch_path,
+        &TEXT_PATCH.replace("pkgshift patch fixture", "changed patch fixture"),
+    );
+    let applied = run(&root, &binaries, &["to", "bun", "--approve", plan_id]);
+    assert!(!applied.status.success());
+    assert!(!root.join("bun.lock").exists());
+    let manifest = fs::read_to_string(root.join("package.json")).expect("source manifest");
+    assert!(manifest.contains("patch:left-pad"));
+    assert!(!manifest.contains("patchedDependencies"));
+}
+
+#[test]
+fn blocks_a_symbolic_link_patch_path_before_approval() {
+    use std::os::unix::fs::symlink;
+
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{"name":"fixture","private":true,"packageManager":"bun@1.3.14","patchedDependencies":{"left-pad@1.3.0":"patches/linked.patch"}}
+"#,
+    );
+    write(&root.join("bun.lock"), "{}\n");
+    write(&root.join("patches/real.patch"), TEXT_PATCH);
+    symlink("real.patch", root.join("patches/linked.patch")).expect("patch symlink");
+
+    let planned = run(&root, &binaries, &["to", "pnpm"]);
+    assert!(!planned.status.success());
+    let planned = json_output(&planned);
+    assert!(
+        planned["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| {
+                diagnostics
+                    .iter()
+                    .any(|entry| entry["code"] == "PATCH_PATH_UNSUPPORTED")
+            })
+    );
+    assert!(!root.join("pnpm-lock.yaml").exists());
+}
+
+#[test]
 fn migrates_registry_and_lifecycle_policy_to_yarn_modern() {
     let directory = tempfile::tempdir().expect("fixture directory");
     let binaries = fake_package_managers(&directory);
@@ -308,6 +455,44 @@ fn migrates_a_real_pnpm_fixture_with_bun() {
     assert_eq!(applied["status"], "completed");
     assert!(root.join("bun.lock").is_file());
     assert!(!root.join("pnpm-lock.yaml").exists());
+}
+
+#[test]
+#[ignore = "requires the real Bun executable and registry access"]
+fn applies_a_migrated_yarn_patch_with_real_bun() {
+    let bun_available = Command::new("bun")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success());
+    if !bun_available {
+        return;
+    }
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = tempfile::tempdir().expect("empty binary directory");
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "live-yarn-patch-fixture",
+  "private": true,
+  "packageManager": "yarn@4.18.0",
+  "dependencies": {
+    "left-pad": "patch:left-pad@npm%3A1.3.0#~/.yarn/patches/left-pad.patch"
+  }
+}
+"#,
+    );
+    write(&root.join(".yarnrc.yml"), "nodeLinker: node-modules\n");
+    write(
+        &root.join(".yarn/patches/left-pad.patch"),
+        "diff --git a/index.js b/index.js\nindex e90aec35d979c42dcd4ddfacb4768c00d7102349..ecd9cc2c51b74be58db5df6d039b797a7c617e0e 100644\n--- a/index.js\n+++ b/index.js\n@@ -4,6 +4,7 @@\n      * To Public License, Version 2, as published by Sam Hocevar. See\n      * http://www.wtfpl.net/ for more details. */\n 'use strict';\n+// pkgshift live patch fixture\n module.exports = leftPad;\n \n var cache = [\n",
+    );
+
+    let applied = plan_and_apply(&root, binaries.path(), "bun");
+    assert_eq!(applied["status"], "completed");
+    let installed =
+        fs::read_to_string(root.join("node_modules/left-pad/index.js")).expect("patched package");
+    assert!(installed.contains("pkgshift live patch fixture"));
 }
 
 #[test]

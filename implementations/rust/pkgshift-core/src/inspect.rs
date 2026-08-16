@@ -131,7 +131,7 @@ fn contains_token(content: &str, token: &str) -> bool {
 fn is_relevant(path: &str) -> bool {
     path == "package.json"
         || path.ends_with("/package.json")
-        || (path.starts_with(".yarn/patches/") && path.ends_with(".patch"))
+        || path.ends_with(".patch")
         || RELEVANT_BASENAMES.contains(&path)
 }
 
@@ -406,6 +406,20 @@ fn collect_manifest_features(
     features: &mut BTreeMap<String, Vec<String>>,
 ) {
     collect_policy_features(manifest, &format!("{manifest_path}#"), features);
+    if let Some(resolutions) = manifest.get("resolutions").and_then(Value::as_object) {
+        for (selector, value) in resolutions {
+            if value
+                .as_str()
+                .is_some_and(|specifier| specifier.starts_with("patch:"))
+            {
+                add_feature(
+                    features,
+                    "dependency.patch-protocol",
+                    format!("{manifest_path}#/resolutions/{selector}"),
+                );
+            }
+        }
+    }
     if let Some(pnpm) = manifest.get("pnpm").and_then(Value::as_object) {
         collect_policy_features(pnpm, &format!("{manifest_path}#/pnpm"), features);
     }
@@ -583,6 +597,8 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
             script_names,
         });
     }
+
+    collect_policy_features(&yarn_configuration, ".yarnrc.yml#", &mut features);
 
     if let Some(content) = read_text(&root.join(".npmrc"))? {
         let mut has_registry_configuration = false;
@@ -779,5 +795,37 @@ mod tests {
         fs::write(directory.path().join(".npmrc"), "token=second\n").expect("npm configuration");
         let second = inspect_project(directory.path()).expect("second inspection");
         assert_eq!(first.fingerprint, second.fingerprint);
+    }
+
+    #[test]
+    fn project_patch_files_participate_in_repository_fingerprints() {
+        let directory = tempdir().expect("temporary directory");
+        fs::create_dir_all(directory.path().join("patches")).expect("patch directory");
+        fs::write(
+            directory.path().join("package.json"),
+            r#"{"name":"fixture","packageManager":"bun@1.3.14","patchedDependencies":{"left-pad@1.3.0":"patches/left-pad.patch"}}"#,
+        )
+        .expect("manifest");
+        fs::write(directory.path().join("bun.lock"), "{}\n").expect("lockfile");
+        let patch_path = directory.path().join("patches/left-pad.patch");
+        fs::write(
+            &patch_path,
+            "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n",
+        )
+        .expect("patch");
+        let first = inspect_project(directory.path()).expect("first inspection");
+        fs::write(
+            &patch_path,
+            "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n+changed\n",
+        )
+        .expect("changed patch");
+        let second = inspect_project(directory.path()).expect("second inspection");
+
+        assert!(
+            first
+                .relevant_files
+                .contains(&"patches/left-pad.patch".to_owned())
+        );
+        assert_ne!(first.fingerprint, second.fingerprint);
     }
 }

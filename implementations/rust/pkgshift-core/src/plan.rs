@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::fs;
+use std::path::{Component, Path};
 
 use serde_json::{Map, Value};
 
@@ -505,10 +506,440 @@ fn yaml_single_quoted(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
+fn yaml_key(value: &str) -> String {
+    let mut characters = value.chars();
+    if characters
+        .next()
+        .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+        && characters.all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '-')
+        })
+    {
+        value.to_owned()
+    } else {
+        yaml_single_quoted(value)
+    }
+}
+
+fn append_yaml_entry(lines: &mut Vec<String>, indent: usize, key: &str, value: &Value) {
+    let prefix = " ".repeat(indent);
+    let key = yaml_key(key);
+    match value {
+        Value::Object(entries) if entries.is_empty() => {
+            lines.push(format!("{prefix}{key}: {{}}"));
+        }
+        Value::Object(entries) => {
+            lines.push(format!("{prefix}{key}:"));
+            for (entry_key, entry_value) in entries {
+                append_yaml_entry(lines, indent + 2, entry_key, entry_value);
+            }
+        }
+        Value::Array(entries) if entries.is_empty() => {
+            lines.push(format!("{prefix}{key}: []"));
+        }
+        Value::Array(entries) => {
+            lines.push(format!("{prefix}{key}:"));
+            for entry in entries {
+                match entry {
+                    Value::String(value) => {
+                        lines.push(format!("{prefix}  - {}", yaml_single_quoted(value)));
+                    }
+                    Value::Bool(value) => lines.push(format!("{prefix}  - {value}")),
+                    Value::Number(value) => lines.push(format!("{prefix}  - {value}")),
+                    Value::Null => lines.push(format!("{prefix}  - null")),
+                    Value::Array(_) | Value::Object(_) => {
+                        lines.push(format!(
+                            "{prefix}  - {}",
+                            yaml_single_quoted(&entry.to_string())
+                        ));
+                    }
+                }
+            }
+        }
+        Value::String(value) => {
+            lines.push(format!("{prefix}{key}: {}", yaml_single_quoted(value)));
+        }
+        Value::Bool(value) => lines.push(format!("{prefix}{key}: {value}")),
+        Value::Number(value) => lines.push(format!("{prefix}{key}: {value}")),
+        Value::Null => lines.push(format!("{prefix}{key}: null")),
+    }
+}
+
+fn append_yaml_mapping(lines: &mut Vec<String>, key: &str, entries: &Map<String, Value>) {
+    append_yaml_entry(lines, 0, key, &Value::Object(entries.clone()));
+}
+
+fn package_name_end(selector: &str) -> Option<usize> {
+    if selector.starts_with('@') {
+        let slash = selector.find('/')?;
+        if slash == 1 || slash + 1 == selector.len() {
+            return None;
+        }
+        selector[slash + 1..]
+            .find('@')
+            .map_or(Some(selector.len()), |offset| Some(slash + 1 + offset))
+    } else {
+        if selector.starts_with('@') || selector.starts_with('.') || selector.starts_with('-') {
+            return None;
+        }
+        selector.find('@').or(Some(selector.len()))
+    }
+}
+
+fn valid_package_extension_selector(selector: &str) -> bool {
+    let Some(name_end) = package_name_end(selector) else {
+        return false;
+    };
+    let name = &selector[..name_end];
+    let range = if name_end < selector.len() {
+        selector.get(name_end + 1..)
+    } else {
+        None
+    };
+    !name.is_empty()
+        && !name.chars().any(char::is_whitespace)
+        && !name.contains(['#', ':', '\\'])
+        && range.is_none_or(|value| {
+            !value.is_empty() && !value.contains(['\n', '\r']) && !value.starts_with([':', '#'])
+        })
+}
+
+fn valid_string_map(value: Option<&Value>) -> bool {
+    value.is_some_and(|value| {
+        value.as_object().is_some_and(|entries| {
+            entries
+                .iter()
+                .all(|(name, range)| !name.is_empty() && range.is_string())
+        })
+    })
+}
+
+fn valid_peer_dependencies_meta(value: Option<&Value>) -> bool {
+    value.is_some_and(|value| {
+        value.as_object().is_some_and(|entries| {
+            entries.iter().all(|(name, metadata)| {
+                !name.is_empty()
+                    && metadata.as_object().is_some_and(|metadata| {
+                        metadata.keys().all(|key| key == "optional")
+                            && metadata.get("optional").and_then(Value::as_bool).is_some()
+                    })
+            })
+        })
+    })
+}
+
+fn valid_package_extensions(entries: &Map<String, Value>) -> bool {
+    entries.iter().all(|(selector, extension)| {
+        valid_package_extension_selector(selector)
+            && extension.as_object().is_some_and(|extension| {
+                extension.iter().all(|(field, value)| match field.as_str() {
+                    "dependencies" | "optionalDependencies" | "peerDependencies" => {
+                        valid_string_map(Some(value))
+                    }
+                    "peerDependenciesMeta" => valid_peer_dependencies_meta(Some(value)),
+                    _ => false,
+                })
+            })
+    })
+}
+
+fn source_package_extensions(
+    source: PackageManagerId,
+    root_manifest: &Map<String, Value>,
+    pnpm_manifest: &Map<String, Value>,
+    pnpm_configuration: &Map<String, Value>,
+    yarn_configuration: &Map<String, Value>,
+) -> Map<String, Value> {
+    let root = root_manifest.get("packageExtensions");
+    let pnpm_manifest = pnpm_manifest.get("packageExtensions");
+    let pnpm_configuration = pnpm_configuration.get("packageExtensions");
+    let yarn = yarn_configuration.get("packageExtensions");
+    let candidates = match source {
+        PackageManagerId::Pnpm => [pnpm_configuration, pnpm_manifest, root, yarn],
+        PackageManagerId::YarnModern => [yarn, root, pnpm_configuration, pnpm_manifest],
+        _ => [root, pnpm_configuration, pnpm_manifest, yarn],
+    };
+    candidates
+        .into_iter()
+        .filter_map(|candidate| candidate.and_then(Value::as_object))
+        .find(|entries| !entries.is_empty())
+        .cloned()
+        .unwrap_or_default()
+}
+
+#[derive(Debug, Clone)]
+struct YarnPatchConversion {
+    base_specifier: String,
+    selector: String,
+    path: String,
+}
+
+fn exact_semver(value: &str) -> bool {
+    let (without_build, build) = value
+        .split_once('+')
+        .map_or((value, None), |(version, build)| (version, Some(build)));
+    let (core, prerelease) = without_build
+        .split_once('-')
+        .map_or((without_build, None), |(version, prerelease)| {
+            (version, Some(prerelease))
+        });
+    let mut components = core.split('.');
+    let valid_core = (0..3).all(|_| {
+        components.next().is_some_and(|component| {
+            !component.is_empty() && component.chars().all(|c| c.is_ascii_digit())
+        })
+    }) && components.next().is_none();
+    let valid_suffix = |suffix: Option<&str>| {
+        suffix.is_none_or(|suffix| {
+            !suffix.is_empty()
+                && suffix.chars().all(|character| {
+                    character.is_ascii_alphanumeric() || matches!(character, '.' | '-')
+                })
+        })
+    };
+    valid_core && valid_suffix(prerelease) && valid_suffix(build)
+}
+
+fn exact_package_selector(selector: &str) -> Option<(String, String)> {
+    let name_end = package_name_end(selector)?;
+    if name_end == selector.len() {
+        return None;
+    }
+    let name = &selector[..name_end];
+    let version = &selector[name_end + 1..];
+    exact_semver(version).then(|| (name.to_owned(), version.to_owned()))
+}
+
+fn normalize_patch_path(
+    root: &Path,
+    raw_path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Result<Option<String>> {
+    let path = raw_path
+        .strip_prefix("~/")
+        .or_else(|| raw_path.strip_prefix("./"))
+        .unwrap_or(raw_path);
+    let relative = Path::new(path);
+    let safe = !path.is_empty()
+        && !path.contains('\\')
+        && relative
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("patch")
+        && relative
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir));
+    if !safe {
+        diagnostics.push(Diagnostic::blocking(
+            "PATCH_PATH_UNSUPPORTED",
+            "A patch path is outside the deterministic project-relative subset.",
+            vec![
+                "Use a project-relative .patch file without parent-directory segments.".to_owned(),
+            ],
+        ));
+        return Ok(None);
+    }
+    let mut absolute = root.to_path_buf();
+    let components = relative.components().collect::<Vec<_>>();
+    for (index, component) in components.iter().enumerate() {
+        let Component::Normal(segment) = component else {
+            continue;
+        };
+        absolute.push(segment);
+        match fs::symlink_metadata(&absolute) {
+            Ok(metadata)
+                if metadata.file_type().is_symlink()
+                    || (index + 1 == components.len() && !metadata.is_file())
+                    || (index + 1 < components.len() && !metadata.is_dir()) =>
+            {
+                diagnostics.push(Diagnostic::blocking(
+                    "PATCH_PATH_UNSUPPORTED",
+                    "A patch path traverses a symbolic link or non-file project entry.",
+                    vec![
+                        "Use a regular patch file beneath regular project directories.".to_owned(),
+                    ],
+                ));
+                return Ok(None);
+            }
+            Ok(_) => {}
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
+                diagnostics.push(Diagnostic::blocking(
+                    "PATCH_FILE_NOT_FOUND",
+                    "A configured patch file does not exist in the project.",
+                    vec![
+                        "Restore the configured patch file before retrying the migration."
+                            .to_owned(),
+                    ],
+                ));
+                return Ok(None);
+            }
+            Err(source) => {
+                return Err(PkgshiftError::Io {
+                    path: absolute,
+                    source,
+                });
+            }
+        }
+    }
+    let Some(content) = read_text(&root.join(relative))? else {
+        diagnostics.push(Diagnostic::blocking(
+            "PATCH_FILE_NOT_FOUND",
+            "A configured patch file does not exist in the project.",
+            vec!["Restore the configured patch file before retrying the migration.".to_owned()],
+        ));
+        return Ok(None);
+    };
+    if !content.starts_with("diff --git a/")
+        || !content.lines().any(|line| line.starts_with("--- "))
+        || !content.lines().any(|line| line.starts_with("+++ "))
+        || content.contains("GIT binary patch")
+        || content.contains("Binary files ")
+    {
+        diagnostics.push(Diagnostic::blocking(
+            "PATCH_FORMAT_UNSUPPORTED",
+            "A patch file is outside the portable text unified-diff subset.",
+            vec!["Regenerate the patch as a text-only git-style unified diff.".to_owned()],
+        ));
+        return Ok(None);
+    }
+    Ok(Some(path.replace('\\', "/")))
+}
+
+fn yarn_patch_conversion(
+    root: &Path,
+    name: &str,
+    specifier: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Result<Option<YarnPatchConversion>> {
+    let Some(value) = specifier.strip_prefix("patch:") else {
+        return Ok(None);
+    };
+    let Some((source, raw_path)) = value.split_once('#') else {
+        diagnostics.push(Diagnostic::blocking(
+            "PATCH_LOCATOR_UNSUPPORTED",
+            "A Yarn patch locator does not include one local patch file.",
+            vec!["Regenerate the patch with Yarn patch-commit --save.".to_owned()],
+        ));
+        return Ok(None);
+    };
+    if raw_path.contains(['&', '!', '%']) || raw_path.contains("::") {
+        diagnostics.push(Diagnostic::blocking(
+            "PATCH_LOCATOR_UNSUPPORTED",
+            "A Yarn patch locator uses multiple, optional, encoded, or parameterized patch sources.",
+            vec!["Reduce the locator to one required project-relative patch file.".to_owned()],
+        ));
+        return Ok(None);
+    }
+    let Some(reference) = source.strip_prefix(&format!("{name}@")) else {
+        diagnostics.push(Diagnostic::blocking(
+            "PATCH_LOCATOR_UNSUPPORTED",
+            "A Yarn patch locator aliases a different package identity.",
+            vec![
+                "Use a patch locator whose package identity matches the dependency key.".to_owned(),
+            ],
+        ));
+        return Ok(None);
+    };
+    let version = reference
+        .strip_prefix("npm%3A")
+        .or_else(|| reference.strip_prefix("npm%3a"))
+        .or_else(|| reference.strip_prefix("npm:"))
+        .unwrap_or(reference);
+    if !exact_semver(version) {
+        diagnostics.push(Diagnostic::blocking(
+            "PATCH_SELECTOR_UNSUPPORTED",
+            "A patch targets a range or non-registry reference instead of one exact package version.",
+            vec!["Regenerate the patch against an exact registry package version.".to_owned()],
+        ));
+        return Ok(None);
+    }
+    let Some(path) = normalize_patch_path(root, raw_path, diagnostics)? else {
+        return Ok(None);
+    };
+    Ok(Some(YarnPatchConversion {
+        base_specifier: version.to_owned(),
+        selector: format!("{name}@{version}"),
+        path,
+    }))
+}
+
+fn yarn_patch_name(specifier: &str) -> Option<&str> {
+    let source = specifier.strip_prefix("patch:")?.split_once('#')?.0;
+    let name_end = package_name_end(source)?;
+    (name_end < source.len()).then_some(&source[..name_end])
+}
+
+fn source_patched_dependencies(
+    source: PackageManagerId,
+    root_manifest: &Map<String, Value>,
+    pnpm_manifest: &Map<String, Value>,
+    pnpm_configuration: &Map<String, Value>,
+) -> Map<String, Value> {
+    let root = root_manifest.get("patchedDependencies");
+    let pnpm_manifest = pnpm_manifest.get("patchedDependencies");
+    let pnpm_configuration = pnpm_configuration.get("patchedDependencies");
+    let candidates = match source {
+        PackageManagerId::Pnpm => [pnpm_configuration, pnpm_manifest, root],
+        _ => [root, pnpm_configuration, pnpm_manifest],
+    };
+    candidates
+        .into_iter()
+        .filter_map(|candidate| candidate.and_then(Value::as_object))
+        .find(|entries| !entries.is_empty())
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn validated_patched_dependencies(
+    root: &Path,
+    entries: &Map<String, Value>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Result<Map<String, Value>> {
+    let mut output = Map::new();
+    for (selector, value) in entries {
+        if exact_package_selector(selector).is_none() {
+            diagnostics.push(Diagnostic::blocking(
+                "PATCH_SELECTOR_UNSUPPORTED",
+                "A patched dependency does not target one exact package version.",
+                vec!["Use an exact name@version selector for each patch.".to_owned()],
+            ));
+            continue;
+        }
+        let Some(raw_path) = value.as_str() else {
+            diagnostics.push(Diagnostic::blocking(
+                "PATCH_POLICY_UNSUPPORTED",
+                "A patched dependency value is not a patch file path.",
+                vec!["Use the current selector-to-path patchedDependencies shape.".to_owned()],
+            ));
+            continue;
+        };
+        if let Some(path) = normalize_patch_path(root, raw_path, diagnostics)? {
+            output.insert(selector.clone(), Value::String(path));
+        }
+    }
+    Ok(output)
+}
+
+fn yarn_patch_resolutions(patched_dependencies: &Map<String, Value>) -> Map<String, Value> {
+    patched_dependencies
+        .iter()
+        .filter_map(|(selector, path)| {
+            let (name, version) = exact_package_selector(selector)?;
+            let path = path.as_str()?;
+            Some((
+                format!("{name}@npm:{version}"),
+                Value::String(format!("patch:{name}@npm%3A{version}#~/{path}")),
+            ))
+        })
+        .collect()
+}
+
 fn render_pnpm_workspace(
     patterns: &[String],
     root_manifest: &Map<String, Value>,
     overrides: &Map<String, Value>,
+    package_extensions: &Map<String, Value>,
+    patched_dependencies: &Map<String, Value>,
     node_linker: Option<&str>,
     trusted_dependencies: &[String],
     lifecycle_policy_present: bool,
@@ -540,6 +971,12 @@ fn render_pnpm_workspace(
                 }
             }
         }
+    }
+    if !package_extensions.is_empty() {
+        append_yaml_mapping(&mut lines, "packageExtensions", package_extensions);
+    }
+    if !patched_dependencies.is_empty() {
+        append_yaml_mapping(&mut lines, "patchedDependencies", patched_dependencies);
     }
     if !overrides.is_empty() {
         lines.push("overrides:".to_owned());
@@ -778,10 +1215,14 @@ fn render_yarn_configuration(
     node_linker: &str,
     lifecycle_policy_present: bool,
     registry: &YarnRegistryConfiguration,
+    package_extensions: &Map<String, Value>,
 ) -> String {
     let mut lines = vec![format!("nodeLinker: {node_linker}")];
     if lifecycle_policy_present {
         lines.push("enableScripts: false".to_owned());
+    }
+    if !package_extensions.is_empty() {
+        append_yaml_mapping(&mut lines, "packageExtensions", package_extensions);
     }
     if let Some(server) = &registry.registry_server {
         lines.push(format!("npmRegistryServer: {}", yaml_single_quoted(server)));
@@ -943,6 +1384,9 @@ fn transform_project(
         "overrides.nested-to-resolutions",
         "resolutions.to-overrides",
         "resolutions.to-pnpm-overrides",
+        "patch.yarn-to-pnpm",
+        "patch.yarn-to-bun",
+        "patch.patched-to-yarn",
         "linker.pnp-to-node-modules",
         "linker.pnp-to-isolated",
         "linker.isolated-to-yarn-pnpm",
@@ -1008,6 +1452,138 @@ fn transform_project(
         .and_then(|content| noyalib::from_str::<Value>(content).ok())
         .and_then(|value| value.as_object().cloned())
         .unwrap_or_default();
+    let source = inspection
+        .package_manager
+        .selected
+        .expect("planning requires a selected source");
+    let mut package_extensions = source_package_extensions(
+        source,
+        &root_manifest_before,
+        &pnpm_manifest,
+        &pnpm_configuration,
+        &yarn_configuration,
+    );
+    if !valid_package_extensions(&package_extensions) {
+        diagnostics.push(Diagnostic::blocking(
+            "PACKAGE_EXTENSIONS_UNSUPPORTED",
+            "Package extensions contain a selector or field outside the deterministic shared subset.",
+            vec![
+                "Use package selectors with dependency, optional dependency, peer dependency, or optional peer metadata entries."
+                    .to_owned(),
+            ],
+        ));
+        package_extensions.clear();
+    }
+    let configured_patches = source_patched_dependencies(
+        source,
+        &root_manifest_before,
+        &pnpm_manifest,
+        &pnpm_configuration,
+    );
+    let mut patched_dependencies =
+        validated_patched_dependencies(root, &configured_patches, &mut diagnostics)?;
+    let mut yarn_patch_conversions = BTreeMap::new();
+    if project_ir
+        .features
+        .iter()
+        .any(|feature| feature.id == "dependency.patch-protocol")
+    {
+        if source != PackageManagerId::YarnModern {
+            diagnostics.push(Diagnostic::blocking(
+                "PATCH_SOURCE_UNSUPPORTED",
+                "A Yarn patch protocol dependency was found outside a Yarn Modern project.",
+                vec![
+                    "Normalize the project with Yarn Modern before migrating its patch protocol."
+                        .to_owned(),
+                ],
+            ));
+        } else {
+            for dependency in project_ir
+                .packages
+                .iter()
+                .flat_map(|package| &package.dependencies)
+                .filter(|dependency| {
+                    matches!(dependency.protocol, crate::model::DependencyProtocol::Patch)
+                })
+            {
+                let Some(conversion) = yarn_patch_conversion(
+                    root,
+                    &dependency.name,
+                    &dependency.specifier,
+                    &mut diagnostics,
+                )?
+                else {
+                    continue;
+                };
+                if let Some(existing) = patched_dependencies.get(&conversion.selector)
+                    && existing.as_str() != Some(conversion.path.as_str())
+                {
+                    diagnostics.push(Diagnostic::blocking(
+                        "PATCH_POLICY_CONFLICT",
+                        "Multiple patch declarations target the same exact package version with different files.",
+                        vec!["Keep one patch file for each exact package version.".to_owned()],
+                    ));
+                    continue;
+                }
+                patched_dependencies.insert(
+                    conversion.selector.clone(),
+                    Value::String(conversion.path.clone()),
+                );
+                yarn_patch_conversions.insert(dependency.location.clone(), conversion);
+            }
+            if let Some(resolutions) = root_manifest_before
+                .get("resolutions")
+                .and_then(Value::as_object)
+            {
+                for (selector, value) in resolutions {
+                    let Some(specifier) = value
+                        .as_str()
+                        .filter(|specifier| specifier.starts_with("patch:"))
+                    else {
+                        continue;
+                    };
+                    let Some(name) = yarn_patch_name(specifier) else {
+                        diagnostics.push(Diagnostic::blocking(
+                            "PATCH_LOCATOR_UNSUPPORTED",
+                            "A Yarn patch resolution does not identify one registry package.",
+                            vec![
+                                "Regenerate the patch resolution with Yarn patch-commit --save."
+                                    .to_owned(),
+                            ],
+                        ));
+                        continue;
+                    };
+                    let Some(conversion) =
+                        yarn_patch_conversion(root, name, specifier, &mut diagnostics)?
+                    else {
+                        continue;
+                    };
+                    let exact_resolution = format!("{name}@npm:{}", conversion.base_specifier);
+                    if selector != &exact_resolution && selector != &conversion.selector {
+                        diagnostics.push(Diagnostic::blocking(
+                            "PATCH_SELECTOR_UNSUPPORTED",
+                            "A Yarn patch resolution selector does not match its exact patch locator.",
+                            vec!["Use the exact name@npm:version selector generated by Yarn.".to_owned()],
+                        ));
+                        continue;
+                    }
+                    if let Some(existing) = patched_dependencies.get(&conversion.selector)
+                        && existing.as_str() != Some(conversion.path.as_str())
+                    {
+                        diagnostics.push(Diagnostic::blocking(
+                            "PATCH_POLICY_CONFLICT",
+                            "Multiple patch declarations target the same exact package version with different files.",
+                            vec!["Keep one patch file for each exact package version.".to_owned()],
+                        ));
+                        continue;
+                    }
+                    patched_dependencies
+                        .insert(conversion.selector.clone(), Value::String(conversion.path));
+                }
+            }
+        }
+    }
+    let patch_resolutions = yarn_patch_resolutions(&patched_dependencies);
     let trusted_dependencies = source_trusted_dependencies(
         &root_manifest_before,
         &pnpm_manifest,
@@ -1058,8 +1634,28 @@ fn transform_project(
     let source_resolutions = root_manifest_before
         .get("resolutions")
         .and_then(Value::as_object)
-        .cloned()
+        .map(|resolutions| {
+            resolutions
+                .iter()
+                .filter(|(_, value)| {
+                    !value
+                        .as_str()
+                        .is_some_and(|specifier| specifier.starts_with("patch:"))
+                })
+                .map(|(selector, value)| (selector.clone(), value.clone()))
+                .collect()
+        })
         .unwrap_or_default();
+    let yarn_patch_resolution_present = root_manifest_before
+        .get("resolutions")
+        .and_then(Value::as_object)
+        .is_some_and(|resolutions| {
+            resolutions.values().any(|value| {
+                value
+                    .as_str()
+                    .is_some_and(|specifier| specifier.starts_with("patch:"))
+            })
+        });
     let selected_policy = if source_overrides.is_empty() {
         &source_resolutions
     } else {
@@ -1110,14 +1706,18 @@ fn transform_project(
         };
         if package.path == "." {
             remove_source_lifecycle_policy(&mut manifest, remove_yarn_build_policy);
+            manifest.remove("packageExtensions");
+            manifest.remove("patchedDependencies");
             manifest.insert(
                 "packageManager".to_owned(),
                 Value::String(get_package_manager(target).package_manager_pin.to_owned()),
             );
-            if target != PackageManagerId::Pnpm
-                && let Some(pnpm) = manifest.get_mut("pnpm").and_then(Value::as_object_mut)
-            {
-                pnpm.remove("overrides");
+            if let Some(pnpm) = manifest.get_mut("pnpm").and_then(Value::as_object_mut) {
+                pnpm.remove("packageExtensions");
+                pnpm.remove("patchedDependencies");
+                if target != PackageManagerId::Pnpm {
+                    pnpm.remove("overrides");
+                }
                 if pnpm.is_empty() {
                     manifest.remove("pnpm");
                 }
@@ -1151,6 +1751,53 @@ fn transform_project(
                     }
                 }
                 _ => {}
+            }
+            if source == PackageManagerId::YarnModern
+                && target != PackageManagerId::YarnModern
+                && yarn_patch_resolution_present
+            {
+                manifest.remove("resolutions");
+                if target == PackageManagerId::Bun && !source_resolutions.is_empty() {
+                    manifest.insert(
+                        "resolutions".to_owned(),
+                        Value::Object(source_resolutions.clone()),
+                    );
+                }
+            }
+            if target == PackageManagerId::Npm && !package_extensions.is_empty() {
+                manifest.insert(
+                    "packageExtensions".to_owned(),
+                    Value::Object(package_extensions.clone()),
+                );
+            }
+            if target == PackageManagerId::Bun && !patched_dependencies.is_empty() {
+                manifest.insert(
+                    "patchedDependencies".to_owned(),
+                    Value::Object(patched_dependencies.clone()),
+                );
+            }
+            if target == PackageManagerId::YarnModern && !patch_resolutions.is_empty() {
+                let resolutions = manifest
+                    .entry("resolutions")
+                    .or_insert_with(|| Value::Object(Map::new()))
+                    .as_object_mut()
+                    .expect("resolutions is initialized as an object");
+                for (selector, resolution) in &patch_resolutions {
+                    if let Some(existing) = resolutions.get(selector)
+                        && existing != resolution
+                    {
+                        diagnostics.push(Diagnostic::blocking(
+                            "PATCH_RESOLUTION_CONFLICT",
+                            "A Yarn resolution conflicts with a migrated patched dependency.",
+                            vec![
+                                "Remove the conflicting resolution before retrying the migration."
+                                    .to_owned(),
+                            ],
+                        ));
+                        continue;
+                    }
+                    resolutions.insert(selector.clone(), resolution.clone());
+                }
             }
             if !project_ir.workspace_patterns.is_empty() && target != PackageManagerId::Pnpm {
                 manifest.insert(
@@ -1210,9 +1857,16 @@ fn transform_project(
                     "dependency.portal-protocol"
                 } else if specifier.starts_with("link:") {
                     "dependency.link-protocol"
+                } else if specifier.starts_with("patch:") {
+                    "dependency.patch-protocol"
                 } else {
                     continue;
                 };
+                let location = format!("{}#/{section}/{name}", package.manifest_path);
+                if let Some(conversion) = yarn_patch_conversions.get(&location) {
+                    *value = Value::String(conversion.base_specifier.clone());
+                    continue;
+                }
                 let Some(decision) = decisions.get(feature) else {
                     continue;
                 };
@@ -1273,6 +1927,8 @@ fn transform_project(
     if target == PackageManagerId::Pnpm
         && (!project_ir.workspace_patterns.is_empty()
             || !pnpm_overrides.is_empty()
+            || !package_extensions.is_empty()
+            || !patched_dependencies.is_empty()
             || pnpm_node_linker.is_some()
             || lifecycle_policy_present)
         && let Some(root_manifest) = root_manifest_after.as_ref()
@@ -1284,6 +1940,8 @@ fn transform_project(
                 &project_ir.workspace_patterns,
                 root_manifest,
                 &pnpm_overrides,
+                &package_extensions,
+                &patched_dependencies,
                 pnpm_node_linker,
                 &trusted_dependencies,
                 lifecycle_policy_present,
@@ -1292,6 +1950,8 @@ fn transform_project(
             vec![
                 "workspace.manifest".to_owned(),
                 "resolution.overrides".to_owned(),
+                "resolution.package-extensions".to_owned(),
+                "patch.patched-dependencies".to_owned(),
                 "install.pnp-linker".to_owned(),
                 "install.isolated-linker".to_owned(),
                 "lifecycle.trusted-dependencies".to_owned(),
@@ -1321,12 +1981,14 @@ fn transform_project(
                 yarn_node_linker,
                 lifecycle_policy_present,
                 &registry,
+                &package_extensions,
             )),
-            "Render Yarn Modern linker, lifecycle, and registry configuration.",
+            "Render Yarn Modern linker, policy, lifecycle, and registry configuration.",
             vec![
                 "install.pnp-linker".to_owned(),
                 "install.isolated-linker".to_owned(),
                 "registry.npmrc".to_owned(),
+                "resolution.package-extensions".to_owned(),
                 "lifecycle.trusted-dependencies".to_owned(),
             ],
         )? {
@@ -1360,10 +2022,6 @@ fn transform_project(
         }
     }
 
-    let source = inspection
-        .package_manager
-        .selected
-        .expect("planning requires a selected source");
     let source_command = match source {
         PackageManagerId::YarnClassic | PackageManagerId::YarnModern => "yarn".to_owned(),
         _ => source.to_string(),
@@ -2017,6 +2675,327 @@ mod tests {
         assert_eq!(manifest["overrides"]["@scope/package"], "1.2.3");
         assert_eq!(manifest["overrides"]["lodash"], "4.17.21");
         assert!(manifest.get("resolutions").is_none());
+    }
+
+    #[test]
+    fn renders_npm_package_extensions_in_pnpm_workspace_configuration() {
+        let plan = plan_manifest_policy(
+            PackageManagerId::Npm,
+            PackageManagerId::Pnpm,
+            &json!({
+                "packageExtensions": {
+                    "bare-package": {
+                        "dependencies": { "bare-runtime-dep": "1.0.0" }
+                    },
+                    "broken-package@^1": {
+                        "dependencies": { "missing-runtime-dep": "^2.0.0" },
+                        "peerDependencies": { "react": "*" },
+                        "peerDependenciesMeta": { "react": { "optional": true } }
+                    }
+                }
+            }),
+            false,
+        );
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert!(manifest.get("packageExtensions").is_none());
+        let configuration: Value =
+            noyalib::from_str(mutation_content(&plan, "pnpm-workspace.yaml"))
+                .expect("pnpm configuration YAML");
+        assert_eq!(
+            configuration["packageExtensions"]["broken-package@^1"]["dependencies"]["missing-runtime-dep"],
+            "^2.0.0"
+        );
+        assert_eq!(
+            configuration["packageExtensions"]["bare-package"]["dependencies"]["bare-runtime-dep"],
+            "1.0.0"
+        );
+        assert_eq!(
+            configuration["packageExtensions"]["broken-package@^1"]["peerDependenciesMeta"]["react"]
+                ["optional"],
+            true
+        );
+    }
+
+    #[test]
+    fn renders_pnpm_package_extensions_in_yarn_configuration() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0"}"#,
+                ),
+                ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+                (
+                    "pnpm-workspace.yaml",
+                    "packageExtensions:\n  'broken-package@1':\n    optionalDependencies:\n      optional-runtime: '^3.0.0'\n",
+                ),
+            ],
+            PackageManagerId::YarnModern,
+            false,
+        );
+
+        assert!(plan.executable);
+        let configuration: Value = noyalib::from_str(mutation_content(&plan, ".yarnrc.yml"))
+            .expect("Yarn configuration YAML");
+        assert_eq!(
+            configuration["packageExtensions"]["broken-package@1"]["optionalDependencies"]["optional-runtime"],
+            "^3.0.0"
+        );
+    }
+
+    #[test]
+    fn reads_yarn_package_extensions_and_renders_them_for_npm() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0"}"#,
+                ),
+                ("yarn.lock", "# fixture\n"),
+                (
+                    ".yarnrc.yml",
+                    "nodeLinker: node-modules\npackageExtensions:\n  '@scope/broken@^2':\n    peerDependencies:\n      react: '>=18'\n",
+                ),
+            ],
+            PackageManagerId::Npm,
+            false,
+        );
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert_eq!(
+            manifest["packageExtensions"]["@scope/broken@^2"]["peerDependencies"]["react"],
+            ">=18"
+        );
+    }
+
+    #[test]
+    fn blocks_package_extensions_outside_the_shared_schema() {
+        let plan = plan_manifest_policy(
+            PackageManagerId::Npm,
+            PackageManagerId::Pnpm,
+            &json!({
+                "packageExtensions": {
+                    "broken-package@1": {
+                        "scripts": { "postinstall": "node build.js" }
+                    }
+                }
+            }),
+            false,
+        );
+
+        assert!(!plan.executable);
+        assert!(
+            plan.diagnostics
+                .iter()
+                .any(|entry| { entry.code == "PACKAGE_EXTENSIONS_UNSUPPORTED" && entry.blocking })
+        );
+        assert!(
+            !serde_json::to_string(&plan)
+                .expect("serialized plan")
+                .contains("postinstall")
+        );
+    }
+
+    #[test]
+    fn converts_a_yarn_patch_protocol_dependency_to_bun_policy() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0","dependencies":{"left-pad":"patch:left-pad@npm%3A1.3.0#~/.yarn/patches/left-pad.patch"}}"#,
+                ),
+                ("yarn.lock", "# fixture\n"),
+                (".yarnrc.yml", "nodeLinker: node-modules\n"),
+                (
+                    ".yarn/patches/left-pad.patch",
+                    "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+                ),
+            ],
+            PackageManagerId::Bun,
+            false,
+        );
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert_eq!(manifest["dependencies"]["left-pad"], "1.3.0");
+        assert_eq!(
+            manifest["patchedDependencies"]["left-pad@1.3.0"],
+            ".yarn/patches/left-pad.patch"
+        );
+        assert!(
+            !plan
+                .diagnostics
+                .iter()
+                .any(|entry| entry.code == "TRANSFORMATION_UNIMPLEMENTED")
+        );
+    }
+
+    #[test]
+    fn converts_a_yarn_patch_protocol_dependency_to_pnpm_policy() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0","devDependencies":{"@scope/tool":"patch:@scope/tool@npm%3A2.1.0#~/.yarn/patches/tool.patch"}}"#,
+                ),
+                ("yarn.lock", "# fixture\n"),
+                (".yarnrc.yml", "nodeLinker: node-modules\n"),
+                (
+                    ".yarn/patches/tool.patch",
+                    "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+                ),
+            ],
+            PackageManagerId::Pnpm,
+            false,
+        );
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert_eq!(manifest["devDependencies"]["@scope/tool"], "2.1.0");
+        let configuration: Value =
+            noyalib::from_str(mutation_content(&plan, "pnpm-workspace.yaml"))
+                .expect("pnpm configuration YAML");
+        assert_eq!(
+            configuration["patchedDependencies"]["@scope/tool@2.1.0"],
+            ".yarn/patches/tool.patch"
+        );
+    }
+
+    #[test]
+    fn converts_a_transitive_yarn_patch_resolution_to_bun_policy() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0","dependencies":{"parent":"1.0.0"},"resolutions":{"left-pad@npm:1.3.0":"patch:left-pad@npm%3A1.3.0#~/.yarn/patches/left-pad.patch"}}"#,
+                ),
+                ("yarn.lock", "# fixture\n"),
+                (".yarnrc.yml", "nodeLinker: node-modules\n"),
+                (
+                    ".yarn/patches/left-pad.patch",
+                    "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+                ),
+            ],
+            PackageManagerId::Bun,
+            false,
+        );
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert!(manifest.get("resolutions").is_none());
+        assert_eq!(
+            manifest["patchedDependencies"]["left-pad@1.3.0"],
+            ".yarn/patches/left-pad.patch"
+        );
+    }
+
+    #[test]
+    fn converts_pnpm_patched_dependencies_to_yarn_resolutions() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0","dependencies":{"left-pad":"^1.3.0"}}"#,
+                ),
+                ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+                (
+                    "pnpm-workspace.yaml",
+                    "patchedDependencies:\n  'left-pad@1.3.0': 'patches/left-pad.patch'\n",
+                ),
+                (
+                    "patches/left-pad.patch",
+                    "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+                ),
+            ],
+            PackageManagerId::YarnModern,
+            false,
+        );
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert_eq!(manifest["dependencies"]["left-pad"], "^1.3.0");
+        assert_eq!(
+            manifest["resolutions"]["left-pad@npm:1.3.0"],
+            "patch:left-pad@npm%3A1.3.0#~/patches/left-pad.patch"
+        );
+    }
+
+    #[test]
+    fn carries_bun_patched_dependencies_into_pnpm_configuration() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"bun@1.3.14","patchedDependencies":{"left-pad@1.3.0":"patches/left-pad.patch"}}"#,
+                ),
+                ("bun.lock", "{\"lockfileVersion\":1,\"packages\":{}}\n"),
+                (
+                    "patches/left-pad.patch",
+                    "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+                ),
+            ],
+            PackageManagerId::Pnpm,
+            false,
+        );
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert!(manifest.get("patchedDependencies").is_none());
+        let configuration = mutation_content(&plan, "pnpm-workspace.yaml");
+        assert!(configuration.contains("patchedDependencies:"));
+        assert!(configuration.contains("'left-pad@1.3.0': 'patches/left-pad.patch'"));
+    }
+
+    #[test]
+    fn blocks_patch_ranges_and_missing_patch_files() {
+        let range = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0","dependencies":{"left-pad":"patch:left-pad@npm%3A%5E1.3.0#~/.yarn/patches/left-pad.patch"}}"#,
+                ),
+                ("yarn.lock", "# fixture\n"),
+                (".yarnrc.yml", "nodeLinker: node-modules\n"),
+            ],
+            PackageManagerId::Bun,
+            false,
+        );
+        assert!(!range.executable);
+        assert!(
+            range
+                .diagnostics
+                .iter()
+                .any(|entry| { entry.code == "PATCH_SELECTOR_UNSUPPORTED" && entry.blocking })
+        );
+
+        let missing = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"bun@1.3.14","patchedDependencies":{"left-pad@1.3.0":"patches/missing.patch"}}"#,
+                ),
+                ("bun.lock", "{\"lockfileVersion\":1,\"packages\":{}}\n"),
+            ],
+            PackageManagerId::Pnpm,
+            false,
+        );
+        assert!(!missing.executable);
+        assert!(
+            missing
+                .diagnostics
+                .iter()
+                .any(|entry| { entry.code == "PATCH_FILE_NOT_FOUND" && entry.blocking })
+        );
     }
 
     #[test]
