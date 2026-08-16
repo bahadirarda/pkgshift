@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Changed
+
+- Future GitHub Releases are assembled as drafts before publication so repository release immutability can lock their tags and assets atomically.
+
 ## [0.1.0] - 2026-08-16
 
 ### Added

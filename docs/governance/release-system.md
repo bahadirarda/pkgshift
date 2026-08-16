@@ -15,6 +15,8 @@ sources:
     relation: normative-cargo-publication
   - resource: https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations
     relation: normative-provenance
+  - resource: https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases
+    relation: normative-release-integrity
   - resource: https://docs.github.com/en/packages/learn-github-packages/introduction-to-github-packages
     relation: distribution-boundary
 ---
@@ -61,7 +63,7 @@ An annotated tag named `v<version>` triggers native release builds. The tag must
 | `pkgshift-v<version>-x86_64-pc-windows-msvc.zip` | Windows x86-64 |
 | `SHA256SUMS` | SHA-256 manifest for every archive |
 
-Each archive contains the native executable, README, and MIT license. GitHub artifact attestations bind the downloadable files to their build workflow and source revision.
+Each archive contains the native executable, README, and MIT license. GitHub artifact attestations bind the downloadable files to their build workflow and source revision. The workflow assembles a draft with every asset before publication; repository release immutability then prevents published tags and assets from being moved, replaced, or deleted.
 
 ## Publication sequence
 
@@ -69,7 +71,7 @@ Each archive contains the native executable, README, and MIT license. GitHub art
 2. Move user-visible changes from `Unreleased` into a dated changelog section.
 3. Run `bun run check`, Cargo package verification, and release archive smoke tests.
 4. Merge the release commit to `main` and create the annotated `v<version>` tag.
-5. Let the tag workflow publish the GitHub Release, archives, checksums, and provenance.
+5. Let the tag workflow assemble and atomically publish the immutable GitHub Release, archives, checksums, and provenance.
 6. Explicitly dispatch the protected crates.io workflow for the same tag.
 7. Publish `pkgshift-core` first, wait for registry visibility, then publish `pkgshift`.
 

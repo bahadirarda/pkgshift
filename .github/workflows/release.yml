@@ -180,6 +180,11 @@ jobs:
         shell: bash
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            immutable="$(gh release view "$GITHUB_REF_NAME" --json isImmutable --jq .isImmutable)"
+            if [[ "$immutable" == "true" ]]; then
+              gh release verify "$GITHUB_REF_NAME"
+              exit 0
+            fi
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber
             gh release edit "$GITHUB_REF_NAME" \
               --title "pkgshift $GITHUB_REF_NAME" \
@@ -187,8 +192,11 @@ jobs:
               --latest
           else
             gh release create "$GITHUB_REF_NAME" dist/* \
+              --draft \
               --verify-tag \
               --title "pkgshift $GITHUB_REF_NAME" \
-              --notes-file release-notes.md \
+              --notes-file release-notes.md
+            gh release edit "$GITHUB_REF_NAME" \
+              --draft=false \
               --latest
           fi
