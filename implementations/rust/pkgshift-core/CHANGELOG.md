@@ -1,5 +1,11 @@
 # pkgshift-core
 
+## 0.20260817.1
+
+### Minor Changes
+
+- 3894f9e: Add deterministic linker, Yarn Modern registry, and Bun/pnpm/Yarn lifecycle allow-list migrations to the Rust primary engine and TypeScript parity implementation.
+
 ## 0.20260817.0
 
 ### Minor Changes
