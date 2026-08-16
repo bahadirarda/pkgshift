@@ -364,6 +364,7 @@ async function validateEnglishOnly(): Promise<void> {
   const patterns = [
     ".changeset/*.{json,md}",
     "implementations/rust/**/*.rs",
+    "implementations/rust/**/*.md",
     "implementations/rust/**/LICENSE",
     "docs/**/*.md",
     "implementations/typescript/scripts/**/*.ts",
