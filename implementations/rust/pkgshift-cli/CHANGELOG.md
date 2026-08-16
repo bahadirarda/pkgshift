@@ -1,5 +1,11 @@
 # pkgshift
 
+## 0.20260816.0
+
+### Patch Changes
+
+- 3dc7770: Adopt deterministic calendar release identities shaped as `0.YYYYMMDD.REVISION` while retaining Changesets for reviewed compatibility impact and release notes. Synchronize Cargo, package metadata, the Bun workspace lock, changelogs, tags, archives, and release pull requests around the calculated calendar version.
+
 ## 0.2.0
 
 ### Minor Changes
