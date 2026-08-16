@@ -51,7 +51,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Digest-verified Rust plan and run envelopes, repository-scoped locking, byte-level snapshots, atomic mutations, installer output withholding, structural verification, and restored-fingerprint rollback.
 - Rust subprocess fixtures for pnpm-to-Bun-to-rollback and npm-to-pnpm, plus 20-direction basic planning coverage.
 - A real-installer Rust acceptance run for a multi-package pnpm workspace migrated to Bun and rolled back to its original fingerprint.
-- A Bun workspace containing the TypeScript reference under `packages/pkgshift-ts` and shared root orchestration for both implementations.
+- Sibling Rust and TypeScript engines under `implementations/`, with shared root orchestration for both implementations.
 
 # Delivery Gates
 

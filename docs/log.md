@@ -2,13 +2,13 @@
 
 ## 2026-08-16
 
-* **Architecture**: Established a Rust-primary polyglot monorepo with `pkgshift-core`, `pkgshift-cli`, and an isolated TypeScript compatibility reference.
+* **Architecture**: Established a Rust-primary polyglot monorepo with sibling `implementations/rust` and `implementations/typescript` boundaries.
 * **Decision**: Added the accepted Rust-primary monorepo decision, parity-gate policy, and shared schema boundary.
 * **Implementation**: Ported weighted detection, Project IR, capability analysis, deterministic planning, exact approval, state persistence, apply, verification, and rollback into Rust.
 * **Safety**: Added digest-verified plan and run envelopes, repository-scoped locking with dead-writer recovery on Linux, byte-level snapshots, atomic mutations, lifecycle-script suppression, and withheld installer output.
 * **Verification**: Added Rust coverage for all 20 basic production planning directions and two independent subprocess migrations, including pnpm-to-Bun rollback.
 * **Verification**: Ran a live multi-package pnpm-to-Bun migration with Bun 1.3.14, verified the generated dependency state, and restored the original repository fingerprint.
-* **Tooling**: Moved the TypeScript engine into `packages/pkgshift-ts`, added root polyglot orchestration, pinned Rust 1.97.1, and expanded CI gates for rustfmt, Clippy, Cargo tests, Bun tests, OKF, and production builds.
+* **Tooling**: Grouped both engines under `implementations`, added root polyglot orchestration, pinned Rust 1.97.1, and expanded CI gates for rustfmt, Clippy, Cargo tests, Bun tests, OKF, and production builds.
 
 ## 2026-08-15
 

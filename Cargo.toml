@@ -1,5 +1,8 @@
 [workspace]
-members = ["crates/pkgshift-cli", "crates/pkgshift-core"]
+members = [
+    "implementations/rust/pkgshift-cli",
+    "implementations/rust/pkgshift-core",
+]
 resolver = "3"
 
 [workspace.package]

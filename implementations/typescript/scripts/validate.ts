@@ -181,12 +181,12 @@ async function validateSkill(): Promise<void> {
 async function validateEnglishOnly(): Promise<void> {
   const roots = ["AGENTS.md", "README.md"];
   const patterns = [
-    "crates/**/*.rs",
+    "implementations/rust/**/*.rs",
     "docs/**/*.md",
-    "packages/pkgshift-ts/scripts/**/*.ts",
+    "implementations/typescript/scripts/**/*.ts",
     "skills/**/*.{md,yaml,yml}",
-    "packages/pkgshift-ts/src/**/*.ts",
-    "packages/pkgshift-ts/tests/**/*.ts",
+    "implementations/typescript/src/**/*.ts",
+    "implementations/typescript/tests/**/*.ts",
     "*.json",
     "*.toml",
   ];

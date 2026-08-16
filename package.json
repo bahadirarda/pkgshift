@@ -6,7 +6,7 @@
   "packageManager": "bun@1.3.14",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "implementations/typescript"
   ],
   "author": "bahadirarda",
   "repository": {
@@ -29,16 +29,16 @@
   ],
   "scripts": {
     "build": "bun run build:typescript && cargo build --workspace --release",
-    "build:typescript": "bun run --cwd packages/pkgshift-ts build",
+    "build:typescript": "bun run --cwd implementations/typescript build",
     "check": "bun run check:typescript && bun run check:rust && bun run validate",
     "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
-    "check:typescript": "bun run --cwd packages/pkgshift-ts check",
+    "check:typescript": "bun run --cwd implementations/typescript check",
     "cli": "cargo run -p pkgshift-cli --",
-    "cli:typescript": "bun run --cwd packages/pkgshift-ts cli",
+    "cli:typescript": "bun run --cwd implementations/typescript cli",
     "test": "bun run test:typescript && cargo test --workspace",
-    "test:typescript": "bun run --cwd packages/pkgshift-ts test",
-    "typecheck": "bun run --cwd packages/pkgshift-ts typecheck",
-    "validate": "bun run --cwd packages/pkgshift-ts validate"
+    "test:typescript": "bun run --cwd implementations/typescript test",
+    "typecheck": "bun run --cwd implementations/typescript typecheck",
+    "validate": "bun run --cwd implementations/typescript validate"
   },
   "engines": {
     "bun": ">=1.3.14"

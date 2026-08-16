@@ -26,9 +26,9 @@ pkgshift requires deterministic filesystem behavior, a small distributable execu
 
 Use one polyglot monorepo with two explicit implementation boundaries:
 
-- `crates/pkgshift-core` is the primary domain engine.
-- `crates/pkgshift-cli` is the primary executable and agent-facing command surface.
-- `packages/pkgshift-ts` is an executable compatibility and parity reference.
+- `implementations/rust/pkgshift-core` is the primary domain engine.
+- `implementations/rust/pkgshift-cli` is the primary executable and agent-facing command surface.
+- `implementations/typescript` is an executable compatibility and parity reference.
 - `docs`, `skills`, schema terminology, support baselines, and safety rules remain shared product assets.
 
 Rust 1.97.1 is pinned for reproducible formatting, linting, testing, and release builds.[^rust-release] The port advances by behavioral slices rather than file-for-file translation. A slice crosses the parity gate only after deterministic planning, exact approval, apply, verification, recovery, and failure behavior are covered at the appropriate level.
@@ -38,6 +38,7 @@ The engines may have different internal types and storage layouts. Agent-visible
 # Consequences
 
 - The repository root orchestrates Cargo and Bun workspaces without containing a third engine.
+- The sibling implementation layout makes runtime ownership and parity review visible from one directory.
 - The Rust CLI can ship independently of Bun once documentation validation and the reference suite are separated from release packaging.
 - TypeScript remains runnable until advanced renderers and ancillary command ownership are resolved.
 - Rust must fail closed when a capability renderer has not crossed the parity gate.

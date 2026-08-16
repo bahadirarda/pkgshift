@@ -20,13 +20,13 @@ sources:
 # Layout
 
 ```text
-Cargo.toml                 Rust workspace and shared lint contract
+implementations/
+  rust/
+    pkgshift-core/         deterministic domain engine and stable JSON models
+    pkgshift-cli/          Rust command grammar, terminal reporter, and E2E fixtures
+  typescript/              executable compatibility and parity-reference implementation
+Cargo.toml                 root Rust workspace orchestration and shared lint contract
 rust-toolchain.toml        pinned compiler, rustfmt, and Clippy toolchain
-crates/
-  pkgshift-core/           deterministic domain engine and stable JSON models
-  pkgshift-cli/            Rust command grammar, terminal reporter, and E2E fixtures
-packages/
-  pkgshift-ts/             TypeScript compatibility and parity-reference implementation
 skills/
   pkgshift/                distributable portable Agent Skill source
 docs/                      OKF v0.2 knowledge bundle and shared brand assets
@@ -39,13 +39,13 @@ The root is an orchestration boundary, not a third implementation. Shared produc
 
 The primary runtime is Rust 1.97.1. `pkgshift-core` owns detection, Project IR, capability decisions, immutable planning, integrity-checked state, repository locking, execution, verification, and recovery. `pkgshift-cli` owns the keyword command grammar and presentation boundary. Target processes run directly without a shell, lifecycle scripts are disabled, and process output is withheld from persistent Rust artifacts.
 
-The TypeScript engine remains under `packages/pkgshift-ts` as an executable reference implementation. It has no third-party runtime dependencies and uses Bun 1.3.14 for runtime, YAML parsing, building, and tests. It remains the behavior oracle for capability renderers and ancillary commands that have not crossed the Rust parity gate.
+The TypeScript engine remains under `implementations/typescript` as an executable reference implementation. It has no third-party runtime dependencies and uses Bun 1.3.14 for runtime, YAML parsing, building, and tests. It remains the behavior oracle for capability renderers and ancillary commands that have not crossed the Rust parity gate.
 
 A Rust distribution compiles to one standalone CLI, but apply still requires the selected target package manager executable.
 
 # Implemented Command Path
 
-`crates/pkgshift-cli/src/main.rs` delegates domain work to `pkgshift-core`. Inspection collects weighted evidence and creates a redacted repository fingerprint. Project IR extracts workspace, dependency, policy, linker, registry-reference, and integration semantics. Capability analysis classifies every observed feature for the selected target. Planning renders deterministic target content and binds exact file mutations to before and after digests.
+`implementations/rust/pkgshift-cli/src/main.rs` delegates domain work to `pkgshift-core`. Inspection collects weighted evidence and creates a redacted repository fingerprint. Project IR extracts workspace, dependency, policy, linker, registry-reference, and integration semantics. Capability analysis classifies every observed feature for the selected target. Planning renders deterministic target content and binds exact file mutations to before and after digests.
 
 The guided `to` command keeps its first plan read-only, requests approval, then uses `.pkgshift/state` to persist and execute the exact plan before invoking verification. The advanced staged interface persists a plan only when `--state-dir` is explicit. Rust stored plans and runs use digest-verified envelopes. Apply validates exact approval and the baseline fingerprint, creates recovery snapshots, atomically writes planned content, and executes the target installer. Repository locks recover a dead Linux writer and serialize mutation per repository.
 

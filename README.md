@@ -21,7 +21,7 @@
 </p>
 
 > [!NOTE]
-> pkgshift is a tested technical MVP and is not published to a package registry yet. The Rust engine is the primary CLI; the TypeScript implementation remains in the monorepo as a compatibility reference while distribution is finalized.
+> pkgshift is a tested technical MVP and is not published to a package registry yet. Both implementations live under `implementations/`: Rust is the primary CLI, while TypeScript remains an executable compatibility reference.
 
 ## One command from the project root
 
@@ -75,6 +75,30 @@ flowchart LR
 
 The normal command orchestrates this pipeline without exposing repository or state paths. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The TypeScript reference also retains diagnostic explanation and managed Agent Skill lifecycle commands during the port transition.
 
+## Monorepo layout
+
+Both implementations are deliberately visible under one boundary:
+
+```text
+implementations/
+├── rust/
+│   ├── pkgshift-core/   deterministic migration engine
+│   └── pkgshift-cli/    primary executable and agent interface
+└── typescript/          executable compatibility and parity reference
+
+docs/                    shared OKF knowledge bundle
+skills/pkgshift/         shared portable Agent Skill
+Cargo.toml               Rust workspace orchestration
+package.json             polyglot repository orchestration
+```
+
+Rust and TypeScript share product terminology, adapter baselines, approval semantics, and the versioned JSON contract. They do not share internal implementation details or call one another at runtime.
+
+| Implementation | Role | Toolchain | Validation boundary |
+| --- | --- | --- | --- |
+| Rust | Primary product engine and CLI | Rust 1.97.1 | Core tests, 20-direction planning matrix, subprocess migrations, integrity failures, rollback, and release build |
+| TypeScript | Executable compatibility and parity reference | Bun 1.3.14, strict TypeScript | 57 unit, integration, safety, skill, and real CLI transaction tests |
+
 ## Agent workflow
 
 pkgshift is designed for Codex, Claude Code, and other coding agents, but the engine remains deterministic and model-independent.
@@ -117,7 +141,7 @@ cd pkgshift
 bun install --frozen-lockfile
 bun run check
 bun run build
-cargo install --path crates/pkgshift-cli
+cargo install --path implementations/rust/pkgshift-cli
 ```
 
 Then run it from the repository you want to migrate:
@@ -161,7 +185,7 @@ bun run check             # complete polyglot validation suite
 bun run build             # Rust release binary and TypeScript reference bundle
 ```
 
-The monorepo keeps the primary Rust engine in `crates/`, the TypeScript reference in `packages/pkgshift-ts/`, and shared product assets in `docs/` and `skills/`. Neither implementation delegates repository analysis or edit generation to an AI model.
+Neither implementation delegates repository analysis or edit generation to an AI model.
 
 ## Documentation
 
