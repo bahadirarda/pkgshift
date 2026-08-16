@@ -1,5 +1,11 @@
 # @bahadirarda/pkgshift-typescript
 
+## 0.1.2
+
+### Patch Changes
+
+- 10b1731: Add the official product website and checksum-verified shell installer.
+
 ## 0.1.1
 
 ### Patch Changes
