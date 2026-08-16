@@ -708,6 +708,7 @@ async function rollbackCommand(
 
 async function resolveSkillSource(cwd: string): Promise<string> {
   const candidates = [
+    resolve(import.meta.dir, "../../../../skills/pkgshift"),
     resolve(import.meta.dir, "../../skills/pkgshift"),
     resolve(import.meta.dir, "../skills/pkgshift"),
     resolve(cwd, "skills/pkgshift"),

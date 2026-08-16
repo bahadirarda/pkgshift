@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  typescript-and-knowledge:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -25,7 +25,23 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Validate
-        run: bun run check
+        run: bun run check:typescript
 
-      - name: Build
-        run: bun run build
+      - name: Build TypeScript reference
+        run: bun run build:typescript
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.97.1 --profile minimal --component clippy,rustfmt
+
+      - name: Validate Rust workspace
+        run: cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+
+      - name: Build Rust release binary
+        run: cargo build --workspace --release --locked

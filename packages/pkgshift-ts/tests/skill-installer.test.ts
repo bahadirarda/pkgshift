@@ -11,7 +11,7 @@ import { createProject, removeTemporaryProjects } from "./helpers/project.ts";
 
 afterEach(removeTemporaryProjects);
 
-const sourcePath = resolve(import.meta.dir, "../skills/pkgshift");
+const sourcePath = resolve(import.meta.dir, "../../../skills/pkgshift");
 
 describe("Agent Skill installer", () => {
   test("installs and removes a healthy project-scoped managed copy", async () => {
