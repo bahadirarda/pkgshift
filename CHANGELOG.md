@@ -7,6 +7,14 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 
 ## [Unreleased]
 
+## [0.20260817.2] - 2026-08-17
+
+### Changed
+
+- Preserve validated package extensions across npm, pnpm, and Yarn Modern migrations.
+  
+  Convert exact-version text patches among Yarn Modern, pnpm, and Bun, including transitive Yarn patch resolutions, fail-closed diagnostics, patch fingerprinting, and real Bun acceptance coverage.
+
 ## [0.20260817.1] - 2026-08-17
 
 ### Changed
@@ -56,7 +64,8 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 - Added cross-platform GitHub Release archives, SHA-256 checksums, and build provenance attestations.
 - Added crates.io-ready package metadata and an explicitly approved publication workflow.
 
-[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.1...HEAD
+[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.2...HEAD
+[0.20260817.2]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.1...v0.20260817.2
 [0.20260817.1]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.0...v0.20260817.1
 [0.20260817.0]: https://github.com/bahadirarda/pkgshift/compare/v0.20260816.0...v0.20260817.0
 [0.20260816.0]: https://github.com/bahadirarda/pkgshift/compare/v0.2.0...v0.20260816.0
