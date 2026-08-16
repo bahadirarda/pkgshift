@@ -9,6 +9,12 @@
 </p>
 
 <p align="center">
+  <a href="https://bahadirarda.github.io/pkgshift/">Website</a> ·
+  <a href="https://github.com/bahadirarda/pkgshift/releases">Releases</a> ·
+  <a href="docs/index.md">Documentation</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/bahadirarda/pkgshift/actions/workflows/ci.yml"><img alt="ci" src="https://img.shields.io/github/actions/workflow/status/bahadirarda/pkgshift/ci.yml?branch=main&style=flat-square&label=ci&labelColor=27251f&color=c45124"></a>
   <a href="https://github.com/bahadirarda/pkgshift/releases"><img alt="latest release" src="https://img.shields.io/github/v/release/bahadirarda/pkgshift?display_name=tag&sort=semver&style=flat-square&label=release&labelColor=27251f&color=c45124"></a>
   <img alt="technical mvp" src="https://img.shields.io/badge/status-technical_mvp-c45124?style=flat-square&labelColor=27251f">
@@ -25,6 +31,14 @@
 > pkgshift is a tested technical MVP. GitHub Releases is the native binary channel, while the `pkgshift` and `pkgshift-core` crates use crates.io. Registry publication is an explicit, separately approved step because published crate versions are permanent. Both implementations live under `implementations/`: Rust is the primary CLI, while TypeScript remains an executable compatibility reference.
 
 ## Install
+
+Install the latest native binary on Linux or macOS with the checksum-verifying installer:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://bahadirarda.github.io/pkgshift/install.sh | sh
+```
+
+Set `PKGSHIFT_VERSION=v0.1.0` to pin an exact release or `PKGSHIFT_INSTALL_DIR` to select a destination. The [installer source](site/install.sh) is tracked in this repository and verifies the release archive against `SHA256SUMS` before extraction.
 
 Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, and place `pkgshift` on your `PATH`. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations. Its bundled `release.json` records the stable version plus a date-and-commit build identity.
 
@@ -106,6 +120,7 @@ implementations/
 └── typescript/          executable compatibility and parity reference
 
 docs/                    shared OKF knowledge bundle
+site/                    static product website and verified shell installer
 skills/pkgshift/         shared portable Agent Skill
 .changeset/              committed release intent and fixed-group policy
 Cargo.toml               Rust workspace orchestration
@@ -221,6 +236,7 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 - [Recovery and verification](docs/architecture/recovery-and-verification.md)
 - [Package manager workflow](docs/workflows/pkgshift.md)
 - [Release system](docs/governance/release-system.md)
+- [Website delivery](docs/governance/website-delivery.md)
 
 ## Current boundaries
 

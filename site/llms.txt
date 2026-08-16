@@ -1,0 +1,29 @@
+# pkgshift
+
+> pkgshift is an open-source CLI for deterministic, transactional package manager migrations in JavaScript repositories.
+
+pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, and Bun as production planning targets. It inspects the repository, creates an immutable plan, requires approval for that exact plan, applies the planned operations, verifies the result, and retains rollback artifacts. Coding agents operate the CLI; they do not author migration edits.
+
+## Product
+
+- [Project README](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/README.md): Installation, CLI usage, package manager support, safety guarantees, and development commands.
+- [Product vision](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/product/vision.md): Product principles, user model, safety boundaries, and intended outcomes.
+- [MVP status](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/product/mvp-status.md): Implemented capabilities, verification evidence, and current boundaries.
+- [Capability matrix](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/support/capability-matrix.md): Support tiers and package-manager-specific behavior.
+
+## Architecture
+
+- [Migration engine](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/migration-engine.md): Inspect, plan, approve, apply, verify, and rollback pipeline.
+- [Agent interface](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/agent-interface.md): Machine-readable output, exit codes, next actions, and approval semantics.
+- [Recovery and verification](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/recovery-and-verification.md): Snapshots, run journals, integrity checks, and rollback boundaries.
+
+## Agent integration
+
+- [Portable Agent Skill](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/skills/pkgshift/SKILL.md): Instructions for using pkgshift safely from compatible coding agents.
+- [CLI contract](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/skills/pkgshift/references/cli-contract.md): Command shapes, structured responses, and exact approval flow.
+
+## Distribution
+
+- [Verified shell installer](https://bahadirarda.github.io/pkgshift/install.sh): Linux and macOS installer that verifies the native release archive against SHA256SUMS.
+- [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases): Native binaries, checksums, release metadata, and build provenance.
+- [Source repository](https://github.com/bahadirarda/pkgshift): Rust primary implementation, TypeScript reference, documentation, and release workflows.

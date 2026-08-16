@@ -2,6 +2,9 @@
 
 ## 2026-08-16
 
+* **Website**: Added a responsive product website with semantic content, canonical metadata, social previews, structured software data, crawl directives, a root sitemap, and a curated agent discovery index.
+* **Distribution**: Added a version-pinnable Linux and macOS shell installer that verifies GitHub Release checksums before installing a native executable.
+* **Deployment**: Added a least-privilege GitHub Pages artifact workflow with repository-owned website validation.
 * **Release**: Defined synchronized Semantic Versioning, Conventional Commit titles, curated changelogs, public crate identities, native artifact names, checksums, provenance, and ordered crates.io publication.
 * **Supply Chain**: Prepared complete draft releases before publication and enabled immutable tags and assets for future releases.
 * **Versioning**: Added fixed-group Changesets release intent, automated version pull requests, synchronized Cargo and Bun metadata, and date-plus-source-revision build identities without replacing SemVer.

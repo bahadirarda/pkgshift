@@ -71,6 +71,8 @@ An annotated tag named `v<version>` triggers native release builds. The tag must
 
 Each archive contains the native executable, README, MIT license, and `release.json` build identity. GitHub artifact attestations bind the downloadable files to their build workflow and source revision. The workflow assembles a draft with every asset before publication; repository release immutability then prevents published tags and assets from being moved, replaced, or deleted.
 
+The product website distributes the shell installer defined by the [website delivery contract](/governance/website-delivery.md). The installer resolves a stable GitHub Release and verifies its archive against the release-owned `SHA256SUMS` before installing. It is a convenience delivery surface, not a separate package identity or source of release metadata.
+
 ## Publication sequence
 
 1. Add a Changeset to every user-visible implementation pull request.

@@ -359,6 +359,136 @@ async function validateReleaseMetadata(): Promise<void> {
   }
 }
 
+async function validateWebsite(): Promise<void> {
+  const requiredPaths = [
+    "site/index.html",
+    "site/404.html",
+    "site/favicon.svg",
+    "site/install.sh",
+    "site/llms.txt",
+    "site/robots.txt",
+    "site/script.js",
+    "site/site.webmanifest",
+    "site/sitemap.xml",
+    "site/styles.css",
+  ];
+  for (const path of requiredPaths) {
+    if (!(await targetExists(path))) {
+      errors.push(`${path}: required website file is missing`);
+    }
+  }
+  if (errors.some((error) => error.includes("required website file is missing"))) {
+    return;
+  }
+
+  const canonicalUrl = "https://bahadirarda.github.io/pkgshift/";
+  const index = await Bun.file("site/index.html").text();
+  const requiredMarkup = [
+    ['<html lang="en">', "English document language"],
+    ["<title>pkgshift — Transactional package manager migrations</title>", "descriptive title"],
+    ['name="description"', "meta description"],
+    [`rel="canonical" href="${canonicalUrl}"`, "canonical URL"],
+    ['property="og:image"', "Open Graph image"],
+    ['name="twitter:card" content="summary_large_image"', "large social card"],
+    ['type="application/ld+json"', "structured software data"],
+    ["<h1>", "top-level product heading"],
+  ] as const;
+  for (const [markup, description] of requiredMarkup) {
+    if (!index.includes(markup)) {
+      errors.push(`site/index.html: missing ${description}`);
+    }
+  }
+
+  const structuredData = index.match(
+    /<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/,
+  )?.[1];
+  if (!structuredData) {
+    errors.push("site/index.html: structured data block is empty");
+  } else {
+    try {
+      const parsed = JSON.parse(structuredData) as { "@graph"?: unknown[] };
+      if (!Array.isArray(parsed["@graph"]) || parsed["@graph"].length < 2) {
+        errors.push("site/index.html: structured data must describe the website and software");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown JSON error";
+      errors.push(`site/index.html: invalid structured data: ${message}`);
+    }
+  }
+
+  for (const htmlPath of ["site/index.html", "site/404.html"]) {
+    const html = await Bun.file(htmlPath).text();
+    for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
+      const rawTarget = match[1]?.split("#")[0];
+      if (
+        !rawTarget
+        || rawTarget.startsWith("https://")
+        || rawTarget.startsWith("http://")
+        || rawTarget.startsWith("mailto:")
+        || rawTarget.startsWith("/")
+      ) {
+        continue;
+      }
+      const target = resolve(dirname(htmlPath), rawTarget);
+      if (!(await targetExists(target))) {
+        errors.push(`${htmlPath}: broken website asset ${rawTarget}`);
+      }
+    }
+  }
+
+  try {
+    const manifest = await Bun.file("site/site.webmanifest").json() as {
+      start_url?: string;
+      scope?: string;
+      icons?: unknown[];
+    };
+    if (
+      manifest.start_url !== "/pkgshift/"
+      || manifest.scope !== "/pkgshift/"
+      || !Array.isArray(manifest.icons)
+      || manifest.icons.length === 0
+    ) {
+      errors.push("site/site.webmanifest: invalid GitHub Pages application boundary");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown JSON error";
+    errors.push(`site/site.webmanifest: ${message}`);
+  }
+
+  const robots = await Bun.file("site/robots.txt").text();
+  if (!robots.includes(`${canonicalUrl}sitemap.xml`)) {
+    errors.push("site/robots.txt: canonical sitemap URL is missing");
+  }
+  const sitemap = await Bun.file("site/sitemap.xml").text();
+  if (!sitemap.includes(`<loc>${canonicalUrl}</loc>`)) {
+    errors.push("site/sitemap.xml: canonical product URL is missing");
+  }
+
+  const agentIndex = await Bun.file("site/llms.txt").text();
+  if (
+    !agentIndex.startsWith("# pkgshift\n\n> ")
+    || !agentIndex.includes("## Agent integration")
+    || !agentIndex.includes("skills/pkgshift/SKILL.md")
+  ) {
+    errors.push("site/llms.txt: invalid agent discovery index");
+  }
+
+  const installerPath = "site/install.sh";
+  const installer = await Bun.file(installerPath).text();
+  const installerMode = (await stat(installerPath)).mode;
+  if ((installerMode & 0o111) === 0) {
+    errors.push(`${installerPath}: installer must be executable`);
+  }
+  for (const required of ["SHA256SUMS", "sha256sum", "shasum", "--proto '=https'", "--tlsv1.2"]) {
+    if (!installer.includes(required)) {
+      errors.push(`${installerPath}: missing installer safety contract ${required}`);
+    }
+  }
+  if (/\b(?:sudo|eval)\b/.test(installer)) {
+    errors.push(`${installerPath}: installer must not elevate privileges or evaluate downloaded code`);
+  }
+}
+
 async function validateEnglishOnly(): Promise<void> {
   const roots = ["AGENTS.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "README.md"];
   const patterns = [
@@ -371,6 +501,8 @@ async function validateEnglishOnly(): Promise<void> {
     "skills/**/*.{md,yaml,yml}",
     "implementations/typescript/src/**/*.ts",
     "implementations/typescript/tests/**/*.ts",
+    ".github/workflows/*.{yaml,yml}",
+    "site/**/*.{css,html,js,json,sh,svg,txt,xml}",
     "*.json",
     "*.toml",
   ];
@@ -389,6 +521,7 @@ const conceptCount = await validateOkf();
 await validateSkill();
 const changesetCount = await validateChangesets();
 await validateReleaseMetadata();
+await validateWebsite();
 await validateLinks("README.md", await Bun.file("README.md").text(), null);
 await validateEnglishOnly();
 
@@ -397,4 +530,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Validated ${conceptCount} OKF Markdown files, ${changesetCount} pending Changeset(s), release metadata, the portable Agent Skill, internal links, and English-only content.`);
+console.log(`Validated ${conceptCount} OKF Markdown files, ${changesetCount} pending Changeset(s), release metadata, the product website, the portable Agent Skill, internal links, and English-only content.`);

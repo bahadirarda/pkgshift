@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://bahadirarda.github.io/pkgshift/sitemap.xml
