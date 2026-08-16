@@ -7,6 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-16
+
+### Changed
+
+- Add the official product website and checksum-verified shell installer.
+
 ## [0.1.1] - 2026-08-16
 
 ### Changed
@@ -26,6 +32,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added cross-platform GitHub Release archives, SHA-256 checksums, and build provenance attestations.
 - Added crates.io-ready package metadata and an explicitly approved publication workflow.
 
-[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/bahadirarda/pkgshift/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/bahadirarda/pkgshift/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/bahadirarda/pkgshift/releases/tag/v0.1.0

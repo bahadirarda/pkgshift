@@ -1,6 +1,6 @@
 {
   "name": "@bahadirarda/pkgshift-typescript",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TypeScript reference implementation of pkgshift.",
   "private": true,
   "type": "module",
