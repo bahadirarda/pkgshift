@@ -42,7 +42,7 @@ GitHub Packages does not provide a Cargo registry. Rust packages therefore use c
 
 ## Canonical version
 
-Each user-visible implementation change carries a committed Changeset with an explicit Semantic Version impact and user-facing summary. Private package descriptors beside both Rust crates allow Changesets to model non-npm packages, and the Rust crates plus TypeScript parity package form one fixed release group. The automated version pull request aggregates these declarations and runs the repository-owned synchronization script.
+Each user-visible implementation change carries a committed Changeset with an explicit Semantic Version impact and user-facing summary. Private package descriptors beside both Rust crates allow Changesets to model non-npm packages, and the Rust crates plus TypeScript parity package form one fixed release group. The automated version pull request aggregates these declarations, runs the repository-owned synchronization script, and dispatches the full Rust and TypeScript validation suite against the generated release commit.
 
 `[workspace.package].version` in the root `Cargo.toml` remains the canonical checked-in Semantic Version. The root package metadata, implementation descriptors, TypeScript reference metadata, and `pkgshift` dependency on `pkgshift-core` repeat that version only where their package formats require it. Repository validation rejects drift.
 
