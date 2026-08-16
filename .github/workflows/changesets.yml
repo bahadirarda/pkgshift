@@ -51,6 +51,27 @@ jobs:
           VERSION_BRANCH: changeset-release/${{ github.ref_name }}
         run: gh workflow run ci.yml --ref "$VERSION_BRANCH"
 
+      - name: Curate calendar version pull request
+        if: steps.changesets.outputs['pr-number'] != ''
+        id: calendar-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_BRANCH: changeset-release/${{ github.ref_name }}
+          VERSION_PR_NUMBER: ${{ steps.changesets.outputs['pr-number'] }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$VERSION_BRANCH"
+          body_path="$RUNNER_TEMP/calendar-release-pr.md"
+          release_version="$(
+            bun implementations/typescript/scripts/release-pr-body.ts \
+              --ref "origin/$VERSION_BRANCH" \
+              --output "$body_path"
+          )"
+          gh pr edit "$VERSION_PR_NUMBER" \
+            --title "build(release): pkgshift $release_version" \
+            --body-file "$body_path"
+
       - name: Remove redundant approval placeholder
         if: steps.changesets.outputs['pr-number'] != ''
         env:

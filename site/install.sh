@@ -21,10 +21,10 @@ usage() {
 Install the pkgshift native CLI from a verified GitHub Release.
 
 Usage:
-  install.sh [--version <vX.Y.Z>] [--to <directory>]
+  install.sh [--version <tag>] [--to <directory>]
 
 Options:
-  --version <vX.Y.Z>  Install an exact stable release instead of the latest.
+  --version <tag>      Install an exact stable tag, such as v0.20260816.0.
   --to <directory>    Install pkgshift into this directory.
   -h, --help          Show this help message.
 

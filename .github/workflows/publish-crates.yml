@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Annotated release tag to publish, for example v0.1.0
+        description: Annotated calendar release tag to publish, for example v0.20260816.0
         required: true
         type: string
       confirm:
@@ -40,8 +40,8 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag }}
         shell: bash
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "The publication tag must be a stable v-prefixed Semantic Version."
+          if [[ ! "$RELEASE_TAG" =~ ^v0\.[0-9]{8}\.(0|[1-9][0-9]*)$ ]]; then
+            echo "The publication tag must use v0.YYYYMMDD.REVISION."
             exit 1
           fi
           if [[ "$(git cat-file -t "refs/tags/$RELEASE_TAG")" != "tag" ]]; then

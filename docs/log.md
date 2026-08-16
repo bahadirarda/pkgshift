@@ -2,6 +2,9 @@
 
 ## 2026-08-16
 
+* **Calendar versioning**: Replaced counter-only pre-1 package versions with deterministic `0.YYYYMMDD.REVISION` identities while preserving Changesets as the compatibility-impact and release-note ledger.
+* **Release synchronization**: Added calendar release pull request curation and made Bun workspace lock versions part of the blocking metadata parity check.
+
 * **Trust**: Added normalized npm, pnpm, Yarn Classic, Yarn Modern, and text Bun lock graphs with blocking resolution-set and comparable-integrity verification.
 * **Execution**: Added target-native importer selection, including `pnpm import`, `bun pm migrate`, Bun's pnpm migration path, and `yarn import`, while preserving source locks until target installation completes.
 * **Trial**: Added exact-approval `pkgshift to <target> --trial` execution in a disposable repository copy with no source state, a nested verification report, and repository-preservation evidence.
@@ -14,7 +17,7 @@
 * **Deployment**: Added a least-privilege GitHub Pages artifact workflow with repository-owned website validation.
 * **Release**: Defined synchronized Semantic Versioning, Conventional Commit titles, curated changelogs, public crate identities, native artifact names, checksums, provenance, and ordered crates.io publication.
 * **Supply Chain**: Prepared complete draft releases before publication and enabled immutable tags and assets for future releases.
-* **Versioning**: Added fixed-group Changesets release intent, automated version pull requests, synchronized Cargo and Bun metadata, and date-plus-source-revision build identities without replacing SemVer.
+* **Versioning foundation**: Added fixed-group Changesets release intent, automated version pull requests, synchronized Cargo and Bun metadata, and source-revision build provenance before calendar package identities were adopted.
 * **Architecture**: Established a Rust-primary polyglot monorepo with sibling `implementations/rust` and `implementations/typescript` boundaries.
 * **Decision**: Added the accepted Rust-primary monorepo decision, parity-gate policy, and shared schema boundary.
 * **Implementation**: Ported weighted detection, Project IR, capability analysis, deterministic planning, exact approval, state persistence, apply, verification, and rollback into Rust.

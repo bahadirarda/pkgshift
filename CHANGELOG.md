@@ -2,8 +2,8 @@
 
 All notable changes to pkgshift are documented in this file.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION`.
 
 ## [Unreleased]
 

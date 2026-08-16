@@ -7,6 +7,8 @@ generated:
 sources:
   - resource: https://semver.org/spec/v2.0.0.html
     relation: normative-versioning
+  - resource: https://calver.org/
+    relation: calendar-versioning-convention
   - resource: https://www.conventionalcommits.org/en/v1.0.0/
     relation: normative-change-language
   - resource: https://keepachangelog.com/en/1.1.0/
@@ -42,19 +44,35 @@ GitHub Packages does not provide a Cargo registry. Rust packages therefore use c
 
 ## Canonical version
 
-Each user-visible implementation change carries a committed Changeset with an explicit Semantic Version impact and user-facing summary. Private package descriptors beside both Rust crates allow Changesets to model non-npm packages, and the Rust crates plus TypeScript parity package form one fixed release group. The automated version pull request aggregates these declarations, runs the repository-owned synchronization script, and dispatches the full Rust and TypeScript validation suite against the generated release commit. GitHub token-created pull requests produce approval-only placeholder runs; the automation removes only those redundant runs after dispatching validation for the exact release commit.
+Each user-visible implementation change carries a committed Changeset with an explicit compatibility impact and user-facing summary. Private package descriptors beside both Rust crates allow Changesets to model non-npm packages, and the Rust crates plus TypeScript parity package form one fixed release group. Changesets remains the review and release-intent ledger; its calculated package number is an intermediate value rather than the published identity.
 
-`[workspace.package].version` in the root `Cargo.toml` remains the canonical checked-in Semantic Version. The root package metadata, implementation descriptors, TypeScript reference metadata, and `pkgshift` dependency on `pkgshift-core` repeat that version only where their package formats require it. Repository validation rejects drift.
+The automated version pull request aggregates the declarations, calculates the calendar version from the source commit date and current canonical version, synchronizes release files, replaces its generated description with the actual calendar identity, and dispatches the full Rust and TypeScript validation suite against the exact release commit. GitHub token-created pull requests produce approval-only placeholder runs; the automation removes only those redundant runs after dispatching validation.
 
-During the pre-1.0 period:
+`[workspace.package].version` in the root `Cargo.toml` remains the canonical checked-in version. The root package metadata, implementation descriptors, TypeScript reference metadata, private Changesets proxies, Bun workspace lock, Cargo lock, and `pkgshift` dependency on `pkgshift-core` repeat that version only where their formats require it. Repository validation rejects drift.
 
-- A patch version contains backward-compatible fixes within the current minor line.
-- A minor version may add features or revise an unstable interface.
-- Version 1.0 establishes the first stable compatibility contract.
+During the pre-stable period, pkgshift uses a Semantic Version-compatible calendar identity:
+
+```text
+0.YYYYMMDD.REVISION
+```
+
+- `0` declares the pre-stable compatibility epoch.
+- `YYYYMMDD` is the release source commit's calendar date.
+- `REVISION` starts at `0` on a new date and increments for another release from the same date.
+- Dates cannot move backward relative to the checked-in canonical version.
+- The final counter-only version, `0.2.0`, remains an immutable historical release and is the only accepted migration source for the first calendar version.
+
+For example, the first release sourced on 2026-08-16 is `0.20260816.0`; another release sourced on that date is `0.20260816.1`; the next release day begins `0.20260817.0`. The numeric form is valid for Cargo, crates.io, npm-compatible metadata, and Semantic Version tooling while making release chronology visible.
+
+Changeset impacts retain their compatibility meaning without directly selecting the numeric release:
+
+- A patch declaration contains backward-compatible fixes within the current release line.
+- A minor declaration may add features or revise an unstable interface.
+- A major declaration identifies an incompatible change that requires explicit release review.
 
 Conventional Commit types describe the change, while the curated changelog determines the public release narrative. `fix` normally implies a patch, `feat` normally implies a minor, and `!` or `BREAKING CHANGE` explicitly marks an incompatible change.
 
-Stable registry and GitHub Release versions never use a date or commit count in place of SemVer. Official binary archives instead contain `release.json` with a build identity shaped as `<version>+<YYYYMMDD>.sha.<short-sha>`, the full source commit, commit date, tag, and Rust target. This separates dependency compatibility from exact build provenance. Changesets snapshot configuration uses the same date-and-commit principle for disposable prerelease builds.
+Official binary archives contain `release.json` with a build identity shaped as `<calendar-version>+sha.<short-sha>`, the full source commit, commit date, annotated tag, and Rust target. The calendar version identifies the release; the commit fields provide exact build provenance without making a commit count part of dependency resolution.
 
 ## Release artifacts
 
@@ -76,7 +94,7 @@ The product website distributes the shell installer defined by the [website deli
 ## Publication sequence
 
 1. Add a Changeset to every user-visible implementation pull request.
-2. Merge the automated version pull request that synchronizes manifests, lockfiles, and the dated changelog.
+2. Merge the curated automated version pull request that calculates `0.YYYYMMDD.REVISION` and synchronizes manifests, lockfiles, and changelogs.
 3. Run `bun run check`, Cargo package verification, and release archive smoke tests.
 4. Create the annotated `v<version>` tag from the version commit on `main`.
 5. Let the tag workflow assemble and atomically publish the immutable GitHub Release, archives, checksums, and provenance.
