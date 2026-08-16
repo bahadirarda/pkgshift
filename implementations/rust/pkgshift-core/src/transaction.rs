@@ -7,9 +7,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::catalog::get_package_manager;
 use crate::inspect::{build_project_ir, inspect_project};
+use crate::lock_graph::{compare_lock_graphs, extract_lock_graph};
 use crate::model::{
-    ApplyOutcome, Diagnostic, DiagnosticSeverity, MigrationPlan, MutationAction,
-    ProcessExecutionRecord, SCHEMA_VERSION, SnapshotEntry, StoredPlan, StoredRun,
+    ApplyOutcome, Diagnostic, DiagnosticSeverity, LockGraph, MigrationPlan, MutationAction,
+    ProcessExecutionRecord, SCHEMA_VERSION, SnapshotEntry, StoredPlan, StoredRun, TrialReport,
     VerificationCheck, VerificationReport, VerificationStatus,
 };
 use crate::util::{
@@ -185,6 +186,71 @@ where
         )));
     }
     Ok(envelope.content)
+}
+
+fn should_skip_trial_entry(relative: &Path) -> bool {
+    relative.components().any(|component| {
+        matches!(
+            component.as_os_str().to_str(),
+            Some(".git" | ".pkgshift" | "node_modules" | "target")
+        )
+    })
+}
+
+fn copy_trial_tree(source: &Path, destination: &Path, relative: &Path) -> Result<()> {
+    let current = source.join(relative);
+    let mut entries = fs::read_dir(&current)
+        .map_err(|source_error| PkgshiftError::Io {
+            path: current.clone(),
+            source: source_error,
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|source_error| PkgshiftError::Io {
+            path: current.clone(),
+            source: source_error,
+        })?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+    for entry in entries {
+        let child_relative = relative.join(entry.file_name());
+        if should_skip_trial_entry(&child_relative) {
+            continue;
+        }
+        let source_path = entry.path();
+        let metadata =
+            fs::symlink_metadata(&source_path).map_err(|source_error| PkgshiftError::Io {
+                path: source_path.clone(),
+                source: source_error,
+            })?;
+        if metadata.file_type().is_symlink() {
+            return Err(PkgshiftError::InvalidState(format!(
+                "trial sandbox does not follow symbolic links: {}",
+                child_relative.display()
+            )));
+        }
+        let destination_path = destination.join(&child_relative);
+        if metadata.is_dir() {
+            fs::create_dir_all(&destination_path).map_err(|source_error| PkgshiftError::Io {
+                path: destination_path.clone(),
+                source: source_error,
+            })?;
+            copy_trial_tree(source, destination, &child_relative)?;
+        } else if metadata.is_file() {
+            if let Some(parent) = destination_path.parent() {
+                fs::create_dir_all(parent).map_err(|source_error| PkgshiftError::Io {
+                    path: parent.to_path_buf(),
+                    source: source_error,
+                })?;
+            }
+            fs::copy(&source_path, &destination_path).map_err(|source_error| {
+                PkgshiftError::Io {
+                    path: source_path.clone(),
+                    source: source_error,
+                }
+            })?;
+            set_file_mode(&destination_path, file_mode(&metadata))?;
+        }
+    }
+    Ok(())
 }
 
 fn path_state(path: &Path) -> Result<Option<fs::Metadata>> {
@@ -400,6 +466,7 @@ fn run_process(root: &Path, argv: &[String]) -> Result<ProcessExecutionRecord> {
 fn verify_plan(
     root: &Path,
     plan: &MigrationPlan,
+    source_lock_graph: Option<&LockGraph>,
     expected_packages: &[String],
     run_id: &str,
     install_succeeded: bool,
@@ -465,14 +532,21 @@ fn verify_plan(
         .filter(|path| root.join(path).is_file())
         .map(ToString::to_string)
         .collect::<Vec<_>>();
+    let empty_target_lock_omitted = existing_locks.is_empty()
+        && source_lock_graph.is_some_and(|graph| graph.complete && graph.nodes.is_empty());
     checks.push(VerificationCheck {
         id: "target-lockfile".to_owned(),
-        status: if existing_locks.is_empty() {
-            VerificationStatus::Failed
-        } else {
+        status: if !existing_locks.is_empty() || empty_target_lock_omitted {
             VerificationStatus::Passed
+        } else {
+            VerificationStatus::Failed
         },
-        summary: if existing_locks.is_empty() {
+        summary: if empty_target_lock_omitted {
+            format!(
+                "{} omitted an empty lockfile for an empty resolved package set.",
+                plan.target
+            )
+        } else if existing_locks.is_empty() {
             format!("No {} lockfile was generated.", plan.target)
         } else {
             format!(
@@ -480,7 +554,14 @@ fn verify_plan(
                 existing_locks.join(", ")
             )
         },
-        evidence: existing_locks,
+        evidence: if empty_target_lock_omitted {
+            vec![
+                "sourceResolutions:0".to_owned(),
+                "targetLockfile:absent".to_owned(),
+            ]
+        } else {
+            existing_locks
+        },
     });
 
     let current_packages: Vec<String> = build_project_ir(&inspection)?
@@ -525,12 +606,93 @@ fn verify_plan(
         evidence: vec![format!("success:{install_succeeded}")],
     });
 
-    checks.push(VerificationCheck {
-        id: "dependency-graph-drift".to_owned(),
-        status: VerificationStatus::Skipped,
-        summary: "Resolved graph drift is not compared in the Rust MVP.".to_owned(),
-        evidence: vec!["This limitation is reported explicitly.".to_owned()],
-    });
+    let lock_graph_comparison = if let Some(source_graph) = source_lock_graph {
+        match extract_lock_graph(root, plan.target)? {
+            Some(target_graph) => {
+                let comparison = compare_lock_graphs(source_graph, &target_graph)?;
+                let passed = comparison.status == VerificationStatus::Passed;
+                let mut evidence = vec![
+                    format!("policy:{}", comparison.policy),
+                    format!("sourceResolutions:{}", comparison.source_resolutions),
+                    format!("targetResolutions:{}", comparison.target_resolutions),
+                    format!("added:{}", comparison.added_resolutions.len()),
+                    format!("removed:{}", comparison.removed_resolutions.len()),
+                    format!(
+                        "integrityMismatches:{}",
+                        comparison.integrity_mismatches.len()
+                    ),
+                    format!("edgeChanges:{}", comparison.edge_changes.len()),
+                ];
+                evidence.extend(
+                    target_graph
+                        .diagnostics
+                        .iter()
+                        .map(|entry| format!("{}:{}", entry.code, entry.summary)),
+                );
+                checks.push(VerificationCheck {
+                    id: "dependency-graph-drift".to_owned(),
+                    status: comparison.status,
+                    summary: if passed {
+                        "Source and target resolved package sets match.".to_owned()
+                    } else {
+                        "Target dependency state drifted from the accepted source lock graph."
+                            .to_owned()
+                    },
+                    evidence,
+                });
+                Some(comparison)
+            }
+            None => {
+                if source_graph.complete && source_graph.nodes.is_empty() {
+                    let absent_target = LockGraph {
+                        schema_version: SCHEMA_VERSION.to_owned(),
+                        graph_id: format!("lockgraph_absent_{}", plan.target),
+                        manager: plan.target,
+                        lockfile_path: String::new(),
+                        lockfile_digest: "absent".to_owned(),
+                        format: "absent-empty".to_owned(),
+                        complete: true,
+                        nodes: Vec::new(),
+                        edges: Vec::new(),
+                        diagnostics: Vec::new(),
+                    };
+                    let mut comparison = compare_lock_graphs(source_graph, &absent_target)?;
+                    comparison.target_graph_id = None;
+                    checks.push(VerificationCheck {
+                        id: "dependency-graph-drift".to_owned(),
+                        status: comparison.status,
+                        summary:
+                            "The target omitted an empty lockfile and preserved the empty resolution set."
+                                .to_owned(),
+                        evidence: vec![
+                            format!("policy:{}", comparison.policy),
+                            "sourceResolutions:0".to_owned(),
+                            "targetResolutions:0".to_owned(),
+                            "targetLockfile:absent".to_owned(),
+                        ],
+                    });
+                    Some(comparison)
+                } else {
+                    checks.push(VerificationCheck {
+                        id: "dependency-graph-drift".to_owned(),
+                        status: VerificationStatus::Failed,
+                        summary: "No target lock graph was available for comparison.".to_owned(),
+                        evidence: vec![format!("target:{}", plan.target)],
+                    });
+                    None
+                }
+            }
+        }
+    } else {
+        checks.push(VerificationCheck {
+            id: "dependency-graph-drift".to_owned(),
+            status: VerificationStatus::Skipped,
+            summary: "No source lockfile existed, so resolved graph comparison is not applicable."
+                .to_owned(),
+            evidence: vec!["sourceLockGraph:none".to_owned()],
+        });
+        None
+    };
     let failed = checks
         .iter()
         .filter(|check| check.status == VerificationStatus::Failed)
@@ -551,7 +713,14 @@ fn verify_plan(
     };
     let report_id = short_digest(
         "verification_",
-        &(run_id, &plan.plan_id, status, &checks, &diagnostics),
+        &(
+            run_id,
+            &plan.plan_id,
+            status,
+            &checks,
+            &diagnostics,
+            &lock_graph_comparison,
+        ),
     )?;
     Ok(VerificationReport {
         schema_version: SCHEMA_VERSION.to_owned(),
@@ -561,6 +730,7 @@ fn verify_plan(
         status,
         checks,
         diagnostics,
+        lock_graph_comparison,
     })
 }
 
@@ -680,7 +850,14 @@ pub fn apply_stored_plan(
         .iter()
         .map(|package| package.path.clone())
         .collect::<Vec<_>>();
-    let verification = verify_plan(&root, plan, &expected_packages, &run_id, true)?;
+    let verification = verify_plan(
+        &root,
+        plan,
+        stored_plan.source_lock_graph.as_ref(),
+        &expected_packages,
+        &run_id,
+        true,
+    )?;
     run.state = if verification.status == VerificationStatus::Passed {
         "succeeded"
     } else {
@@ -722,10 +899,19 @@ pub fn verify_stored_run(
         .iter()
         .map(|package| package.path.clone())
         .collect::<Vec<_>>();
-    let install_succeeded = run.processes.iter().any(|process| process.success);
+    let install_command = get_package_manager(run.plan.target)
+        .install_command
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let install_succeeded = run
+        .processes
+        .iter()
+        .any(|process| process.success && process.argv == install_command);
     let report = verify_plan(
         &root,
         &run.plan,
+        stored_plan.source_lock_graph.as_ref(),
         &expected_packages,
         run_id,
         install_succeeded,
@@ -746,6 +932,89 @@ pub fn verify_stored_run(
         &report,
     )?;
     Ok(report)
+}
+
+pub fn trial_stored_plan(
+    root: &Path,
+    stored_plan: &StoredPlan,
+    approval: Option<&str>,
+) -> Result<TrialReport> {
+    let root = resolve_root(root)?;
+    if approval != Some(stored_plan.plan.plan_id.as_str()) {
+        return Err(PkgshiftError::InvalidState(format!(
+            "trial requires exact approval for {}",
+            stored_plan.plan.plan_id
+        )));
+    }
+    if !stored_plan.plan.executable {
+        return Err(PkgshiftError::InvalidState(format!(
+            "plan {} is not executable",
+            stored_plan.plan.plan_id
+        )));
+    }
+    let before = inspect_project(&root)?;
+    if before.fingerprint != stored_plan.plan.repository_fingerprint {
+        return Err(PkgshiftError::InvalidState(
+            "migration-relevant repository evidence changed after planning".to_owned(),
+        ));
+    }
+
+    let temporary = tempfile::tempdir().map_err(|source| PkgshiftError::Io {
+        path: std::env::temp_dir(),
+        source,
+    })?;
+    let sandbox_root = temporary.path().join("project");
+    fs::create_dir_all(&sandbox_root).map_err(|source| PkgshiftError::Io {
+        path: sandbox_root.clone(),
+        source,
+    })?;
+    copy_trial_tree(&root, &sandbox_root, Path::new(""))?;
+    let sandbox_state = sandbox_root.join(".pkgshift/state");
+    save_plan(&sandbox_state, stored_plan)?;
+    let outcome = apply_stored_plan(
+        &sandbox_root,
+        &sandbox_state,
+        &stored_plan.plan.plan_id,
+        approval,
+    )?;
+
+    let after = inspect_project(&root)?;
+    let repository_unchanged = before.fingerprint == after.fingerprint;
+    let mut diagnostics = outcome.run.diagnostics.clone();
+    if !repository_unchanged {
+        diagnostics.push(diagnostic(
+            "TRIAL_REPOSITORY_CHANGED",
+            "The source repository changed while the isolated trial was running.",
+            vec!["Inspect concurrent repository activity before retrying.".to_owned()],
+        ));
+    }
+    let status = if repository_unchanged && outcome.run.state == "succeeded" {
+        VerificationStatus::Passed
+    } else {
+        VerificationStatus::Failed
+    };
+    let report_id = short_digest(
+        "trial_",
+        &(
+            SCHEMA_VERSION,
+            &stored_plan.plan.plan_id,
+            status,
+            repository_unchanged,
+            &outcome.run.processes,
+            &outcome.verification,
+            &diagnostics,
+        ),
+    )?;
+    Ok(TrialReport {
+        schema_version: SCHEMA_VERSION.to_owned(),
+        report_id,
+        plan_id: stored_plan.plan.plan_id.clone(),
+        status,
+        repository_unchanged,
+        processes: outcome.run.processes,
+        verification: outcome.verification,
+        diagnostics,
+    })
 }
 
 pub fn rollback_stored_run(

@@ -35,15 +35,25 @@ describe("package manager planning", () => {
     expect(first?.operations.map((operation) => operation.kind)).toEqual([
       "manifest.render-target",
       "integration.translate-commands",
-      "dependency.install-target",
+      "dependency.import-and-install-target",
       "source.retire",
       "migration.verify",
     ]);
-    expect(first?.operations.find((operation) => operation.kind === "dependency.install-target")?.command).toEqual([
+    expect(first?.operations.find((operation) =>
+      operation.kind === "dependency.import-and-install-target"
+    )?.command).toEqual([
       "bun",
       "install",
       "--ignore-scripts",
     ]);
+    expect(first?.nativeImport).toEqual({
+      id: "bun-pnpm-install-migration",
+      source: "pnpm",
+      target: "bun",
+      mode: "install-integrated",
+      command: ["bun", "install", "--ignore-scripts"],
+      summary: "Use Bun's install-integrated pnpm lockfile migration path.",
+    });
   });
 
   test("labels preview targets without blocking planning", async () => {

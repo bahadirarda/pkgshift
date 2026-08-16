@@ -3,12 +3,12 @@ use std::path::Path;
 
 use serde_json::{Map, Value};
 
-use crate::catalog::get_package_manager;
+use crate::catalog::{get_package_manager, native_import_strategy};
 use crate::model::{
     CapabilityAnalysis, CapabilityClassification, CapabilityDecision, CapabilitySummary,
-    Diagnostic, DiagnosticSeverity, EvidenceDetail, MigrationPlan, MutationAction,
-    PackageManagerId, PlannedFileMutation, PlannedOperation, ProjectInspection, ProjectIr,
-    SCHEMA_VERSION, SideEffect, SupportTier,
+    Diagnostic, DiagnosticSeverity, EvidenceDetail, LockGraph, MigrationPlan, MutationAction,
+    NativeImportMode, PackageManagerId, PlannedFileMutation, PlannedOperation, ProjectInspection,
+    ProjectIr, SCHEMA_VERSION, SideEffect, SupportTier,
 };
 use crate::util::{PkgshiftError, Result, digest_text, read_json_object, read_text, short_digest};
 
@@ -853,6 +853,7 @@ pub fn plan_package_manager_migration(
     inspection: &ProjectInspection,
     project_ir: &ProjectIr,
     analysis: &CapabilityAnalysis,
+    source_lock_graph: Option<&LockGraph>,
     target: PackageManagerId,
     accepted_lossy: bool,
 ) -> Result<Option<MigrationPlan>> {
@@ -865,6 +866,25 @@ pub fn plan_package_manager_migration(
     let mut diagnostics = project_ir.diagnostics.clone();
     diagnostics.extend(analysis.diagnostics.clone());
     diagnostics.extend(transformation.diagnostics);
+    if let Some(graph) = source_lock_graph {
+        diagnostics.extend(graph.diagnostics.clone());
+    }
+    let native_import = native_import_strategy(source, target, source_lock_graph.is_some());
+    if source != target && source_lock_graph.is_some() && native_import.is_none() {
+        diagnostics.push(Diagnostic {
+            code: "NATIVE_IMPORT_UNAVAILABLE".to_owned(),
+            severity: DiagnosticSeverity::Warning,
+            summary: format!(
+                "No verified target-native lockfile importer is registered for {source} to {target}."
+            ),
+            blocking: false,
+            evidence: Vec::new(),
+            remediation: vec![
+                "pkgshift will generate target dependency state and require lock graph verification."
+                    .to_owned(),
+            ],
+        });
+    }
     if target_definition.tier == SupportTier::PreviewTarget {
         diagnostics.push(Diagnostic {
             code: "PM_TARGET_PREVIEW".to_owned(),
@@ -936,14 +956,60 @@ pub fn plan_package_manager_migration(
         ) {
             operations.push(value);
         }
+        if let Some(strategy) = native_import
+            .as_ref()
+            .filter(|strategy| strategy.mode == NativeImportMode::DedicatedCommand)
+        {
+            operations.push(PlannedOperation {
+                id: format!("op_{:03}", operations.len() + 1),
+                phase: "install".to_owned(),
+                kind: "dependency.import-target".to_owned(),
+                description: strategy.summary.clone(),
+                paths: target_definition
+                    .lockfiles
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect(),
+                command: strategy.command.clone(),
+                capabilities: analysis
+                    .decisions
+                    .iter()
+                    .map(|decision| decision.feature_id.clone())
+                    .collect(),
+                side_effect: SideEffect::DependencyState,
+                reversible: true,
+                preconditions: vec![
+                    "Source dependency state and target configuration match the accepted plan."
+                        .to_owned(),
+                ],
+                postconditions: vec!["The target-native importer exits successfully.".to_owned()],
+                mutations: Vec::new(),
+            });
+        }
+        let install_integrates_import = native_import
+            .as_ref()
+            .is_some_and(|strategy| strategy.mode == NativeImportMode::InstallIntegrated);
         operations.push(PlannedOperation {
             id: format!("op_{:03}", operations.len() + 1),
             phase: "install".to_owned(),
-            kind: "dependency.install-target".to_owned(),
-            description: format!(
-                "Generate {} dependency state without lifecycle scripts.",
-                target_definition.display_name
-            ),
+            kind: if install_integrates_import {
+                "dependency.import-and-install-target"
+            } else {
+                "dependency.install-target"
+            }
+            .to_owned(),
+            description: native_import
+                .as_ref()
+                .filter(|strategy| strategy.mode == NativeImportMode::InstallIntegrated)
+                .map_or_else(
+                    || {
+                        format!(
+                            "Generate {} dependency state without lifecycle scripts.",
+                            target_definition.display_name
+                        )
+                    },
+                    |strategy| strategy.summary.clone(),
+                ),
             paths: target_definition
                 .lockfiles
                 .iter()
@@ -1011,6 +1077,8 @@ pub fn plan_package_manager_migration(
             &project_ir.project_ir_id,
             &analysis.analysis_id,
             &analysis.summary,
+            source_lock_graph.map(|graph| &graph.graph_id),
+            &native_import,
             accepted_lossy,
             executable,
             &operations,
@@ -1029,6 +1097,8 @@ pub fn plan_package_manager_migration(
         project_ir_id: project_ir.project_ir_id.clone(),
         capability_analysis_id: analysis.analysis_id.clone(),
         capability_summary: analysis.summary.clone(),
+        source_lock_graph_id: source_lock_graph.map(|graph| graph.graph_id.clone()),
+        native_import,
         operations,
         diagnostics,
         verification: vec![
@@ -1038,6 +1108,11 @@ pub fn plan_package_manager_migration(
             "source-only artifacts are retired".to_owned(),
             "workspace membership is preserved".to_owned(),
             "target installation operation succeeded".to_owned(),
+            if source_lock_graph.is_some() {
+                "source and target resolution sets match".to_owned()
+            } else {
+                "resolved graph comparison is skipped when no source lockfile exists".to_owned()
+            },
         ],
     }))
 }
@@ -1087,6 +1162,7 @@ mod tests {
             &inspection,
             &ir,
             &analysis,
+            None,
             PackageManagerId::Bun,
             false,
         )
@@ -1141,10 +1217,16 @@ mod tests {
                 let analysis = analyze_capabilities(&ir, target)
                     .expect("analysis")
                     .expect("capability analysis");
-                let plan =
-                    plan_package_manager_migration(&inspection, &ir, &analysis, target, false)
-                        .expect("planning")
-                        .expect("migration plan");
+                let plan = plan_package_manager_migration(
+                    &inspection,
+                    &ir,
+                    &analysis,
+                    None,
+                    target,
+                    false,
+                )
+                .expect("planning")
+                .expect("migration plan");
                 assert!(plan.executable, "{source} to {target} should be executable");
             }
         }

@@ -5,7 +5,7 @@ description: Defines implemented package manager target tiers and execution boun
 tags: [support, npm, pnpm, yarn, bun, vlt, deno]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
 sources:
   - id: npm-install
     resource: https://docs.npmjs.com/cli/install/
@@ -16,6 +16,9 @@ sources:
   - id: pnpm-catalogs
     resource: https://pnpm.io/catalogs
     title: pnpm catalog documentation
+  - id: pnpm-import
+    resource: https://pnpm.io/cli/import
+    title: pnpm import documentation
   - id: yarn-modern
     resource: https://yarnpkg.com/
     title: Yarn documentation
@@ -25,6 +28,12 @@ sources:
   - id: bun-install
     resource: https://bun.com/docs/pm/cli/install
     title: Bun install documentation
+  - id: bun-pm-migrate
+    resource: https://bun.sh/docs/pm/cli/pm#migrate
+    title: Bun package manager migration documentation
+  - id: yarn-classic-import
+    resource: https://classic.yarnpkg.com/lang/en/docs/cli/import/
+    title: Yarn Classic import documentation
   - id: bun-workspaces
     resource: https://bun.sh/docs/pm/workspaces
     title: Bun workspace documentation
@@ -111,8 +120,26 @@ Production targets provide:
 - Redaction tests for registry and environment configuration.
 - Apply failure and rollback tests.
 - Structural verification tied to the plan and apply journal.
+- Normalized source lock graph extraction and blocking target resolution-set verification in the Rust primary path.
+- Registered target-native importer or install-integrated migration selection where official behavior supports it.
+- Approved isolated execution trials through the Rust primary CLI.
 
-Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, unsupported patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, or selectors outside the implemented subset block execution. Resolved dependency graph comparison remains a post-MVP release-hardening gate.
+Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, unsupported patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. Edge-level and platform-aware graph policies remain release-hardening extensions beyond the blocking `resolution-set-v1` policy.
+
+# Native Migration Paths
+
+The Rust planner preserves source lockfiles through import and installation, then retires source-only artifacts after success.
+
+| Source | Target | Selected path |
+| --- | --- | --- |
+| npm or Yarn | pnpm | `pnpm import`, then lifecycle-script-disabled `pnpm install`. |
+| npm or Yarn | Bun | `bun pm migrate`, then lifecycle-script-disabled `bun install`. |
+| pnpm | Bun | Bun's install-integrated pnpm migration path. |
+| npm | Yarn Classic | `yarn import`, then lifecycle-script-disabled `yarn install`. |
+| Yarn Classic | Yarn Modern | Install-integrated Yarn migration. |
+| Yarn Classic | npm | npm's `yarn.lock`-aware install path. |
+
+Other directions generate target dependency state and emit `NATIVE_IMPORT_UNAVAILABLE` when a source lockfile exists. Every production direction still passes or fails on target verification; a native importer is not treated as proof by itself.
 
 # Freshness
 

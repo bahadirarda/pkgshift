@@ -36,6 +36,9 @@ The implementation may add codes while preserving the following baseline familie
 | `CAPABILITY_UNSUPPORTED` | No safe target representation exists. |
 | `CAPABILITY_UNKNOWN` | Target behavior lacks enough authoritative evidence for a safe decision. |
 | `LOSSY_ACCEPTANCE_REQUIRED` | Lossy decisions were not accepted while creating the immutable plan. |
+| `NATIVE_IMPORT_UNAVAILABLE` | No verified target-native importer exists for the selected direction; target graph proof remains required. |
+| `LOCK_GRAPH_PARSE_FAILED` | A source or target lockfile could not produce a trustworthy normalized graph. |
+| `LOCK_GRAPH_FORMAT_UNSUPPORTED` | The lockfile format, including binary `bun.lockb`, cannot be proven safely. |
 | `PLAN_PRECONDITION_FAILED` | Repository evidence changed after planning. |
 | `REPOSITORY_TRANSACTION_BUSY` | Another agent or run owns the repository transaction lock. |
 | `APPROVAL_REQUIRED` | A mutating command lacks the exact artifact-bound approval token. |

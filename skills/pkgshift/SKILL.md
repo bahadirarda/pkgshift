@@ -13,6 +13,7 @@ Map the request to the narrowest operation:
 
 - Assess a repository or identify its package manager: inspect.
 - Preview a specific migration without execution: guided dry-run.
+- Prove importer, installer, and verification behavior without source writes: guided trial.
 - Perform a migration: guided preview, exact approval, then guided execution.
 - Produce independently stored stage artifacts: use the advanced plan, apply, and verify commands.
 - Investigate a code or failed artifact: explain.
@@ -68,12 +69,25 @@ Read the result by fields, not by prose. Check:
 - Capability losses and blocking diagnostics are understood.
 - Operations, commands, side effects, and rollback limits are visible.
 - Verification checks match the repository shape.
+- Source lock graph and native importer artifacts are understood when present.
 - `summary.repositoryChanged` is false before approval.
 - The plan is executable before requesting approval.
 
 If lossy decisions exist, explain each one before creating a replacement preview with `--accept-lossy`. Never add that option without explicit user acceptance.
 
 Load [references/capability-model.md](references/capability-model.md) when capability classifications or target selection require interpretation. Load [references/diagnostics.md](references/diagnostics.md) when presenting or handling a diagnostic.
+
+## Trial an Accepted Plan
+
+When the user requests execution proof before repository mutation, preview with:
+
+```text
+pkgshift to <target> --trial --json --no-color --non-interactive
+```
+
+The first call remains read-only and returns exit code `7`. Present that its next action has `sideEffect: process-execution`: it runs native import, target installation, and verification in a disposable repository copy, but may use the network and package manager caches. After exact approval, execute the returned argument array unchanged.
+
+Require `status: completed`, a passing `trial-report`, `repositoryUnchanged: true`, and passing nested verification. A trial returns no source `runId`. Trial approval never authorizes apply; obtain a new normal guided preview and separate repository-write approval before migration.
 
 ## Request Approval
 
@@ -91,7 +105,7 @@ pkgshift to <target> --approve <plan-id> --json --no-color --non-interactive
 
 Do not reconstruct the command, invent paths, or add flags that were not approved. The CLI re-plans against current repository evidence, requires the identifier to remain exact, persists state under its default location, applies the migration, and verifies the run in one invocation. If preconditions conflict, stop and create a new preview. Preserve the `runId` on success, partial failure, or cancellation.
 
-Treat the migration as successful only when the approved invocation returns `status: completed` with no blocking verification diagnostic. Report passed, failed, and skipped checks separately. The MVP deliberately skips resolved lock-graph comparison and does not automatically run representative project scripts. Do not claim that skipped checks passed.
+Treat the migration as successful only when the approved invocation returns `status: completed` with no blocking verification diagnostic. Report passed, failed, and skipped checks separately. When a source lock graph exists, require a passing `lockGraphComparison`; graph comparison is skipped only when no source lockfile existed. The engine does not automatically run representative project scripts. Do not claim that skipped checks passed.
 
 ## Use Advanced Stages Only When Needed
 

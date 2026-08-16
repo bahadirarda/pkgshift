@@ -63,7 +63,10 @@ describe("target transformations", () => {
         if (target === source) continue;
         const { plan } = await planFixture(files, target);
         expect(plan.executable, `${source} -> ${target}`).toBeTrue();
-        expect(plan.operations.some((entry) => entry.kind === "dependency.install-target")).toBeTrue();
+        expect(plan.operations.some((entry) =>
+          entry.kind === "dependency.install-target"
+          || entry.kind === "dependency.import-and-install-target"
+        )).toBeTrue();
         plannedDirections += 1;
       }
     }

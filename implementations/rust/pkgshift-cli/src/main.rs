@@ -42,6 +42,10 @@ struct Cli {
     #[arg(long, global = true)]
     dry_run: bool,
 
+    /// Execute the accepted plan in a disposable sandbox and leave the repository unchanged.
+    #[arg(long, global = true, conflicts_with = "dry_run")]
+    trial: bool,
+
     /// Disable the guided terminal approval prompt.
     #[arg(long, global = true)]
     non_interactive: bool,
@@ -173,8 +177,19 @@ fn interactive_approval(execution: &CommandExecution) -> io::Result<bool> {
         .get("target")
         .and_then(serde_json::Value::as_str)
         .unwrap_or("unknown");
-    eprintln!("Plan {plan_id} will migrate {source} to {target}.");
-    eprint!("Apply this exact plan? [y/N] ");
+    let trial = execution
+        .result
+        .summary
+        .get("trial")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    if trial {
+        eprintln!("Plan {plan_id} will trial {source} to {target} in an isolated sandbox.");
+        eprint!("Run this exact trial plan? [y/N] ");
+    } else {
+        eprintln!("Plan {plan_id} will migrate {source} to {target}.");
+        eprint!("Apply this exact plan? [y/N] ");
+    }
     io::stderr().flush()?;
     let mut answer = String::new();
     io::stdin().read_line(&mut answer)?;
@@ -192,6 +207,7 @@ fn main() -> ExitCode {
     options.accept_lossy = cli.accept_lossy;
     options.approval = cli.approve;
     options.dry_run = cli.dry_run;
+    options.trial = cli.trial;
 
     let mut execution = execute(&options);
     let can_prompt = is_guided

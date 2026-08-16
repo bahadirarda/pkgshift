@@ -317,7 +317,9 @@ export async function buildProjectIR(
     addPatterns(denoConfiguration.location, stringArray(denoConfiguration.value.workspace));
   }
 
-  const normalizedPatterns = [...new Set(patterns.map((pattern) => pattern.trim()).filter(Boolean))].sort();
+  const normalizedPatterns = [...new Set(
+    patterns.map((pattern) => pattern.trim()).filter(Boolean),
+  )];
   for (const pattern of normalizedPatterns.filter((entry) => !workspacePatternSupported(entry))) {
     diagnostics.push({
       code: "WORKSPACE_PATTERN_UNSUPPORTED",

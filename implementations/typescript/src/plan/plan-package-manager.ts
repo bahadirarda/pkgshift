@@ -1,4 +1,7 @@
-import { getPackageManager } from "../adapters/catalog.ts";
+import {
+  getPackageManager,
+  nativeImportStrategy,
+} from "../adapters/catalog.ts";
 import type { CapabilityAnalysis } from "../capabilities/models.ts";
 import { sha256Json } from "../core/files.ts";
 import type {
@@ -67,6 +70,10 @@ export async function planPackageManagerMigration(
   const targetDefinition = getPackageManager(target);
   const sourceDefinition = getPackageManager(source);
   const acceptedLossy = options.acceptedLossy ?? false;
+  const sourceLockfilePresent = sourceDefinition.lockfiles.some((path) =>
+    inspection.relevantFiles.includes(path)
+  );
+  const nativeImport = nativeImportStrategy(source, target, sourceLockfilePresent);
   const transformation = await transformProject(
     inspection,
     projectIr,
@@ -78,6 +85,18 @@ export async function planPackageManagerMigration(
     ...capabilityAnalysis.diagnostics,
     ...transformation.diagnostics,
   ];
+
+  if (source !== target && sourceLockfilePresent && !nativeImport) {
+    diagnostics.push({
+      code: "NATIVE_IMPORT_UNAVAILABLE",
+      severity: "warning",
+      summary: `No verified target-native lockfile importer is registered for ${source} to ${target}.`,
+      blocking: false,
+      remediation: [
+        "pkgshift will generate target dependency state and require target verification.",
+      ],
+    });
+  }
 
   if (targetDefinition.tier === "preview-target") {
     diagnostics.push({
@@ -138,11 +157,33 @@ export async function planPackageManagerMigration(
       ["Recognized source package-manager commands use the target executable."],
     ));
 
+    if (nativeImport?.mode === "dedicated-command") {
+      operations.push({
+        id: operationId(operations.length),
+        phase: "install",
+        kind: "dependency.import-target",
+        description: nativeImport.summary,
+        paths: targetDefinition.lockfiles,
+        command: nativeImport.command,
+        sideEffect: "dependency-state",
+        capabilities: capabilityAnalysis.decisions.map((decision) => decision.featureId),
+        reversible: true,
+        preconditions: [
+          "Source dependency state and target configuration match the accepted plan.",
+        ],
+        postconditions: ["The target-native importer exits successfully."],
+      });
+    }
+
     operations.push({
       id: operationId(operations.length),
       phase: "install",
-      kind: "dependency.install-target",
-      description: `Generate ${targetDefinition.displayName} dependency state without lifecycle scripts.`,
+      kind: nativeImport?.mode === "install-integrated"
+        ? "dependency.import-and-install-target"
+        : "dependency.install-target",
+      description: nativeImport?.mode === "install-integrated"
+        ? nativeImport.summary
+        : `Generate ${targetDefinition.displayName} dependency state without lifecycle scripts.`,
       paths: targetDefinition.lockfiles,
       command: installCommand(target),
       sideEffect: "dependency-state",
@@ -187,6 +228,7 @@ export async function planPackageManagerMigration(
     projectIrId: projectIr.projectIrId,
     capabilityAnalysisId: capabilityAnalysis.analysisId,
     capabilitySummary: capabilityAnalysis.summary,
+    nativeImport,
     acceptedLossy,
     executable,
     operations,
@@ -206,6 +248,7 @@ export async function planPackageManagerMigration(
     projectIrId: projectIr.projectIrId,
     capabilityAnalysisId: capabilityAnalysis.analysisId,
     capabilitySummary: capabilityAnalysis.summary,
+    ...(nativeImport ? { nativeImport } : {}),
     operations,
     diagnostics,
     verification: [

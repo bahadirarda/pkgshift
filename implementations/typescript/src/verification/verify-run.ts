@@ -166,7 +166,10 @@ async function verifyRunLocked(options: {
     evidence: [`expected:${expectedPackages.join(",")}`, `actual:${actualPackages.join(",")}`],
   });
 
-  const installOperation = journal.operations.find((entry) => entry.kind === "dependency.install-target");
+  const installOperation = journal.operations.find((entry) =>
+    entry.kind === "dependency.install-target"
+    || entry.kind === "dependency.import-and-install-target"
+  );
   checks.push({
     id: "target-install",
     status: installOperation?.status === "succeeded" ? "passed" : "failed",
@@ -179,8 +182,8 @@ async function verifyRunLocked(options: {
   checks.push({
     id: "dependency-graph-drift",
     status: "skipped",
-    summary: "Resolved graph drift is not compared because the source adapter did not persist a lock graph summary.",
-    evidence: ["MVP records this limitation explicitly."],
+    summary: "The TypeScript reference does not persist the Rust primary path's source lock graph.",
+    evidence: ["Use the Rust primary CLI when blocking resolution-set proof is required."],
   });
 
   const diagnostics = checks.some((check) => check.status === "failed")

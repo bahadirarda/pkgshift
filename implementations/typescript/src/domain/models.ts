@@ -108,6 +108,17 @@ export interface PlannedFileMutation {
   capabilities: string[];
 }
 
+export type NativeImportMode = "dedicated-command" | "install-integrated";
+
+export interface NativeImportStrategy {
+  id: string;
+  source: PackageManagerId;
+  target: PackageManagerId;
+  mode: NativeImportMode;
+  command: string[];
+  summary: string;
+}
+
 export interface MigrationPlan {
   schemaVersion: "1.0";
   planId: string;
@@ -127,6 +138,8 @@ export interface MigrationPlan {
     unknown: number;
     notApplicable: number;
   };
+  sourceLockGraphId?: string;
+  nativeImport?: NativeImportStrategy;
   operations: PlannedOperation[];
   diagnostics: Diagnostic[];
   verification: string[];

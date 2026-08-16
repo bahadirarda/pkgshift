@@ -1,4 +1,8 @@
-import type { PackageManagerId, SupportTier } from "../domain/models.ts";
+import type {
+  NativeImportStrategy,
+  PackageManagerId,
+  SupportTier,
+} from "../domain/models.ts";
 
 export interface PackageManagerDefinition {
   id: PackageManagerId;
@@ -19,7 +23,7 @@ export const PACKAGE_MANAGERS: readonly PackageManagerDefinition[] = [
     displayName: "npm",
     tier: "production-target",
     aliases: ["npm"],
-    lockfiles: ["package-lock.json", "npm-shrinkwrap.json"],
+    lockfiles: ["npm-shrinkwrap.json", "package-lock.json"],
     configurationFiles: [".npmrc"],
     installCommand: ["npm", "install"],
     implementationStatus: "production",
@@ -125,4 +129,101 @@ export function normalizePackageManagerId(
     return "yarn-modern";
   }
   return null;
+}
+
+export function nativeImportStrategy(
+  source: PackageManagerId,
+  target: PackageManagerId,
+  sourceLockfilePresent: boolean,
+): NativeImportStrategy | null {
+  if (!sourceLockfilePresent) return null;
+  if (
+    target === "pnpm"
+    && ["npm", "yarn-classic", "yarn-modern"].includes(source)
+  ) {
+    return {
+      id: "pnpm-import",
+      source,
+      target,
+      mode: "dedicated-command",
+      command: ["pnpm", "import"],
+      summary: "Generate pnpm dependency state with pnpm's native lockfile importer.",
+    };
+  }
+  if (
+    target === "bun"
+    && ["npm", "yarn-classic", "yarn-modern"].includes(source)
+  ) {
+    return {
+      id: "bun-pm-migrate",
+      source,
+      target,
+      mode: "dedicated-command",
+      command: ["bun", "pm", "migrate"],
+      summary: "Generate Bun dependency state with bun pm migrate.",
+    };
+  }
+  if (source === "pnpm" && target === "bun") {
+    return {
+      id: "bun-pnpm-install-migration",
+      source,
+      target,
+      mode: "install-integrated",
+      command: installCommandFor(target),
+      summary: "Use Bun's install-integrated pnpm lockfile migration path.",
+    };
+  }
+  if (source === "npm" && target === "yarn-classic") {
+    return {
+      id: "yarn-classic-import",
+      source,
+      target,
+      mode: "dedicated-command",
+      command: ["yarn", "import"],
+      summary: "Generate Yarn Classic dependency state with yarn import.",
+    };
+  }
+  if (source === "yarn-classic" && target === "yarn-modern") {
+    return {
+      id: "yarn-modern-install-migration",
+      source,
+      target,
+      mode: "install-integrated",
+      command: installCommandFor(target),
+      summary: "Use Yarn Modern's install-integrated Yarn Classic migration path.",
+    };
+  }
+  if (source === "yarn-classic" && target === "npm") {
+    return {
+      id: "npm-yarn-lock-install",
+      source,
+      target,
+      mode: "install-integrated",
+      command: installCommandFor(target),
+      summary: "Use npm's yarn.lock-aware installation path.",
+    };
+  }
+  if (
+    target === "deno"
+    && ["npm", "pnpm", "yarn-classic", "yarn-modern"].includes(source)
+  ) {
+    return {
+      id: "deno-install-migration",
+      source,
+      target,
+      mode: "install-integrated",
+      command: installCommandFor(target),
+      summary: "Use Deno's install-integrated Node dependency migration path.",
+    };
+  }
+  return null;
+}
+
+function installCommandFor(target: PackageManagerId): string[] {
+  const base = [...getPackageManager(target).installCommand];
+  if (["npm", "pnpm", "yarn-classic", "bun"].includes(target)) {
+    return [...base, "--ignore-scripts"];
+  }
+  if (target === "yarn-modern") return [...base, "--mode=skip-build"];
+  return base;
 }

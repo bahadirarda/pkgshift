@@ -526,13 +526,13 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
             }
         })
         .collect::<Vec<_>>();
+    let mut seen_workspace_patterns = BTreeSet::new();
     let workspace_patterns = inspection
         .workspace
         .sources
         .iter()
         .flat_map(|source| source.patterns.iter().cloned())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
+        .filter(|pattern| seen_workspace_patterns.insert(pattern.clone()))
         .collect::<Vec<_>>();
     let project_ir_id = short_digest(
         "ir_",

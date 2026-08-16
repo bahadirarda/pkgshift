@@ -5,7 +5,7 @@ description: Records the completed technical MVP, its validation evidence, and e
 tags: [product, mvp, status, delivery]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-16T16:00:00Z}
+generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -26,10 +26,14 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Weighted package manager detection from manifest, lockfile, workspace, and configuration evidence.
 - Explicit ambiguity and conflicting-evidence diagnostics.
 - Repository fingerprints over migration-relevant evidence.
+- Normalized source lock graphs bound to immutable plans and independently extracted target graphs.
+- Blocking `resolution-set-v1` verification for added, removed, or comparably integrity-mismatched resolutions.
+- Target-native importer selection for verified pnpm, Bun, Yarn Classic, Yarn Modern, and npm migration paths.
 - Versioned Project IR across workspace packages, dependency protocols, policy shapes, linker settings, and integrations.
 - Source-to-target capability analysis backed by explicit rules and authoritative documentation.
 - Real `inspect`, `support`, `plan`, `apply`, `verify`, `rollback`, `explain`, `skill`, and `help` commands.
 - A current-directory `pkgshift to <target>` workflow with read-only preview, interactive confirmation, hidden default state, apply, and verification orchestration.
+- An approved `--trial` workflow that executes the exact plan and verification in a disposable copy without persisting source repository state.
 - The `pkgshift pm to <target>` planning shortcut.
 - Versioned JSON results with artifacts, diagnostics, and side-effect metadata.
 - Deterministic target rendering and digest-bound file mutations.
@@ -50,7 +54,9 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - A pinned Rust 1.97.1 workspace with separate core and CLI crates.
 - Digest-verified Rust plan and run envelopes, repository-scoped locking, byte-level snapshots, atomic mutations, installer output withholding, structural verification, and restored-fingerprint rollback.
 - Rust subprocess fixtures for pnpm-to-Bun-to-rollback and npm-to-pnpm, plus 20-direction basic planning coverage.
+- Rust subprocess fixtures for isolated trial, native importer ordering, successful graph proof, intentional graph drift, and source repository preservation.
 - A real-installer Rust acceptance run for a multi-package pnpm workspace migrated to Bun and rolled back to its original fingerprint.
+- Real Bun 1.3.14 acceptance runs for dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback.
 - Sibling Rust and TypeScript engines under `implementations/`, with shared root orchestration for both implementations.
 
 # Delivery Gates
@@ -61,7 +67,8 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Inspection and planning | MVP complete | Production targets render common manifest, workspace, catalog, override, linker, registry-reference, and integration semantics or fail closed. |
 | Plan artifact persistence | MVP complete | Persistence is explicit, atomic, immutable, digest-checked, and repository-bound. |
 | Transaction executor | MVP complete | Recovery snapshots, precondition rechecks, atomic writes, journal transitions, and partial-failure fixtures pass. |
-| Verification | MVP complete | Planned digests, target selection, lockfile creation, workspace membership, and install completion are checked. |
+| Verification | MVP complete | Planned digests, target selection, lockfile behavior, workspace membership, install completion, and normalized resolution-set parity are checked. |
+| Isolated trial | MVP complete | Exact approval executes the accepted plan in a disposable copy and reports repository preservation plus nested verification. |
 | Rollback | MVP complete | Successful, failed, and partially applied runs restore repository files and verify the baseline fingerprint. |
 | Skill installer | MVP complete | Codex and Claude Code project destinations pass copy, link, conflict, status, and protected-uninstall fixtures. |
 | Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, and Bun produce executable plans when every observed feature has a safe implemented path. |
@@ -77,7 +84,8 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Literal registry credentials, sensitive manifest fields, known token formats, and private keys cannot enter persisted plan content; environment references remain supported.
 - Dependency lifecycle scripts remain disabled during target installation.
 - Rollback does not restore `node_modules`, global stores, downloads, or package-manager caches.
-- Resolved lock-graph drift is recorded as skipped because the MVP does not persist a normalized source lock graph.
+- Binary `bun.lockb` graph extraction fails closed until the repository converts it to the current text `bun.lock` format.
+- Resolution-set proof does not yet make dependency edges blocking because peer, optional, hoisting, and deduplication representations differ between managers.
 - Representative project scripts are not selected or executed automatically.
 - The Rust CLI does not yet own TypeScript reference commands for managed Agent Skill lifecycle or artifact explanation.
 - Advanced Rust renderers that have not crossed the parity gate emit blocking diagnostics instead of delegating edits to a model.
@@ -85,4 +93,4 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 
 # Post-MVP Work
 
-Close advanced Rust renderer parity, add normalized source and target lock-graph extraction, configurable graph-drift policy, explicit representative-script selection, target executable version resolution, distribution packaging, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.
+Close advanced Rust renderer parity, add configurable platform-aware and edge-aware graph policies, explicit representative-script selection, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.

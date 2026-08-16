@@ -4,7 +4,7 @@ title: Package Manager Migration
 description: Defines the safe operational workflow for planning, approving, applying, and verifying a package manager migration.
 tags: [workflow, package-management, verification, rollback]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
 sources:
   - id: transactional-decision
     resource: /decisions/transactional-migrations.md
@@ -30,6 +30,14 @@ Use a read-only preview when no execution is intended:
 pkgshift to bun --dry-run
 ```
 
+Use an isolated execution trial when importer, installer, and verification behavior should be proven before repository mutation:
+
+```text
+pkgshift to bun --trial
+```
+
+Trial has its own exact approval boundary. It executes in a disposable copy, returns a `trial-report`, and does not authorize or perform the later repository apply. See [Isolated Migration Trial](/workflows/isolated-trial.md).
+
 # Default Agent Workflow
 
 Run:
@@ -41,6 +49,8 @@ pkgshift to bun --json --no-color --non-interactive
 The expected approval boundary is exit code `7` with a complete plan and one `nextActions` entry. Present the source, target, plan identifier, file and operation counts, warnings, capability losses, side effects, and verification scope. If the user approves that exact plan, execute `nextActions[0].argv` as an argument array. Do not add a repository path or state path, and do not reconstruct the command from prose.
 
 The approved invocation automatically persists the plan under `.pkgshift/state`, applies it, and verifies the run. Treat the migration as complete only when the returned status is `completed` and verification has no blocking failure.
+
+When the user requests a trial first, add `--trial` to the initial preview and execute only its returned action after approval. A passing trial reports `repositoryUnchanged: true` and no `runId`. Return to a normal preview and approval before apply.
 
 # Preconditions
 
@@ -97,7 +107,7 @@ The engine rechecks preconditions and creates owner-only recovery snapshots befo
 pkgshift verify <run-id> --state-dir .pkgshift/state --json --no-color
 ```
 
-Assess planned digests, target selection, lockfile creation, installation completion, workspace behavior, and integrations. The MVP records resolved graph comparison as skipped and does not automatically choose representative project scripts.
+Assess planned digests, target selection, lockfile behavior, installation completion, workspace behavior, integrations, and the source-to-target lock graph comparison. Graph comparison is skipped only when no source lockfile existed. The engine does not automatically choose representative project scripts.
 
 ## 6. Complete or Roll Back
 
@@ -126,6 +136,7 @@ A completed migration has:
 - A plan artifact.
 - A successful apply run journal.
 - A verification report tied to that run.
+- A passing lock graph comparison when a source lock graph exists.
 - No unresolved blocking diagnostic.
 - A concise record of expected semantic drift, if any.
 - An explicit skipped-check record for capabilities outside the MVP boundary.

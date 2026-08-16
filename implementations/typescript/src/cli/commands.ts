@@ -277,6 +277,7 @@ async function planCommand(parsed: ParsedArguments): Promise<CommandExecution> {
         operations: plan.operations.length,
         warnings: plan.diagnostics.filter((diagnostic) => diagnostic.severity === "warning").length,
         capabilities: plan.capabilitySummary,
+        nativeImport: plan.nativeImport?.id ?? null,
         artifactStored,
         executionAvailable: plan.executable,
       },

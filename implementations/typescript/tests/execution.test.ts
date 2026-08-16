@@ -108,7 +108,7 @@ describe("transaction execution", () => {
     }, new FixtureRunner(0));
 
     expect(applied.journal.status).toBe("verifying");
-    expect((await new ExecutionStore(stateDirectory).load(applied.journal.runId)).records).toHaveLength(1);
+    expect((await new ExecutionStore(stateDirectory).load(applied.journal.runId)).records).toHaveLength(2);
     expect((await Bun.file(join(root, "package.json")).json()).packageManager).toBe("bun@1.3.14");
     expect(await Bun.file(join(root, "package-lock.json")).exists()).toBeFalse();
     expect(await Bun.file(join(root, "bun.lock")).exists()).toBeTrue();
