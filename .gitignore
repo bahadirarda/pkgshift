@@ -1,4 +1,5 @@
 .pkgshift/
 coverage/
 dist/
+target/
 node_modules/

@@ -1,6 +1,9 @@
 import { stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
+const repositoryRoot = resolve(import.meta.dir, "../../..");
+process.chdir(repositoryRoot);
+
 const errors: string[] = [];
 
 async function filesMatching(pattern: string): Promise<string[]> {
@@ -178,12 +181,14 @@ async function validateSkill(): Promise<void> {
 async function validateEnglishOnly(): Promise<void> {
   const roots = ["AGENTS.md", "README.md"];
   const patterns = [
+    "crates/**/*.rs",
     "docs/**/*.md",
-    "scripts/**/*.ts",
+    "packages/pkgshift-ts/scripts/**/*.ts",
     "skills/**/*.{md,yaml,yml}",
-    "src/**/*.ts",
-    "tests/**/*.ts",
+    "packages/pkgshift-ts/src/**/*.ts",
+    "packages/pkgshift-ts/tests/**/*.ts",
     "*.json",
+    "*.toml",
   ];
   for (const pattern of patterns) {
     roots.push(...await filesMatching(pattern));

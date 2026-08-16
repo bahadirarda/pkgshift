@@ -4,7 +4,7 @@ title: Agent Interface
 description: Defines a simple keyword-based CLI and deterministic output contract for coding agents and humans.
 tags: [architecture, cli, json, agents]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T16:00:00Z}
 sources:
   - id: agent-first-decision
     resource: /decisions/agent-first-cli.md
@@ -12,6 +12,9 @@ sources:
   - id: workflow
     resource: /workflows/pkgshift.md
     title: Package Manager Migration Workflow
+  - id: rust-primary-decision
+    resource: /decisions/rust-primary-polyglot-monorepo.md
+    title: Rust-Primary Polyglot Monorepo
 ---
 
 # Primary Command
@@ -25,6 +28,10 @@ pkgshift to <target>
 It performs deterministic inspection, Project IR construction, capability analysis, and planning before presenting an approval prompt. Planning remains read-only. On approval, the command persists the immutable plan to `.pkgshift/state`, applies it, and verifies the resulting run. `--dry-run` stops after planning.
 
 Humans do not need to provide repository or state paths when running from the intended repository root.
+
+# Implementation Availability
+
+The Rust CLI is the primary interface and implements `to`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, and `rollback`. The TypeScript reference preserves the same migration contract and additionally retains `explain` plus managed `skill` lifecycle commands while their long-term ownership is decided. This temporary command difference does not change approval, result-envelope, or side-effect semantics.
 
 # Agent Flow
 

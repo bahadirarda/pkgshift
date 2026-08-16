@@ -5,7 +5,7 @@ description: Records the completed technical MVP, its validation evidence, and e
 tags: [product, mvp, status, delivery]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T16:00:00Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -14,13 +14,13 @@ sources:
     resource: /architecture/repository-layout.md
     title: Repository Layout
   - id: repository-source
-    resource: "repository source tree at 2026-08-15"
+    resource: "repository source tree at 2026-08-16"
     title: Repository source tree
 ---
 
 # Technical MVP
 
-The repository contains an executable TypeScript MVP with no third-party runtime dependencies:
+The repository contains a Rust-primary polyglot MVP. Rust owns the primary migration engine and CLI; the dependency-free TypeScript runtime remains executable as a compatibility and parity reference. The shared product scope includes:
 
 - npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency-mode adapter definitions.
 - Weighted package manager detection from manifest, lockfile, workspace, and configuration evidence.
@@ -47,6 +47,11 @@ The repository contains an executable TypeScript MVP with no third-party runtime
 - Real pnpm-to-Bun execution fixtures covering multi-package workspaces, workspace protocols, default and named catalogs, isolated linking, trusted dependencies, exclusion patterns, local dependencies, registry configuration, and CI, container, and documentation integrations.
 - Direction-matrix fixtures for every basic migration pair across the five production adapters.
 - An OKF v0.2 knowledge bundle and a portable Agent Skill source.
+- A pinned Rust 1.97.1 workspace with separate core and CLI crates.
+- Digest-verified Rust plan and run envelopes, repository-scoped locking, byte-level snapshots, atomic mutations, installer output withholding, structural verification, and restored-fingerprint rollback.
+- Rust subprocess fixtures for pnpm-to-Bun-to-rollback and npm-to-pnpm, plus 20-direction basic planning coverage.
+- A real-installer Rust acceptance run for a multi-package pnpm workspace migrated to Bun and rolled back to its original fingerprint.
+- A Bun workspace containing the TypeScript reference under `packages/pkgshift-ts` and shared root orchestration for both implementations.
 
 # Delivery Gates
 
@@ -60,6 +65,9 @@ The repository contains an executable TypeScript MVP with no third-party runtime
 | Rollback | MVP complete | Successful, failed, and partially applied runs restore repository files and verify the baseline fingerprint. |
 | Skill installer | MVP complete | Codex and Claude Code project destinations pass copy, link, conflict, status, and protected-uninstall fixtures. |
 | Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, and Bun produce executable plans when every observed feature has a safe implemented path. |
+| Rust primary path | MVP complete | Inspect, plan, exact approval, apply, verify, and rollback pass subprocess and real-installer acceptance coverage. |
+| Polyglot workspace | MVP complete | Cargo crates and the TypeScript reference run from isolated workspace boundaries under one CI contract. |
+| Advanced Rust renderer parity | In progress | Unported transformations fail closed; the TypeScript suite remains their executable specification. |
 
 # Explicit Boundaries
 
@@ -71,8 +79,10 @@ The repository contains an executable TypeScript MVP with no third-party runtime
 - Rollback does not restore `node_modules`, global stores, downloads, or package-manager caches.
 - Resolved lock-graph drift is recorded as skipped because the MVP does not persist a normalized source lock graph.
 - Representative project scripts are not selected or executed automatically.
+- The Rust CLI does not yet own TypeScript reference commands for managed Agent Skill lifecycle or artifact explanation.
+- Advanced Rust renderers that have not crossed the parity gate emit blocking diagnostics instead of delegating edits to a model.
 - Documentation remains `draft` until a human verifier records review evidence.
 
 # Post-MVP Work
 
-Add normalized source and target lock-graph extraction, configurable graph-drift policy, explicit representative-script selection, target executable version resolution, distribution packaging, and broader client-specific Agent Skill compatibility.
+Close advanced Rust renderer parity, add normalized source and target lock-graph extraction, configurable graph-drift policy, explicit representative-script selection, target executable version resolution, distribution packaging, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.

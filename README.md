@@ -11,8 +11,9 @@
 <p align="center">
   <a href="https://github.com/bahadirarda/pkgshift/actions/workflows/ci.yml"><img alt="ci" src="https://img.shields.io/github/actions/workflow/status/bahadirarda/pkgshift/ci.yml?branch=main&style=flat-square&label=ci&labelColor=27251f&color=c45124"></a>
   <img alt="technical mvp" src="https://img.shields.io/badge/status-technical_mvp-c45124?style=flat-square&labelColor=27251f">
+  <img alt="rust 1.97.1" src="https://img.shields.io/badge/rust-1.97.1-e1a523?style=flat-square&labelColor=27251f">
   <img alt="bun 1.3.14" src="https://img.shields.io/badge/bun-1.3.14-a29b58?style=flat-square&labelColor=27251f">
-  <img alt="typescript strict" src="https://img.shields.io/badge/typescript-strict-e1a523?style=flat-square&labelColor=27251f">
+  <img alt="polyglot monorepo" src="https://img.shields.io/badge/monorepo-rust_%2B_typescript-8f6f3f?style=flat-square&labelColor=27251f">
 </p>
 
 <p align="center">
@@ -20,22 +21,17 @@
 </p>
 
 > [!NOTE]
-> pkgshift is a tested technical MVP and is not published to a package registry yet. Build it from source while the distribution contract is finalized.
+> pkgshift is a tested technical MVP and is not published to a package registry yet. The Rust engine is the primary CLI; the TypeScript implementation remains in the monorepo as a compatibility reference while distribution is finalized.
 
 ## One command from the project root
 
 ```console
 $ pkgshift to bun
-Migration: pnpm -> bun
-Plan: plan_...
-Files: 7
-Operations: 6
-Warnings: 0
-Lossy decisions: 0
-
-Apply this migration? [y/N] y
-pkgshift: to bun
-Status: completed
+Plan plan_... will migrate pnpm to bun.
+Apply this exact plan? [y/N] y
+pkgshift to bun: Completed
+plan: plan_...
+run: run_...
 runStatus: succeeded
 ```
 
@@ -77,7 +73,7 @@ flowchart LR
     G -->|failure| H[rollback]
 ```
 
-The normal command orchestrates this pipeline without exposing repository or state paths. Advanced `inspect`, `plan`, `apply`, `verify`, `explain`, and `rollback` commands remain available for integrations that need stage-level control.
+The normal command orchestrates this pipeline without exposing repository or state paths. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The TypeScript reference also retains diagnostic explanation and managed Agent Skill lifecycle commands during the port transition.
 
 ## Agent workflow
 
@@ -107,13 +103,13 @@ The model does not author migration edits. Detection, capability analysis, trans
 | vlt | Preview, planning only | `vlt@1.0.2` |
 | Deno dependency mode | Preview, planning only | `deno@2.9.5` |
 
-All 20 basic directions between the five production adapters have deterministic planning coverage. Real apply/install/verify/rollback fixtures include npm-to-Bun and multiple pnpm-to-Bun workspaces with catalogs, isolated linking, exclusions, local dependencies, and repository integrations.
+Both engines cover all 20 basic directions between the five production adapters at planning level. Rust subprocess fixtures execute `pnpm -> bun -> rollback` and `npm -> pnpm`; a separate live check uses the real Bun installer. The TypeScript reference retains the broader complex-capability fixture set while remaining the parity oracle during the port.
 
 See the full [support policy](docs/support/package-managers.md) and [capability matrix](docs/support/capability-matrix.md).
 
 ## Build from source
 
-Requirements: Bun `1.3.14` or newer.
+Requirements: Rust `1.97.1` and Bun `1.3.14` or newer. Bun is used for the TypeScript reference, documentation validation, and workspace orchestration.
 
 ```bash
 git clone https://github.com/bahadirarda/pkgshift.git
@@ -121,7 +117,7 @@ cd pkgshift
 bun install --frozen-lockfile
 bun run check
 bun run build
-bun link
+cargo install --path crates/pkgshift-cli
 ```
 
 Then run it from the repository you want to migrate:
@@ -133,16 +129,14 @@ pkgshift to bun --dry-run
 
 ## Agent Skill
 
-The portable `pkgshift` Agent Skill teaches coding agents to treat the CLI as the execution boundary and preserve exact approval semantics.
+The portable `pkgshift` Agent Skill teaches coding agents to treat the CLI as the execution boundary and preserve exact approval semantics. Install the repository-owned source into the shared modern project path:
 
 ```bash
-pkgshift skill install \
-  --scope project \
-  --client codex \
-  --approve skill:pkgshift:project:codex
+mkdir -p .agents/skills
+cp -R /path/to/pkgshift/skills/pkgshift .agents/skills/pkgshift
 ```
 
-Project and user installations are supported for Codex (`.agents/skills/pkgshift`) and Claude Code (`.claude/skills/pkgshift`) through managed copies or symlinks.
+The TypeScript reference still exposes managed copy, symlink, status, doctor, and protected uninstall flows through `bun run cli:typescript -- skill ...`. Codex uses `.agents/skills/pkgshift`; Claude Code uses `.claude/skills/pkgshift`.
 
 ## Safety contract
 
@@ -151,7 +145,7 @@ Project and user installations are supported for Codex (`.agents/skills/pkgshift
 - Plans bind to the repository fingerprint and exact before/after file digests.
 - Recovery snapshots are created before the first repository write.
 - Target installs run without a shell and with lifecycle scripts disabled.
-- Credentials and matching environment secrets are redacted before output or persistence.
+- Credentials are redacted from repository evidence, and Rust process output is withheld from persisted artifacts.
 - Symbolic-link traversal outside the selected repository root is rejected.
 - Concurrent apply, verify, and rollback operations are serialized per repository.
 
@@ -160,14 +154,14 @@ Rollback restores repository files. It does not claim to restore `node_modules`,
 ## Development
 
 ```bash
-bun run typecheck  # strict TypeScript validation
-bun test           # unit, integration, failure, and real CLI transactions
-bun run validate   # OKF, links, Agent Skill, and English-only content
-bun run check      # complete validation suite
-bun run build      # dist/pkgshift.js
+bun run check:rust        # rustfmt, clippy, unit tests, and subprocess transactions
+bun run check:typescript  # strict types, 57 reference tests, and bundle validation
+bun run validate          # OKF, links, Agent Skill, and English-only content
+bun run check             # complete polyglot validation suite
+bun run build             # Rust release binary and TypeScript reference bundle
 ```
 
-The runtime has no third-party dependencies. Bun and TypeScript are development dependencies.
+The monorepo keeps the primary Rust engine in `crates/`, the TypeScript reference in `packages/pkgshift-ts/`, and shared product assets in `docs/` and `skills/`. Neither implementation delegates repository analysis or edit generation to an AI model.
 
 ## Documentation
 
@@ -182,4 +176,4 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 
 ## Current boundaries
 
-Resolved source-to-target lock graph comparison and automatic representative project-script execution are not part of the MVP. Verification records graph comparison as skipped rather than claiming coverage. Preview adapters cannot be applied, and lossy decisions require explicit acceptance when the plan is created.
+Resolved source-to-target lock graph comparison and automatic representative project-script execution are not part of the MVP. Verification records graph comparison as skipped rather than claiming coverage. Preview adapters cannot be applied, and lossy decisions require explicit acceptance when the plan is created. Rust target rendering currently fails closed for advanced transformations that have not crossed the parity gate; the TypeScript reference documents and tests the intended behavior until each renderer is ported.
