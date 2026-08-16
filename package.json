@@ -44,6 +44,7 @@
     "typecheck": "bun run --cwd implementations/typescript typecheck",
     "validate": "bun run --cwd implementations/typescript validate",
     "version:check": "bun run --cwd implementations/typescript validate",
+    "version:next": "bun implementations/typescript/scripts/next-version.ts",
     "version:packages": "bun run implementations/typescript/scripts/version-packages.ts"
   },
   "devDependencies": {

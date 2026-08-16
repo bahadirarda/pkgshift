@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { nextCalendarVersion } from "./release/calendar-version.ts";
 
 const repositoryRoot = resolve(import.meta.dir, "../../..");
 process.chdir(repositoryRoot);
@@ -83,6 +84,10 @@ function markdownBullet(summary: string): string {
   return `- ${summary.trim().replaceAll("\n", "\n  ")}`;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function updateChangelog(
   content: string,
   previousVersion: string,
@@ -125,6 +130,16 @@ const proxyPaths = [
   "implementations/rust/pkgshift-core/package.json",
   "implementations/typescript/package.json",
 ] as const;
+const packageChangelogPaths = [
+  "implementations/rust/pkgshift-cli/CHANGELOG.md",
+  "implementations/rust/pkgshift-core/CHANGELOG.md",
+  "implementations/typescript/CHANGELOG.md",
+] as const;
+const bunLockWorkspacePaths = [
+  "implementations/rust/pkgshift-cli",
+  "implementations/rust/pkgshift-core",
+  "implementations/typescript",
+] as const;
 
 const rootCargoBefore = await readFile(rootCargoPath, "utf8");
 const cargoMetadata = Bun.TOML.parse(rootCargoBefore) as {
@@ -148,13 +163,13 @@ try {
   const plannedVersions = new Map(
     plan.releases.map((release) => [release.name, release.newVersion]),
   );
-  const nextVersion = plannedVersions.get("pkgshift");
-  if (!nextVersion) {
+  const changesetsVersion = plannedVersions.get("pkgshift");
+  if (!changesetsVersion) {
     throw new Error("Release plan does not contain the pkgshift product package");
   }
   for (const packageName of releasePackages) {
-    if (plannedVersions.get(packageName) !== nextVersion) {
-      throw new Error(`Fixed release group does not agree on ${nextVersion}`);
+    if (plannedVersions.get(packageName) !== changesetsVersion) {
+      throw new Error(`Fixed release group does not agree on ${changesetsVersion}`);
     }
   }
 
@@ -163,6 +178,7 @@ try {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(releaseDate)) {
     throw new Error(`Invalid release date ${releaseDate}`);
   }
+  const nextVersion = nextCalendarVersion(previousVersion, releaseDate);
   const summaries = [...plan.changesets]
     .sort((left, right) => left.id.localeCompare(right.id))
     .map((changeset) => changeset.summary.trim());
@@ -171,9 +187,23 @@ try {
 
   for (const path of proxyPaths) {
     const metadata = await readJson(path);
-    if (metadata.version !== nextVersion) {
-      throw new Error(`${path}: Changesets produced ${metadata.version}, expected ${nextVersion}`);
+    if (metadata.version !== changesetsVersion) {
+      throw new Error(
+        `${path}: Changesets produced ${metadata.version}, expected ${changesetsVersion}`,
+      );
     }
+    metadata.version = nextVersion;
+    await writeJson(path, metadata);
+  }
+  for (const path of packageChangelogPaths) {
+    const content = await readFile(path, "utf8");
+    const updated = replaceExactly(
+      path,
+      content,
+      new RegExp(`^## ${escapeRegExp(changesetsVersion)}$`, "m"),
+      `## ${nextVersion}`,
+    );
+    await writeFile(path, updated);
   }
 
   const rootPackage = await readJson(rootPackagePath);
@@ -208,6 +238,18 @@ try {
   await writeFile(changelogPath, changelog);
 
   await run(["bun", "install", "--lockfile-only"]);
+  let bunLock = await readFile("bun.lock", "utf8");
+  for (const path of bunLockWorkspacePaths) {
+    bunLock = replaceExactly(
+      "bun.lock",
+      bunLock,
+      new RegExp(
+        `("${escapeRegExp(path)}": \\{[\\s\\S]*?\\n\\s+"version": ")[^"]+(")`,
+      ),
+      `$1${nextVersion}$2`,
+    );
+  }
+  await writeFile("bun.lock", bunLock);
   await run(["cargo", "check", "--workspace"]);
   await run(["bun", "run", "version:check"]);
 

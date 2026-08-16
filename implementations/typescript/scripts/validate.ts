@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
+import { isCalendarVersion } from "./release/calendar-version.ts";
 
 const repositoryRoot = resolve(import.meta.dir, "../../..");
 process.chdir(repositoryRoot);
@@ -34,6 +35,10 @@ interface ChangesetsConfig {
     version?: boolean;
     tag?: boolean;
   };
+}
+
+interface BunLock {
+  workspaces?: Record<string, { version?: string }>;
 }
 
 async function filesMatching(pattern: string): Promise<string[]> {
@@ -135,11 +140,12 @@ async function validateOkf(): Promise<number> {
             errors.push(`${path}: sources must be a YAML list`);
           } else {
             for (const source of frontmatter.sources) {
+              const resource = source && typeof source === "object"
+                ? (source as Record<string, unknown>).resource
+                : undefined;
               if (
-                !source
-                || typeof source !== "object"
-                || typeof (source as Record<string, unknown>).resource !== "string"
-                || !(source as Record<string, string>).resource.trim()
+                typeof resource !== "string"
+                || !resource.trim()
               ) {
                 errors.push(`${path}: every source entry requires a resource`);
               }
@@ -268,6 +274,13 @@ async function validateReleaseMetadata(): Promise<void> {
     errors.push("Cargo.toml: workspace.package.version must be valid SemVer");
     return;
   }
+  const legacyTransition = version === "0.2.0"
+    && await targetExists(".changeset/calendar-versioning.md");
+  if (!isCalendarVersion(version) && !legacyTransition) {
+    errors.push(
+      "Cargo.toml: workspace.package.version must use 0.YYYYMMDD.REVISION calendar SemVer",
+    );
+  }
 
   const synchronizedVersions = [
     ["package.json", rootPackage.version],
@@ -282,6 +295,18 @@ async function validateReleaseMetadata(): Promise<void> {
   for (const [path, candidate] of synchronizedVersions) {
     if (candidate !== version) {
       errors.push(`${path}: expected version ${version}, found ${candidate ?? "missing"}`);
+    }
+  }
+
+  const bunLock = Bun.JSONC.parse(await Bun.file("bun.lock").text()) as BunLock;
+  for (const path of [
+    "implementations/rust/pkgshift-cli",
+    "implementations/rust/pkgshift-core",
+    "implementations/typescript",
+  ]) {
+    const candidate = bunLock.workspaces?.[path]?.version;
+    if (candidate !== version) {
+      errors.push(`bun.lock ${path}: expected version ${version}, found ${candidate ?? "missing"}`);
     }
   }
 

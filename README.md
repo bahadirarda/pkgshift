@@ -38,9 +38,9 @@ Install the latest native binary on Linux or macOS with the checksum-verifying i
 curl --proto '=https' --tlsv1.2 -LsSf https://bahadirarda.github.io/pkgshift/install.sh | sh
 ```
 
-Set `PKGSHIFT_VERSION=v0.1.0` to pin an exact release or `PKGSHIFT_INSTALL_DIR` to select a destination. The [installer source](site/install.sh) is tracked in this repository and verifies the release archive against `SHA256SUMS` before extraction.
+Set `PKGSHIFT_VERSION=v0.20260816.0` to pin an exact calendar release or `PKGSHIFT_INSTALL_DIR` to select a destination. The [installer source](site/install.sh) is tracked in this repository and verifies the release archive against `SHA256SUMS` before extraction.
 
-Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, and place `pkgshift` on your `PATH`. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations. Its bundled `release.json` records the stable version plus a date-and-commit build identity.
+Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, and place `pkgshift` on your `PATH`. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations. Its bundled `release.json` records the calendar version and exact source commit.
 
 The registry package installs with Cargo once the matching version is available on crates.io:
 
@@ -228,13 +228,14 @@ Rollback restores repository files. It does not claim to restore `node_modules`,
 
 ```bash
 bun run check:rust        # rustfmt, clippy, unit tests, and subprocess transactions
-bun run check:typescript  # strict types, 57 reference tests, and bundle validation
+bun run check:typescript  # strict types, reference tests, and bundle validation
 bun run validate          # OKF, links, Agent Skill, and English-only content
 bun run check             # complete polyglot validation suite
 bun run build             # Rust release binary and TypeScript reference bundle
 bun run changeset         # declare user-visible release intent
 bun run changeset:status  # inspect the calculated fixed-group release plan
-bun run version:check     # synchronized SemVer, package identities, changelog, and release tag
+bun run version:next      # preview the deterministic calendar version
+bun run version:check     # synchronized calendar SemVer, package identities, locks, changelog, and release tag
 ```
 
 Neither implementation delegates repository analysis or edit generation to an AI model.
