@@ -181,7 +181,12 @@ fn migrates_an_npm_workspace_to_pnpm() {
   "name": "npm-workspace-fixture",
   "private": true,
   "packageManager": "npm@12.0.2",
-  "workspaces": ["packages/*"]
+  "workspaces": ["packages/*"],
+  "overrides": {
+    "parent": {
+      "child": "1.2.3"
+    }
+  }
 }
 "#,
     );
@@ -210,9 +215,18 @@ fn migrates_an_npm_workspace_to_pnpm() {
     assert!(root.join("pnpm-workspace.yaml").is_file());
     assert!(!root.join("package-lock.json").exists());
     assert!(
-        fs::read_to_string(root.join("package.json"))
-            .expect("migrated manifest")
-            .contains("\"packageManager\": \"pnpm@11.21.0\"")
+        fs::read_to_string(root.join("pnpm-workspace.yaml"))
+            .expect("pnpm policy configuration")
+            .contains("'parent>child': '1.2.3'")
+    );
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("package.json")).expect("migrated manifest"),
+    )
+    .expect("migrated manifest JSON");
+    assert!(manifest.get("overrides").is_none());
+    assert!(
+        manifest["packageManager"] == "pnpm@11.21.0",
+        "target package manager pin should be rendered"
     );
 }
 

@@ -366,9 +366,9 @@ fn add_feature(
         .push(location.into());
 }
 
-fn collect_manifest_features(
-    manifest: &Map<String, Value>,
-    manifest_path: &str,
+fn collect_policy_features(
+    policy: &Map<String, Value>,
+    location_prefix: &str,
     features: &mut BTreeMap<String, Vec<String>>,
 ) {
     let policy_keys = [
@@ -379,13 +379,15 @@ fn collect_manifest_features(
         ("catalog", "policy.catalogs"),
         ("catalogs", "policy.catalogs"),
         ("trustedDependencies", "lifecycle.trusted-dependencies"),
+        ("onlyBuiltDependencies", "lifecycle.trusted-dependencies"),
+        ("allowBuilds", "lifecycle.trusted-dependencies"),
     ];
     for (key, feature) in policy_keys {
-        if manifest.get(key).is_some_and(|value| !value.is_null()) {
-            add_feature(features, feature, format!("{manifest_path}#/{key}"));
+        if policy.get(key).is_some_and(|value| !value.is_null()) {
+            add_feature(features, feature, format!("{location_prefix}/{key}"));
         }
     }
-    if manifest
+    if policy
         .get("overrides")
         .and_then(Value::as_object)
         .is_some_and(|overrides| overrides.values().any(Value::is_object))
@@ -393,8 +395,19 @@ fn collect_manifest_features(
         add_feature(
             features,
             "resolution.nested-overrides",
-            format!("{manifest_path}#/overrides"),
+            format!("{location_prefix}/overrides"),
         );
+    }
+}
+
+fn collect_manifest_features(
+    manifest: &Map<String, Value>,
+    manifest_path: &str,
+    features: &mut BTreeMap<String, Vec<String>>,
+) {
+    collect_policy_features(manifest, &format!("{manifest_path}#"), features);
+    if let Some(pnpm) = manifest.get("pnpm").and_then(Value::as_object) {
+        collect_policy_features(pnpm, &format!("{manifest_path}#/pnpm"), features);
     }
 }
 
@@ -409,6 +422,7 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
     let package_paths = discover_package_paths(inspection)?;
     let mut packages = Vec::new();
     let mut features = BTreeMap::<String, Vec<String>>::new();
+    let mut diagnostics = inspection.diagnostics.clone();
     if inspection.workspace.configured {
         add_feature(
             &mut features,
@@ -513,6 +527,23 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
     if root.join("yarn.config.cjs").exists() {
         add_feature(&mut features, "policy.yarn-constraints", "yarn.config.cjs");
     }
+    if let Some(content) = read_text(&root.join("pnpm-workspace.yaml"))? {
+        match noyalib::from_str::<Value>(&content) {
+            Ok(Value::Object(configuration)) => {
+                collect_policy_features(&configuration, "pnpm-workspace.yaml#", &mut features);
+            }
+            Ok(_) => diagnostics.push(Diagnostic::blocking(
+                "CONFIGURATION_PARSE_FAILED",
+                "pnpm-workspace.yaml must contain a mapping at its root.",
+                vec!["Repair pnpm-workspace.yaml before retrying inspection.".to_owned()],
+            )),
+            Err(error) => diagnostics.push(Diagnostic::blocking(
+                "CONFIGURATION_PARSE_FAILED",
+                format!("pnpm-workspace.yaml could not be parsed: {error}"),
+                vec!["Repair pnpm-workspace.yaml before retrying inspection.".to_owned()],
+            )),
+        }
+    }
 
     let observed_features = features
         .into_iter()
@@ -554,7 +585,7 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
         workspace_patterns,
         features: observed_features,
         integrations: inspection.integrations.clone(),
-        diagnostics: inspection.diagnostics.clone(),
+        diagnostics,
     }))
 }
 

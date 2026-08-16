@@ -501,16 +501,27 @@ fn parse_pnpm_catalogs(content: &str) -> (Map<String, Value>, Map<String, Value>
     (catalog, catalogs)
 }
 
-fn render_pnpm_workspace(patterns: &[String], root_manifest: &Map<String, Value>) -> String {
-    let mut lines = vec!["packages:".to_owned()];
-    for pattern in patterns {
-        lines.push(format!("  - '{pattern}'"));
+fn yaml_single_quoted(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+fn render_pnpm_workspace(
+    patterns: &[String],
+    root_manifest: &Map<String, Value>,
+    overrides: &Map<String, Value>,
+) -> String {
+    let mut lines = Vec::new();
+    if !patterns.is_empty() {
+        lines.push("packages:".to_owned());
+        for pattern in patterns {
+            lines.push(format!("  - {}", yaml_single_quoted(pattern)));
+        }
     }
     if let Some(catalog) = root_manifest.get("catalog").and_then(Value::as_object) {
         lines.push("catalog:".to_owned());
         for (name, value) in catalog {
             if let Some(value) = value.as_str() {
-                lines.push(format!("  {name}: '{value}'"));
+                lines.push(format!("  {name}: {}", yaml_single_quoted(value)));
             }
         }
     }
@@ -521,14 +532,76 @@ fn render_pnpm_workspace(patterns: &[String], root_manifest: &Map<String, Value>
             if let Some(entries) = value.as_object() {
                 for (name, value) in entries {
                     if let Some(value) = value.as_str() {
-                        lines.push(format!("    {name}: '{value}'"));
+                        lines.push(format!("    {name}: {}", yaml_single_quoted(value)));
                     }
                 }
             }
         }
     }
+    if !overrides.is_empty() {
+        lines.push("overrides:".to_owned());
+        for (selector, value) in overrides {
+            if let Some(value) = value.as_str() {
+                lines.push(format!(
+                    "  {}: {}",
+                    yaml_single_quoted(selector),
+                    yaml_single_quoted(value)
+                ));
+            }
+        }
+    }
     lines.push(String::new());
     lines.join("\n")
+}
+
+fn flatten_nested_overrides(
+    overrides: &Map<String, Value>,
+    separator: &str,
+) -> Option<Map<String, Value>> {
+    let mut flattened = Map::new();
+    for (parent, value) in overrides {
+        if let Some(value) = value.as_str() {
+            flattened.insert(parent.clone(), Value::String(value.to_owned()));
+            continue;
+        }
+        let children = value.as_object()?;
+        for (child, value) in children {
+            let value = value.as_str()?;
+            let selector = if child == "." {
+                parent.clone()
+            } else {
+                format!("{parent}{separator}{child}")
+            };
+            flattened.insert(selector, Value::String(value.to_owned()));
+        }
+    }
+    Some(flattened)
+}
+
+fn compatible_resolutions(resolutions: &Map<String, Value>) -> Option<Map<String, Value>> {
+    let mut overrides = Map::new();
+    for (selector, value) in resolutions {
+        let has_selector_syntax = |part: &str| {
+            part.chars()
+                .any(|character| matches!(character, '/' | '@' | '*'))
+        };
+        let bare_package = selector.strip_prefix('@').map_or_else(
+            || !selector.is_empty() && !has_selector_syntax(selector),
+            |scoped| {
+                scoped.split_once('/').is_some_and(|(scope, name)| {
+                    !scope.is_empty()
+                        && !name.is_empty()
+                        && !has_selector_syntax(scope)
+                        && !has_selector_syntax(name)
+                })
+            },
+        );
+        if !bare_package || !value.is_string() {
+            return None;
+        }
+        overrides.insert(selector.clone(), value.clone());
+    }
+    Some(overrides)
 }
 
 struct Transformation {
@@ -554,6 +627,12 @@ fn transform_project(
         "portal.to-link",
         "link.to-file",
         "catalog.expand-to-range",
+        "overrides.to-pnpm",
+        "overrides.to-resolutions",
+        "overrides.nested-to-selector",
+        "overrides.nested-to-resolutions",
+        "resolutions.to-overrides",
+        "resolutions.to-pnpm-overrides",
     ];
     for decision in &analysis.decisions {
         if matches!(
@@ -591,6 +670,78 @@ fn transform_project(
         .as_deref()
         .map(parse_pnpm_catalogs)
         .unwrap_or_default();
+    let root_manifest_before = read_json_object(&root.join("package.json"))?.unwrap_or_default();
+    let manifest_overrides = root_manifest_before
+        .get("overrides")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let pnpm_manifest = root_manifest_before
+        .get("pnpm")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let pnpm_configuration = pnpm_workspace
+        .as_deref()
+        .and_then(|content| noyalib::from_str::<Value>(content).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    let source_overrides = pnpm_configuration
+        .get("overrides")
+        .and_then(Value::as_object)
+        .or_else(|| pnpm_manifest.get("overrides").and_then(Value::as_object))
+        .cloned()
+        .filter(|overrides| !overrides.is_empty())
+        .unwrap_or(manifest_overrides);
+    let source_resolutions = root_manifest_before
+        .get("resolutions")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let selected_policy = if source_overrides.is_empty() {
+        &source_resolutions
+    } else {
+        &source_overrides
+    };
+    let mut pnpm_overrides = Map::new();
+    let rendered_policy = match target {
+        PackageManagerId::Pnpm if !selected_policy.is_empty() => {
+            if source_overrides.is_empty() {
+                compatible_resolutions(selected_policy)
+            } else {
+                flatten_nested_overrides(selected_policy, ">")
+            }
+        }
+        PackageManagerId::YarnClassic | PackageManagerId::YarnModern
+            if !source_overrides.is_empty() =>
+        {
+            flatten_nested_overrides(selected_policy, "/")
+        }
+        PackageManagerId::Npm if source_overrides.is_empty() && !source_resolutions.is_empty() => {
+            compatible_resolutions(selected_policy)
+        }
+        PackageManagerId::Npm | PackageManagerId::Bun if !source_overrides.is_empty() => {
+            Some(source_overrides.clone())
+        }
+        _ => Some(Map::new()),
+    };
+    if let Some(policy) = rendered_policy.as_ref() {
+        if target == PackageManagerId::Pnpm {
+            pnpm_overrides = policy.clone();
+        }
+    } else if source_overrides.is_empty() {
+        diagnostics.push(Diagnostic::blocking(
+            "RESOLUTION_SELECTOR_UNSUPPORTED",
+            "Yarn resolution selectors cannot be translated without reducing selector fidelity.",
+            vec!["Review the root resolutions policy before retrying the migration.".to_owned()],
+        ));
+    } else {
+        diagnostics.push(Diagnostic::blocking(
+            "NESTED_OVERRIDE_UNSUPPORTED",
+            "Nested overrides exceed the deterministic target selector subset.",
+            vec!["Reduce nested overrides to one parent-child level before retrying.".to_owned()],
+        ));
+    }
     for package in &project_ir.packages {
         let Some(mut manifest) = read_json_object(&root.join(&package.manifest_path))? else {
             continue;
@@ -600,6 +751,44 @@ fn transform_project(
                 "packageManager".to_owned(),
                 Value::String(get_package_manager(target).package_manager_pin.to_owned()),
             );
+            if target != PackageManagerId::Pnpm
+                && let Some(pnpm) = manifest.get_mut("pnpm").and_then(Value::as_object_mut)
+            {
+                pnpm.remove("overrides");
+                if pnpm.is_empty() {
+                    manifest.remove("pnpm");
+                }
+            }
+            match target {
+                PackageManagerId::Pnpm => {
+                    manifest.remove("overrides");
+                    manifest.remove("resolutions");
+                }
+                PackageManagerId::YarnClassic | PackageManagerId::YarnModern
+                    if !source_overrides.is_empty() =>
+                {
+                    manifest.remove("overrides");
+                    manifest.remove("resolutions");
+                    if let Some(policy) = rendered_policy.as_ref() {
+                        manifest.insert("resolutions".to_owned(), Value::Object(policy.clone()));
+                    }
+                }
+                PackageManagerId::Npm
+                    if source_overrides.is_empty() && !source_resolutions.is_empty() =>
+                {
+                    manifest.remove("resolutions");
+                    if let Some(policy) = rendered_policy.as_ref() {
+                        manifest.insert("overrides".to_owned(), Value::Object(policy.clone()));
+                    }
+                }
+                PackageManagerId::Npm | PackageManagerId::Bun if !source_overrides.is_empty() => {
+                    manifest.remove("resolutions");
+                    if let Some(policy) = rendered_policy.as_ref() {
+                        manifest.insert("overrides".to_owned(), Value::Object(policy.clone()));
+                    }
+                }
+                _ => {}
+            }
             if !project_ir.workspace_patterns.is_empty() && target != PackageManagerId::Pnpm {
                 manifest.insert(
                     "workspaces".to_owned(),
@@ -693,7 +882,7 @@ fn transform_project(
 
     let mut configuration_mutations = Vec::new();
     if target == PackageManagerId::Pnpm
-        && !project_ir.workspace_patterns.is_empty()
+        && (!project_ir.workspace_patterns.is_empty() || !pnpm_overrides.is_empty())
         && let Some(root_manifest) = root_manifest_after.as_ref()
         && let Some(change) = mutation(
             root,
@@ -702,9 +891,13 @@ fn transform_project(
             Some(render_pnpm_workspace(
                 &project_ir.workspace_patterns,
                 root_manifest,
+                &pnpm_overrides,
             )),
-            "Render pnpm workspace and catalog configuration.",
-            vec!["workspace.manifest".to_owned()],
+            "Render pnpm workspace and policy configuration.",
+            vec![
+                "workspace.manifest".to_owned(),
+                "resolution.overrides".to_owned(),
+            ],
         )?
     {
         configuration_mutations.push(change);
@@ -1121,11 +1314,61 @@ pub fn plan_package_manager_migration(
 mod tests {
     use std::fs;
 
+    use serde_json::json;
     use tempfile::tempdir;
 
     use crate::inspect::{build_project_ir, inspect_project};
 
     use super::*;
+
+    fn plan_manifest_policy(
+        source: PackageManagerId,
+        target: PackageManagerId,
+        policy: &Value,
+        accepted_lossy: bool,
+    ) -> MigrationPlan {
+        let directory = tempdir().expect("temporary directory");
+        let source_definition = get_package_manager(source);
+        let mut manifest = Map::from_iter([
+            ("name".to_owned(), Value::String("fixture".to_owned())),
+            ("private".to_owned(), Value::Bool(true)),
+            (
+                "packageManager".to_owned(),
+                Value::String(source_definition.package_manager_pin.to_owned()),
+            ),
+        ]);
+        let policy = policy.as_object().expect("policy object");
+        manifest.extend(policy.clone());
+        fs::write(
+            directory.path().join("package.json"),
+            json_content(&manifest).expect("manifest serialization"),
+        )
+        .expect("manifest");
+        fs::write(
+            directory.path().join(source_definition.lockfiles[0]),
+            "fixture\n",
+        )
+        .expect("source lockfile");
+        let inspection = inspect_project(directory.path()).expect("inspection");
+        let ir = build_project_ir(&inspection)
+            .expect("IR build")
+            .expect("project IR");
+        let analysis = analyze_capabilities(&ir, target)
+            .expect("analysis")
+            .expect("capability analysis");
+        plan_package_manager_migration(&inspection, &ir, &analysis, None, target, accepted_lossy)
+            .expect("planning")
+            .expect("migration plan")
+    }
+
+    fn mutation_content<'a>(plan: &'a MigrationPlan, path: &str) -> &'a str {
+        plan.operations
+            .iter()
+            .flat_map(|operation| &operation.mutations)
+            .find(|mutation| mutation.path == path && mutation.action == MutationAction::Write)
+            .and_then(|mutation| mutation.content.as_deref())
+            .expect("planned mutation content")
+    }
 
     #[test]
     fn plans_a_pnpm_to_bun_workspace() {
@@ -1230,5 +1473,183 @@ mod tests {
                 assert!(plan.executable, "{source} to {target} should be executable");
             }
         }
+    }
+
+    #[test]
+    fn renders_nested_npm_overrides_as_pnpm_selectors() {
+        let plan = plan_manifest_policy(
+            PackageManagerId::Npm,
+            PackageManagerId::Pnpm,
+            &json!({
+                "overrides": {
+                    "parent": {
+                        ".": "2.0.0",
+                        "child": "1.2.3"
+                    }
+                }
+            }),
+            false,
+        );
+
+        assert!(plan.executable);
+        assert!(
+            !plan
+                .diagnostics
+                .iter()
+                .any(|entry| entry.code == "TRANSFORMATION_UNIMPLEMENTED")
+        );
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert!(manifest.get("overrides").is_none());
+        let configuration = mutation_content(&plan, "pnpm-workspace.yaml");
+        assert!(configuration.contains("'parent': '2.0.0'"));
+        assert!(configuration.contains("'parent>child': '1.2.3'"));
+    }
+
+    #[test]
+    fn renders_nested_npm_overrides_as_yarn_resolutions() {
+        let plan = plan_manifest_policy(
+            PackageManagerId::Npm,
+            PackageManagerId::YarnModern,
+            &json!({
+                "overrides": {
+                    "parent": {
+                        "child": "1.2.3"
+                    }
+                }
+            }),
+            true,
+        );
+
+        assert!(plan.executable);
+        assert!(plan.accepted_lossy);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert_eq!(manifest["resolutions"]["parent/child"], "1.2.3");
+        assert!(manifest.get("overrides").is_none());
+    }
+
+    #[test]
+    fn renders_compatible_yarn_resolutions_as_npm_overrides() {
+        let plan = plan_manifest_policy(
+            PackageManagerId::YarnClassic,
+            PackageManagerId::Npm,
+            &json!({
+                "resolutions": {
+                    "@scope/package": "1.2.3",
+                    "lodash": "4.17.21"
+                }
+            }),
+            false,
+        );
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert_eq!(manifest["overrides"]["@scope/package"], "1.2.3");
+        assert_eq!(manifest["overrides"]["lodash"], "4.17.21");
+        assert!(manifest.get("resolutions").is_none());
+    }
+
+    #[test]
+    fn blocks_yarn_resolution_selectors_that_cannot_preserve_fidelity() {
+        let plan = plan_manifest_policy(
+            PackageManagerId::YarnClassic,
+            PackageManagerId::Npm,
+            &json!({ "resolutions": { "parent/child": "1.2.3" } }),
+            false,
+        );
+
+        assert!(!plan.executable);
+        assert!(
+            plan.diagnostics
+                .iter()
+                .any(|entry| entry.code == "RESOLUTION_SELECTOR_UNSUPPORTED" && entry.blocking)
+        );
+    }
+
+    #[test]
+    fn carries_pnpm_workspace_overrides_into_npm() {
+        let directory = tempdir().expect("temporary directory");
+        fs::write(
+            directory.path().join("package.json"),
+            r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0"}"#,
+        )
+        .expect("manifest");
+        fs::write(
+            directory.path().join("pnpm-workspace.yaml"),
+            "overrides:\n  parent:\n    child: 1.2.3\n",
+        )
+        .expect("pnpm configuration");
+        fs::write(
+            directory.path().join("pnpm-lock.yaml"),
+            "lockfileVersion: '9.0'\n",
+        )
+        .expect("source lockfile");
+
+        let inspection = inspect_project(directory.path()).expect("inspection");
+        let ir = build_project_ir(&inspection)
+            .expect("IR build")
+            .expect("project IR");
+        assert!(
+            ir.features
+                .iter()
+                .any(|feature| feature.id == "resolution.overrides")
+        );
+        assert!(
+            ir.features
+                .iter()
+                .any(|feature| feature.id == "resolution.nested-overrides")
+        );
+        let analysis = analyze_capabilities(&ir, PackageManagerId::Npm)
+            .expect("analysis")
+            .expect("capability analysis");
+        let plan = plan_package_manager_migration(
+            &inspection,
+            &ir,
+            &analysis,
+            None,
+            PackageManagerId::Npm,
+            false,
+        )
+        .expect("planning")
+        .expect("migration plan");
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert_eq!(manifest["overrides"]["parent"]["child"], "1.2.3");
+        assert!(
+            plan.operations
+                .iter()
+                .flat_map(|entry| &entry.mutations)
+                .any(|mutation| mutation.path == "pnpm-workspace.yaml"
+                    && mutation.action == MutationAction::Delete)
+        );
+    }
+
+    #[test]
+    fn blocks_override_nesting_beyond_the_deterministic_subset() {
+        let plan = plan_manifest_policy(
+            PackageManagerId::Npm,
+            PackageManagerId::Pnpm,
+            &json!({
+                "overrides": {
+                    "grandparent": {
+                        "parent": {
+                            "child": "1.2.3"
+                        }
+                    }
+                }
+            }),
+            false,
+        );
+
+        assert!(!plan.executable);
+        assert!(
+            plan.diagnostics
+                .iter()
+                .any(|entry| entry.code == "NESTED_OVERRIDE_UNSUPPORTED" && entry.blocking)
+        );
     }
 }

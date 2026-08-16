@@ -5,7 +5,7 @@ description: Records the completed technical MVP, its validation evidence, and e
 tags: [product, mvp, status, delivery]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-16T21:09:25Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -37,6 +37,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - The `pkgshift pm to <target>` planning shortcut.
 - Versioned JSON results with artifacts, diagnostics, and side-effect metadata.
 - Deterministic target rendering and digest-bound file mutations.
+- Rust-primary npm and pnpm override plus Yarn resolution rendering for the deterministic selector subset, including policy detected in `pnpm-workspace.yaml`.
 - Opt-in atomic plan bundle persistence with digest verification.
 - Exact plan and run approval tokens before mutation.
 - Owner-only recovery snapshots created before the first repository write.
@@ -74,7 +75,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, and Bun produce executable plans when every observed feature has a safe implemented path. |
 | Rust primary path | MVP complete | Inspect, plan, exact approval, apply, verify, and rollback pass subprocess and real-installer acceptance coverage. |
 | Polyglot workspace | MVP complete | Cargo crates and the TypeScript reference run from isolated workspace boundaries under one CI contract. |
-| Advanced Rust renderer parity | In progress | Unported transformations fail closed; the TypeScript suite remains their executable specification. |
+| Advanced Rust renderer parity | In progress | Override and resolution policy rendering has crossed the parity gate; remaining unported transformations fail closed and the TypeScript suite remains their executable specification. |
 
 # Explicit Boundaries
 
@@ -89,6 +90,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Representative project scripts are not selected or executed automatically.
 - The Rust CLI does not yet own TypeScript reference commands for managed Agent Skill lifecycle or artifact explanation.
 - Advanced Rust renderers that have not crossed the parity gate emit blocking diagnostics instead of delegating edits to a model.
+- Override nesting beyond one deterministic parent-child selector level and Yarn resolution selectors that cannot map to a bare npm package remain blocking.
 - Documentation remains `draft` until a human verifier records review evidence.
 
 # Post-MVP Work

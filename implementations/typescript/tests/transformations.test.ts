@@ -144,6 +144,23 @@ describe("target transformations", () => {
     expect(parsed.overrides).toEqual({ "parent>child": "1.2.3" });
   });
 
+  test("preserves a bare scoped Yarn resolution as an npm override", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        packageManager: "yarn@1.22.22",
+        resolutions: { "@scope/package": "1.2.3" },
+      }),
+      "yarn.lock": "# fixture\n",
+    }, "npm");
+
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    expect(JSON.parse(manifest?.content ?? "{}").overrides).toEqual({
+      "@scope/package": "1.2.3",
+    });
+  });
+
   test("renders executable baseline plans for both Yarn families and Bun", async () => {
     for (const [target, pin] of [
       ["yarn-classic", "yarn@1.22.22"],
