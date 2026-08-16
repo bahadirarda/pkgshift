@@ -94,6 +94,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | --- | --- |
 | Repository understanding | Combines manifest, lockfile, workspace, configuration, and integration evidence instead of guessing from one file. |
 | Semantic planning | Builds a versioned Project IR and evaluates every observed capability against the target adapter. |
+| Policy translation | Converts supported linker, registry, override, resolution, and lifecycle allow-list semantics into deterministic target configuration. |
 | Approval boundary | Produces an immutable plan identifier and requires approval for that exact plan before mutation. |
 | Transactional execution | Rechecks preconditions, snapshots affected files, journals operations, and stops at the first unsafe transition. |
 | Verification | Normalizes source and target lock graphs, blocks resolution or comparable integrity drift, and checks planned digests, target selection, workspace membership, and installer completion. |
@@ -140,8 +141,8 @@ Rust and TypeScript share product terminology, adapter baselines, approval seman
 
 | Implementation | Role | Toolchain | Validation boundary |
 | --- | --- | --- | --- |
-| Rust | Primary product engine and CLI | Rust 1.97.1 | Lock graph format tests, 20-direction planning, subprocess migrations, isolated trial, drift failure, rollback, and release build |
-| TypeScript | Executable compatibility and parity reference | Bun 1.3.14, strict TypeScript | 57 unit, integration, safety, skill, and real CLI transaction tests |
+| Rust | Primary product engine and CLI | Rust 1.97.1 | Lock graph format tests, 20-direction planning, policy conversion, subprocess migrations, real Bun acceptance, isolated trial, drift failure, rollback, and release build |
+| TypeScript | Executable compatibility and parity reference | Bun 1.3.14, strict TypeScript | 66 unit, integration, policy, safety, skill, and real CLI transaction tests |
 
 ## Agent workflow
 
@@ -173,7 +174,7 @@ The model does not author migration edits. Detection, capability analysis, trans
 | vlt | Preview, planning only | `vlt@1.0.2` |
 | Deno dependency mode | Preview, planning only | `deno@2.9.5` |
 
-Both engines cover all 20 basic directions between the five production adapters at planning level. The planner selects `pnpm import`, `bun pm migrate`, Bun's pnpm migration path, `yarn import`, or a verified install-integrated path where applicable. The Rust renderer detects policy in manifests and `pnpm-workspace.yaml`, translates the supported npm and pnpm override and Yarn resolution subset, and blocks selectors whose fidelity cannot be preserved. Rust subprocess fixtures execute `pnpm -> bun -> rollback`, `npm -> pnpm`, isolated trial, and deliberate graph drift; live Bun checks cover dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback. The TypeScript reference retains the remaining complex-capability fixtures and native-import planning while serving as the renderer parity oracle during the port.
+Both engines cover all 20 basic directions between the five production adapters at planning level. The planner selects `pnpm import`, `bun pm migrate`, Bun's pnpm migration path, `yarn import`, or a verified install-integrated path where applicable. The Rust renderer translates the supported npm and pnpm override and Yarn resolution subset, Plug and Play and isolated linkers, environment-backed `.npmrc` registry settings for Yarn Modern, and lifecycle allow-lists among Bun, pnpm, and Yarn Modern. Unsupported selectors, literal credentials, and configuration outside the deterministic subset fail closed. Rust subprocess fixtures execute `pnpm -> bun -> rollback`, `npm -> pnpm`, `npm -> yarn-modern`, isolated trial, and deliberate graph drift; live Bun checks cover dependency-bearing migration, apply, graph proof, and rollback. The TypeScript reference retains the remaining complex-capability fixtures and native-import planning while serving as the renderer parity oracle during the port.
 
 See the full [support policy](docs/support/package-managers.md) and [capability matrix](docs/support/capability-matrix.md).
 
@@ -219,6 +220,7 @@ The TypeScript reference still exposes managed copy, symlink, status, doctor, an
 - Trial sandboxes reject symbolic links and never persist migration state in the source repository.
 - Target installs run without a shell and with lifecycle scripts disabled.
 - Credentials are redacted from repository evidence, and Rust process output is withheld from persisted artifacts.
+- Yarn registry migration accepts authentication only through environment references and never persists literal `.npmrc` tokens.
 - Symbolic-link traversal outside the selected repository root is rejected.
 - Concurrent apply, verify, and rollback operations are serialized per repository.
 

@@ -27,6 +27,10 @@ fn fake_package_managers(directory: &TempDir) -> PathBuf {
             "pnpm",
             "printf '%s\\n' \"lockfileVersion: '9.0'\" 'packages: {}' 'snapshots: {}' > pnpm-lock.yaml",
         ),
+        (
+            "yarn",
+            "printf '%s\\n' '__metadata:' '  version: 8' > yarn.lock",
+        ),
     ] {
         let path = binary_directory.join(name);
         write(
@@ -228,6 +232,82 @@ fn migrates_an_npm_workspace_to_pnpm() {
         manifest["packageManager"] == "pnpm@11.21.0",
         "target package manager pin should be rendered"
     );
+}
+
+#[test]
+fn migrates_registry_and_lifecycle_policy_to_yarn_modern() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "npm-yarn-fixture",
+  "private": true,
+  "packageManager": "npm@12.0.2",
+  "trustedDependencies": ["esbuild"]
+}
+"#,
+    );
+    write(
+        &root.join("package-lock.json"),
+        "{\"lockfileVersion\":3,\"packages\":{\"\":{}}}\n",
+    );
+    write(
+        &root.join(".npmrc"),
+        "registry=https://registry.npmjs.org\n//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n",
+    );
+
+    let applied = plan_and_apply(&root, &binaries, "yarn-modern");
+    assert_eq!(applied["status"], "completed");
+    assert!(root.join("yarn.lock").is_file());
+    assert!(!root.join("package-lock.json").exists());
+    assert!(!root.join(".npmrc").exists());
+    let configuration =
+        fs::read_to_string(root.join(".yarnrc.yml")).expect("Yarn Modern configuration");
+    assert!(configuration.contains("nodeLinker: node-modules"));
+    assert!(configuration.contains("enableScripts: false"));
+    assert!(configuration.contains("'${NPM_TOKEN}'"));
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("package.json")).expect("migrated manifest"),
+    )
+    .expect("migrated manifest JSON");
+    assert_eq!(manifest["dependenciesMeta"]["esbuild"]["built"], true);
+    assert!(manifest.get("trustedDependencies").is_none());
+}
+
+#[test]
+#[ignore = "requires the real Bun executable"]
+fn migrates_a_real_pnpm_fixture_with_bun() {
+    let bun_available = Command::new("bun")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success());
+    if !bun_available {
+        return;
+    }
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = tempfile::tempdir().expect("empty binary directory");
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{"name":"live-bun-fixture","private":true,"packageManager":"pnpm@11.21.0","dependencies":{"local-package":"file:./local-package"}}
+"#,
+    );
+    write(
+        &root.join("local-package/package.json"),
+        r#"{"name":"local-package","version":"1.0.0"}
+"#,
+    );
+    write(
+        &root.join("pnpm-lock.yaml"),
+        "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+    );
+
+    let applied = plan_and_apply(&root, binaries.path(), "bun");
+    assert_eq!(applied["status"], "completed");
+    assert!(root.join("bun.lock").is_file());
+    assert!(!root.join("pnpm-lock.yaml").exists());
 }
 
 #[test]

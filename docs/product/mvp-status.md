@@ -5,7 +5,7 @@ description: Records the completed technical MVP, its validation evidence, and e
 tags: [product, mvp, status, delivery]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-16T21:09:25Z}
+generated: { by: bahadirarda, at: 2026-08-16T22:38:36Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -38,6 +38,9 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Versioned JSON results with artifacts, diagnostics, and side-effect metadata.
 - Deterministic target rendering and digest-bound file mutations.
 - Rust-primary npm and pnpm override plus Yarn resolution rendering for the deterministic selector subset, including policy detected in `pnpm-workspace.yaml`.
+- Rust-primary Plug and Play and isolated linker translation across pnpm, Yarn Modern, Bun, npm, and Yarn Classic target layouts.
+- Secret-safe `.npmrc` translation into Yarn Modern registry, scope, authentication-policy, and environment-token configuration.
+- Bidirectional Bun, pnpm, and Yarn Modern lifecycle allow-list rendering using current `trustedDependencies`, `allowBuilds`, and `dependenciesMeta` contracts.
 - Opt-in atomic plan bundle persistence with digest verification.
 - Exact plan and run approval tokens before mutation.
 - Owner-only recovery snapshots created before the first repository write.
@@ -54,7 +57,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - An OKF v0.2 knowledge bundle and a portable Agent Skill source.
 - A pinned Rust 1.97.1 workspace with separate core and CLI crates.
 - Digest-verified Rust plan and run envelopes, repository-scoped locking, byte-level snapshots, atomic mutations, installer output withholding, structural verification, and restored-fingerprint rollback.
-- Rust subprocess fixtures for pnpm-to-Bun-to-rollback and npm-to-pnpm, plus 20-direction basic planning coverage.
+- Rust subprocess fixtures for pnpm-to-Bun-to-rollback, npm-to-pnpm, and npm-to-Yarn Modern registry and lifecycle conversion, plus 20-direction basic planning coverage.
 - Rust subprocess fixtures for isolated trial, native importer ordering, successful graph proof, intentional graph drift, and source repository preservation.
 - A real-installer Rust acceptance run for a multi-package pnpm workspace migrated to Bun and rolled back to its original fingerprint.
 - Real Bun 1.3.14 acceptance runs for dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback.
@@ -75,7 +78,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, and Bun produce executable plans when every observed feature has a safe implemented path. |
 | Rust primary path | MVP complete | Inspect, plan, exact approval, apply, verify, and rollback pass subprocess and real-installer acceptance coverage. |
 | Polyglot workspace | MVP complete | Cargo crates and the TypeScript reference run from isolated workspace boundaries under one CI contract. |
-| Advanced Rust renderer parity | In progress | Override and resolution policy rendering has crossed the parity gate; remaining unported transformations fail closed and the TypeScript suite remains their executable specification. |
+| Advanced Rust renderer parity | In progress | Override, resolution, linker, Yarn registry, and Bun/pnpm/Yarn lifecycle policy rendering have crossed the parity gate; remaining unported transformations fail closed and the TypeScript suite remains their executable specification. |
 
 # Explicit Boundaries
 
@@ -90,9 +93,12 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Representative project scripts are not selected or executed automatically.
 - The Rust CLI does not yet own TypeScript reference commands for managed Agent Skill lifecycle or artifact explanation.
 - Advanced Rust renderers that have not crossed the parity gate emit blocking diagnostics instead of delegating edits to a model.
+- Registry tokens must use `${NAME}` references for Yarn Modern translation; literal credentials and unrecognized `.npmrc` settings fail closed without entering plan artifacts.
+- pnpm output uses the current `allowBuilds` map while inspection continues to accept legacy `onlyBuiltDependencies` input.
+- Yarn per-dependency build denials outside global allow-list mode remain blocking because other targets cannot preserve them safely.
 - Override nesting beyond one deterministic parent-child selector level and Yarn resolution selectors that cannot map to a bare npm package remain blocking.
 - Documentation remains `draft` until a human verifier records review evidence.
 
 # Post-MVP Work
 
-Close advanced Rust renderer parity, add configurable platform-aware and edge-aware graph policies, explicit representative-script selection, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.
+Close patch and package-extension renderer parity, add configurable platform-aware and edge-aware graph policies, explicit representative-script selection, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.

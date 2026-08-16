@@ -5,7 +5,7 @@ description: Defines how observed Project IR features become source-to-target co
 tags: [architecture, capabilities, adapters, diagnostics]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T22:38:36Z}
 sources:
   - id: capability-matrix
     resource: /support/capability-matrix.md
@@ -19,6 +19,9 @@ sources:
   - id: pnpm-settings
     resource: https://pnpm.io/settings
     title: pnpm settings documentation
+  - id: pnpm-build-policy
+    resource: https://pnpm.io/settings/build
+    title: pnpm build policy documentation
   - id: pnpm-catalogs
     resource: https://pnpm.io/catalogs
     title: pnpm catalogs documentation
@@ -28,6 +31,9 @@ sources:
   - id: yarn-linkers
     resource: https://yarnpkg.com/features/linkers
     title: Yarn linker documentation
+  - id: yarn-configuration
+    resource: https://yarnpkg.com/configuration/yarnrc
+    title: Yarn configuration documentation
   - id: bun-install
     resource: https://bun.sh/docs/pm/cli/install
     title: Bun install documentation
@@ -76,5 +82,7 @@ The analysis identifier is derived from Project IR, source, target, decisions, a
 Lossy decisions remain reviewable because the semantic compromise is explicit. Unsupported and unknown decisions block the plan from execution. Preview targets default to unknown when their adapter has not verified a rule.
 
 Rules cite authoritative package manager documentation and carry a freshness deadline. Similar field names do not establish semantic compatibility. For example, Bun supports top-level npm overrides but not nested override objects, so nested npm overrides to Bun are classified as unsupported.[^bun-overrides]
+
+Renderer support is narrower than syntactic recognition. Current lifecycle rules preserve allow-list behavior between Bun `trustedDependencies`, pnpm `allowBuilds`, and Yarn Modern `dependenciesMeta` only when Yarn dependency scripts are disabled globally. npm and Yarn Classic cannot preserve the same dependency-level policy and remain blocking. Registry authentication translation accepts environment references but rejects literal credentials before plan persistence.
 
 [^bun-overrides]: Bun override documentation

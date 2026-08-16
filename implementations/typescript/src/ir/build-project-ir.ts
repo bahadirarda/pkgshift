@@ -370,6 +370,19 @@ export async function buildProjectIR(
   addPolicy(policies, "package-extensions", "package.json", "/packageExtensions", rootManifest.packageExtensions);
   addPolicy(policies, "patched-dependencies", "package.json", "/patchedDependencies", rootManifest.patchedDependencies);
   addPolicy(policies, "trusted-dependencies", "package.json", "/trustedDependencies", rootManifest.trustedDependencies);
+  if (yarnConfiguration?.enableScripts === false && isObject(rootManifest.dependenciesMeta)) {
+    const builtDependencies = Object.fromEntries(
+      Object.entries(rootManifest.dependenciesMeta)
+        .filter((entry) => isObject(entry[1]) && entry[1].built === true),
+    );
+    addPolicy(
+      policies,
+      "trusted-dependencies",
+      "package.json",
+      "/dependenciesMeta",
+      builtDependencies,
+    );
+  }
 
   if (isObject(rootManifest.pnpm)) {
     addPolicy(policies, "overrides", "package.json", "/pnpm/overrides", rootManifest.pnpm.overrides);
@@ -478,7 +491,32 @@ export async function buildProjectIR(
       detail: "pnpm hooks are present",
     });
   }
-  if (inspection.relevantFiles.includes(".npmrc")) {
+  const npmrc = await readText(join(inspection.root, ".npmrc"));
+  let npmrcHasRegistryConfiguration = false;
+  if (npmrc !== null) {
+    for (const rawLine of npmrc.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#") || line.startsWith(";")) continue;
+      const [setting, ...valueParts] = line.split("=");
+      const value = valueParts.join("=").trim();
+      if (setting?.trim() === "node-linker") {
+        if (value === "pnp") {
+          addObservedFeature(features, "install.pnp-linker", {
+            location: ".npmrc",
+            detail: "Legacy pnpm configuration selects Plug and Play linking",
+          });
+        } else if (value === "isolated") {
+          addObservedFeature(features, "install.isolated-linker", {
+            location: ".npmrc",
+            detail: "Legacy pnpm configuration selects isolated linking",
+          });
+        }
+      } else {
+        npmrcHasRegistryConfiguration = true;
+      }
+    }
+  }
+  if (npmrcHasRegistryConfiguration) {
     addObservedFeature(features, "registry.npmrc", {
       location: ".npmrc",
       detail: "npm-compatible registry configuration is present; values remain redacted",

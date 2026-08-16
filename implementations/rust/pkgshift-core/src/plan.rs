@@ -509,6 +509,9 @@ fn render_pnpm_workspace(
     patterns: &[String],
     root_manifest: &Map<String, Value>,
     overrides: &Map<String, Value>,
+    node_linker: Option<&str>,
+    trusted_dependencies: &[String],
+    lifecycle_policy_present: bool,
 ) -> String {
     let mut lines = Vec::new();
     if !patterns.is_empty() {
@@ -550,8 +553,315 @@ fn render_pnpm_workspace(
             }
         }
     }
+    if let Some(node_linker) = node_linker {
+        lines.push(format!("nodeLinker: {node_linker}"));
+    }
+    if lifecycle_policy_present {
+        if trusted_dependencies.is_empty() {
+            lines.push("allowBuilds: {}".to_owned());
+        } else {
+            lines.push("allowBuilds:".to_owned());
+            for dependency in trusted_dependencies {
+                lines.push(format!("  {}: true", yaml_single_quoted(dependency)));
+            }
+        }
+    }
     lines.push(String::new());
     lines.join("\n")
+}
+
+fn string_array(value: Option<&Value>) -> impl Iterator<Item = &str> {
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+}
+
+fn source_trusted_dependencies(
+    root_manifest: &Map<String, Value>,
+    pnpm_manifest: &Map<String, Value>,
+    pnpm_configuration: &Map<String, Value>,
+    yarn_configuration: &Map<String, Value>,
+) -> Vec<String> {
+    let mut trusted = BTreeSet::new();
+    for value in [
+        root_manifest.get("trustedDependencies"),
+        pnpm_manifest.get("onlyBuiltDependencies"),
+        pnpm_configuration.get("onlyBuiltDependencies"),
+    ] {
+        trusted.extend(string_array(value).map(str::to_owned));
+    }
+    if let Some(allow_builds) = pnpm_configuration
+        .get("allowBuilds")
+        .and_then(Value::as_object)
+    {
+        trusted.extend(
+            allow_builds
+                .iter()
+                .filter(|(_, allowed)| allowed.as_bool() == Some(true))
+                .map(|(name, _)| name.clone()),
+        );
+    }
+    if yarn_configuration
+        .get("enableScripts")
+        .and_then(Value::as_bool)
+        == Some(false)
+        && let Some(dependencies_meta) = root_manifest
+            .get("dependenciesMeta")
+            .and_then(Value::as_object)
+    {
+        trusted.extend(
+            dependencies_meta
+                .iter()
+                .filter(|(_, metadata)| {
+                    metadata
+                        .as_object()
+                        .and_then(|entry| entry.get("built"))
+                        .and_then(Value::as_bool)
+                        == Some(true)
+                })
+                .map(|(name, _)| name.clone()),
+        );
+    }
+    trusted.into_iter().collect()
+}
+
+fn remove_source_lifecycle_policy(
+    manifest: &mut Map<String, Value>,
+    remove_yarn_build_policy: bool,
+) {
+    manifest.remove("trustedDependencies");
+    if let Some(pnpm) = manifest.get_mut("pnpm").and_then(Value::as_object_mut) {
+        pnpm.remove("onlyBuiltDependencies");
+        pnpm.remove("allowBuilds");
+        if pnpm.is_empty() {
+            manifest.remove("pnpm");
+        }
+    }
+    if !remove_yarn_build_policy {
+        return;
+    }
+    let Some(dependencies_meta) = manifest
+        .get_mut("dependenciesMeta")
+        .and_then(Value::as_object_mut)
+    else {
+        return;
+    };
+    dependencies_meta.retain(|_, value| {
+        let Some(metadata) = value.as_object_mut() else {
+            return true;
+        };
+        metadata.remove("built");
+        !metadata.is_empty()
+    });
+    if dependencies_meta.is_empty() {
+        manifest.remove("dependenciesMeta");
+    }
+}
+
+fn configure_yarn_lifecycle_policy(
+    manifest: &mut Map<String, Value>,
+    trusted_dependencies: &[String],
+) {
+    if trusted_dependencies.is_empty() {
+        return;
+    }
+    let dependencies_meta = manifest
+        .entry("dependenciesMeta")
+        .or_insert_with(|| Value::Object(Map::new()))
+        .as_object_mut()
+        .expect("dependenciesMeta is initialized as an object");
+    for dependency in trusted_dependencies {
+        let metadata = dependencies_meta
+            .entry(dependency.clone())
+            .or_insert_with(|| Value::Object(Map::new()))
+            .as_object_mut()
+            .expect("dependency metadata is initialized as an object");
+        metadata.insert("built".to_owned(), Value::Bool(true));
+    }
+}
+
+#[derive(Default)]
+struct YarnRegistryConfiguration {
+    always_auth: Option<bool>,
+    registry_server: Option<String>,
+    registries: BTreeMap<String, String>,
+    scopes: BTreeMap<String, String>,
+}
+
+fn environment_reference(value: &str) -> bool {
+    let Some(name) = value
+        .strip_prefix("${")
+        .and_then(|value| value.strip_suffix('}'))
+    else {
+        return false;
+    };
+    let mut characters = name.chars();
+    characters
+        .next()
+        .is_some_and(|character| character == '_' || character.is_ascii_alphabetic())
+        && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+fn npmrc_for_yarn(content: &str, diagnostics: &mut Vec<Diagnostic>) -> YarnRegistryConfiguration {
+    let mut output = YarnRegistryConfiguration::default();
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+        let Some((setting, value)) = line.split_once('=') else {
+            diagnostics.push(Diagnostic::blocking(
+                "NPMRC_SETTING_UNSUPPORTED",
+                "Yarn Modern translation found an unsupported .npmrc setting.",
+                vec!["Reduce .npmrc to supported registry and authentication settings.".to_owned()],
+            ));
+            continue;
+        };
+        let setting = setting.trim();
+        let value = value.trim();
+        if setting == "node-linker" {
+            if matches!(value, "pnp" | "isolated" | "hoisted" | "node-modules") {
+                continue;
+            }
+            diagnostics.push(Diagnostic::blocking(
+                "NPMRC_SETTING_UNSUPPORTED",
+                "Yarn Modern translation found an unsupported legacy node-linker value.",
+                vec!["Use pnp, isolated, hoisted, or node-modules before retrying.".to_owned()],
+            ));
+            continue;
+        }
+        if setting == "registry" {
+            output.registry_server = Some(value.to_owned());
+            continue;
+        }
+        if let Some(scope) = setting
+            .strip_prefix('@')
+            .and_then(|value| value.strip_suffix(":registry"))
+            .filter(|scope| !scope.is_empty() && !scope.chars().any(char::is_whitespace))
+        {
+            output.scopes.insert(scope.to_owned(), value.to_owned());
+            continue;
+        }
+        if let Some(registry) = setting
+            .strip_suffix(":_authToken")
+            .filter(|registry| registry.starts_with("//") && registry.len() > 2)
+        {
+            if environment_reference(value) {
+                output
+                    .registries
+                    .insert(registry.to_owned(), value.to_owned());
+            } else {
+                diagnostics.push(Diagnostic::blocking(
+                    "REGISTRY_SECRET_REQUIRES_ENVIRONMENT_REFERENCE",
+                    "Yarn Modern registry migration requires authentication tokens to use an environment reference.",
+                    vec!["Replace the literal token in .npmrc with a ${NAME} reference.".to_owned()],
+                ));
+            }
+            continue;
+        }
+        if setting == "always-auth" && matches!(value, "true" | "false") {
+            output.always_auth = Some(value == "true");
+            continue;
+        }
+        diagnostics.push(Diagnostic::blocking(
+            "NPMRC_SETTING_UNSUPPORTED",
+            "Yarn Modern translation found an unsupported .npmrc setting.",
+            vec!["Reduce .npmrc to supported registry and authentication settings.".to_owned()],
+        ));
+    }
+    output
+}
+
+fn render_yarn_configuration(
+    node_linker: &str,
+    lifecycle_policy_present: bool,
+    registry: &YarnRegistryConfiguration,
+) -> String {
+    let mut lines = vec![format!("nodeLinker: {node_linker}")];
+    if lifecycle_policy_present {
+        lines.push("enableScripts: false".to_owned());
+    }
+    if let Some(server) = &registry.registry_server {
+        lines.push(format!("npmRegistryServer: {}", yaml_single_quoted(server)));
+    }
+    if let Some(always_auth) = registry.always_auth {
+        lines.push(format!("npmAlwaysAuth: {always_auth}"));
+    }
+    if !registry.scopes.is_empty() {
+        lines.push("npmScopes:".to_owned());
+        for (scope, server) in &registry.scopes {
+            lines.push(format!("  {}:", yaml_single_quoted(scope)));
+            lines.push(format!(
+                "    npmRegistryServer: {}",
+                yaml_single_quoted(server)
+            ));
+        }
+    }
+    if !registry.registries.is_empty() {
+        lines.push("npmRegistries:".to_owned());
+        for (registry, token) in &registry.registries {
+            lines.push(format!("  {}:", yaml_single_quoted(registry)));
+            lines.push("    npmAlwaysAuth: true".to_owned());
+            lines.push(format!("    npmAuthToken: {}", yaml_single_quoted(token)));
+        }
+    }
+    lines.push(String::new());
+    lines.join("\n")
+}
+
+fn render_bun_configuration(before: Option<&str>, isolated: bool) -> Option<String> {
+    if !isolated {
+        return before.map(str::to_owned);
+    }
+    let before = before.unwrap_or_default();
+    let mut lines = before.lines().map(str::to_owned).collect::<Vec<_>>();
+    let install_sections = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.trim() == "[install]")
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if install_sections.len() > 1 {
+        return None;
+    }
+    if let Some(start) = install_sections.first().copied() {
+        let end = lines
+            .iter()
+            .enumerate()
+            .skip(start + 1)
+            .find(|(_, line)| {
+                let line = line.trim();
+                line.starts_with('[') && line.ends_with(']')
+            })
+            .map_or(lines.len(), |(index, _)| index);
+        let linkers = lines[start + 1..end]
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| {
+                line.split_once('=')
+                    .is_some_and(|(key, _)| key.trim() == "linker")
+            })
+            .map(|(index, _)| start + 1 + index)
+            .collect::<Vec<_>>();
+        if linkers.len() > 1 {
+            return None;
+        }
+        if let Some(index) = linkers.first().copied() {
+            lines[index] = "linker = \"isolated\"".to_owned();
+        } else {
+            lines.insert(start + 1, "linker = \"isolated\"".to_owned());
+        }
+    } else {
+        if lines.last().is_some_and(|line| !line.trim().is_empty()) {
+            lines.push(String::new());
+        }
+        lines.push("[install]".to_owned());
+        lines.push("linker = \"isolated\"".to_owned());
+    }
+    lines.push(String::new());
+    Some(lines.join("\n"))
 }
 
 fn flatten_nested_overrides(
@@ -633,6 +943,13 @@ fn transform_project(
         "overrides.nested-to-resolutions",
         "resolutions.to-overrides",
         "resolutions.to-pnpm-overrides",
+        "linker.pnp-to-node-modules",
+        "linker.pnp-to-isolated",
+        "linker.isolated-to-yarn-pnpm",
+        "linker.isolated-to-hoisted",
+        "registry.npmrc-to-yarnrc",
+        "lifecycle.to-pnpm-build-policy",
+        "lifecycle.to-yarn-build-policy",
     ];
     for decision in &analysis.decisions {
         if matches!(
@@ -686,6 +1003,51 @@ fn transform_project(
         .and_then(|content| noyalib::from_str::<Value>(content).ok())
         .and_then(|value| value.as_object().cloned())
         .unwrap_or_default();
+    let yarn_configuration = read_text(&root.join(".yarnrc.yml"))?
+        .as_deref()
+        .and_then(|content| noyalib::from_str::<Value>(content).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    let trusted_dependencies = source_trusted_dependencies(
+        &root_manifest_before,
+        &pnpm_manifest,
+        &pnpm_configuration,
+        &yarn_configuration,
+    );
+    let lifecycle_policy_present = project_ir
+        .features
+        .iter()
+        .any(|feature| feature.id == "lifecycle.trusted-dependencies");
+    let remove_yarn_build_policy = inspection.package_manager.selected
+        == Some(PackageManagerId::YarnModern)
+        && yarn_configuration
+            .get("enableScripts")
+            .and_then(Value::as_bool)
+            == Some(false);
+    if inspection.package_manager.selected == Some(PackageManagerId::YarnModern)
+        && !remove_yarn_build_policy
+        && root_manifest_before
+            .get("dependenciesMeta")
+            .and_then(Value::as_object)
+            .is_some_and(|entries| {
+                entries.values().any(|metadata| {
+                    metadata
+                        .as_object()
+                        .and_then(|entry| entry.get("built"))
+                        .and_then(Value::as_bool)
+                        == Some(false)
+                })
+            })
+    {
+        diagnostics.push(Diagnostic::blocking(
+            "YARN_BUILD_POLICY_UNSUPPORTED",
+            "The target cannot preserve Yarn per-dependency build denials safely.",
+            vec![
+                "Remove the denial or convert it to a reviewed lifecycle allow-list before retrying."
+                    .to_owned(),
+            ],
+        ));
+    }
     let source_overrides = pnpm_configuration
         .get("overrides")
         .and_then(Value::as_object)
@@ -747,6 +1109,7 @@ fn transform_project(
             continue;
         };
         if package.path == "." {
+            remove_source_lifecycle_policy(&mut manifest, remove_yarn_build_policy);
             manifest.insert(
                 "packageManager".to_owned(),
                 Value::String(get_package_manager(target).package_manager_pin.to_owned()),
@@ -809,6 +1172,21 @@ fn transform_project(
                 if !pnpm_catalogs.is_empty() {
                     manifest.insert("catalogs".to_owned(), Value::Object(pnpm_catalogs.clone()));
                 }
+                if !trusted_dependencies.is_empty() {
+                    manifest.insert(
+                        "trustedDependencies".to_owned(),
+                        Value::Array(
+                            trusted_dependencies
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    );
+                }
+            }
+            if target == PackageManagerId::YarnModern {
+                configure_yarn_lifecycle_policy(&mut manifest, &trusted_dependencies);
             }
         }
         for section in [
@@ -880,9 +1258,23 @@ fn transform_project(
         }
     }
 
+    let pnp = project_ir
+        .features
+        .iter()
+        .any(|feature| feature.id == "install.pnp-linker");
+    let isolated = project_ir
+        .features
+        .iter()
+        .any(|feature| feature.id == "install.isolated-linker");
+    let pnpm_node_linker = pnp
+        .then_some("pnp")
+        .or_else(|| isolated.then_some("isolated"));
     let mut configuration_mutations = Vec::new();
     if target == PackageManagerId::Pnpm
-        && (!project_ir.workspace_patterns.is_empty() || !pnpm_overrides.is_empty())
+        && (!project_ir.workspace_patterns.is_empty()
+            || !pnpm_overrides.is_empty()
+            || pnpm_node_linker.is_some()
+            || lifecycle_policy_present)
         && let Some(root_manifest) = root_manifest_after.as_ref()
         && let Some(change) = mutation(
             root,
@@ -892,31 +1284,80 @@ fn transform_project(
                 &project_ir.workspace_patterns,
                 root_manifest,
                 &pnpm_overrides,
+                pnpm_node_linker,
+                &trusted_dependencies,
+                lifecycle_policy_present,
             )),
             "Render pnpm workspace and policy configuration.",
             vec![
                 "workspace.manifest".to_owned(),
                 "resolution.overrides".to_owned(),
+                "install.pnp-linker".to_owned(),
+                "install.isolated-linker".to_owned(),
+                "lifecycle.trusted-dependencies".to_owned(),
             ],
         )?
     {
         configuration_mutations.push(change);
     }
-    if target == PackageManagerId::Bun
-        && project_ir
-            .features
-            .iter()
-            .any(|feature| feature.id == "install.pnp-linker")
-        && let Some(change) = mutation(
+    if target == PackageManagerId::YarnModern {
+        let npmrc = read_text(&root.join(".npmrc"))?;
+        let registry = npmrc
+            .as_deref()
+            .map(|content| npmrc_for_yarn(content, &mut diagnostics))
+            .unwrap_or_default();
+        let yarn_node_linker = if pnp {
+            "pnp"
+        } else if isolated {
+            "pnpm"
+        } else {
+            "node-modules"
+        };
+        if let Some(change) = mutation(
             root,
-            "bunfig.toml",
+            ".yarnrc.yml",
             MutationAction::Write,
-            Some("[install]\nlinker = \"isolated\"\n".to_owned()),
-            "Select Bun isolated linking for a reviewed Plug and Play migration.",
-            vec!["install.pnp-linker".to_owned()],
-        )?
-    {
-        configuration_mutations.push(change);
+            Some(render_yarn_configuration(
+                yarn_node_linker,
+                lifecycle_policy_present,
+                &registry,
+            )),
+            "Render Yarn Modern linker, lifecycle, and registry configuration.",
+            vec![
+                "install.pnp-linker".to_owned(),
+                "install.isolated-linker".to_owned(),
+                "registry.npmrc".to_owned(),
+                "lifecycle.trusted-dependencies".to_owned(),
+            ],
+        )? {
+            configuration_mutations.push(change);
+        }
+    }
+    if target == PackageManagerId::Bun && (pnp || isolated) {
+        let before = read_text(&root.join("bunfig.toml"))?;
+        if let Some(after) = render_bun_configuration(before.as_deref(), true) {
+            if let Some(change) = mutation(
+                root,
+                "bunfig.toml",
+                MutationAction::Write,
+                Some(after),
+                "Select Bun isolated linking for a reviewed linker migration.",
+                vec![
+                    "install.pnp-linker".to_owned(),
+                    "install.isolated-linker".to_owned(),
+                ],
+            )? {
+                configuration_mutations.push(change);
+            }
+        } else {
+            diagnostics.push(Diagnostic::blocking(
+                "CONFIGURATION_PARSE_FAILED",
+                "bunfig.toml contains ambiguous install linker configuration.",
+                vec![
+                    "Keep one [install] section and one linker setting before retrying.".to_owned(),
+                ],
+            ));
+        }
     }
 
     let source = inspection
@@ -966,7 +1407,9 @@ fn transform_project(
         .chain(source_definition.configuration_files.iter())
         .copied()
     {
-        if target_artifacts.contains(path) || path == ".npmrc" {
+        if target_artifacts.contains(path)
+            || (path == ".npmrc" && target != PackageManagerId::YarnModern)
+        {
             continue;
         }
         if let Some(change) = mutation(
@@ -1370,6 +1813,31 @@ mod tests {
             .expect("planned mutation content")
     }
 
+    fn plan_fixture(
+        files: &[(&str, &str)],
+        target: PackageManagerId,
+        accepted_lossy: bool,
+    ) -> MigrationPlan {
+        let directory = tempdir().expect("temporary directory");
+        for (path, content) in files {
+            let path = directory.path().join(path);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("fixture parent");
+            }
+            fs::write(path, content).expect("fixture file");
+        }
+        let inspection = inspect_project(directory.path()).expect("inspection");
+        let ir = build_project_ir(&inspection)
+            .expect("IR build")
+            .expect("project IR");
+        let analysis = analyze_capabilities(&ir, target)
+            .expect("analysis")
+            .expect("capability analysis");
+        plan_package_manager_migration(&inspection, &ir, &analysis, None, target, accepted_lossy)
+            .expect("planning")
+            .expect("migration plan")
+    }
+
     #[test]
     fn plans_a_pnpm_to_bun_workspace() {
         let directory = tempdir().expect("temporary directory");
@@ -1651,5 +2119,219 @@ mod tests {
                 .iter()
                 .any(|entry| entry.code == "NESTED_OVERRIDE_UNSUPPORTED" && entry.blocking)
         );
+    }
+
+    #[test]
+    fn renders_environment_backed_registry_configuration_for_yarn_modern() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"npm@12.0.2"}"#,
+                ),
+                ("package-lock.json", "{}\n"),
+                (
+                    ".npmrc",
+                    "registry=https://registry.npmjs.org\n@company:registry=https://npm.company.test\n//npm.company.test/:_authToken=${COMPANY_NPM_TOKEN}\nalways-auth=true\n",
+                ),
+            ],
+            PackageManagerId::YarnModern,
+            false,
+        );
+
+        assert!(plan.executable);
+        let configuration = mutation_content(&plan, ".yarnrc.yml");
+        assert!(configuration.contains("nodeLinker: node-modules"));
+        assert!(configuration.contains("npmRegistryServer: 'https://registry.npmjs.org'"));
+        assert!(configuration.contains("'company':"));
+        assert!(configuration.contains("'//npm.company.test/':"));
+        assert!(configuration.contains("'${COMPANY_NPM_TOKEN}'"));
+        assert!(
+            plan.operations
+                .iter()
+                .flat_map(|entry| &entry.mutations)
+                .any(|mutation| mutation.path == ".npmrc"
+                    && mutation.action == MutationAction::Delete)
+        );
+    }
+
+    #[test]
+    fn keeps_literal_registry_tokens_out_of_persisted_plans() {
+        let secret = "literal-token-must-not-persist";
+        let npmrc = format!("//registry.npmjs.org/:_authToken={secret}\n");
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"npm@12.0.2"}"#,
+                ),
+                ("package-lock.json", "{}\n"),
+                (".npmrc", &npmrc),
+            ],
+            PackageManagerId::YarnModern,
+            false,
+        );
+
+        assert!(!plan.executable);
+        assert!(plan.diagnostics.iter().any(|entry| {
+            entry.code == "REGISTRY_SECRET_REQUIRES_ENVIRONMENT_REFERENCE" && entry.blocking
+        }));
+        assert!(
+            !serde_json::to_string(&plan)
+                .expect("serialized plan")
+                .contains(secret)
+        );
+    }
+
+    #[test]
+    fn renders_isolated_linking_and_current_pnpm_build_policy() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"bun@1.3.14","trustedDependencies":["esbuild","sharp"]}"#,
+                ),
+                ("bun.lock", "{\"lockfileVersion\":1,\"packages\":{}}\n"),
+                ("bunfig.toml", "[install]\nlinker = \"isolated\"\n"),
+            ],
+            PackageManagerId::Pnpm,
+            false,
+        );
+
+        assert!(plan.executable);
+        let configuration = mutation_content(&plan, "pnpm-workspace.yaml");
+        assert!(configuration.contains("nodeLinker: isolated"));
+        assert!(configuration.contains("allowBuilds:"));
+        assert!(configuration.contains("'esbuild': true"));
+        assert!(configuration.contains("'sharp': true"));
+        assert!(!configuration.contains("onlyBuiltDependencies"));
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert!(manifest.get("trustedDependencies").is_none());
+    }
+
+    #[test]
+    fn renders_a_yarn_lifecycle_allow_list_with_scripts_disabled() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0"}"#,
+                ),
+                ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+                (
+                    "pnpm-workspace.yaml",
+                    "nodeLinker: isolated\nallowBuilds:\n  esbuild: true\n  blocked-package: false\n",
+                ),
+            ],
+            PackageManagerId::YarnModern,
+            false,
+        );
+
+        assert!(plan.executable);
+        let configuration = mutation_content(&plan, ".yarnrc.yml");
+        assert!(configuration.contains("nodeLinker: pnpm"));
+        assert!(configuration.contains("enableScripts: false"));
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert_eq!(manifest["dependenciesMeta"]["esbuild"]["built"], true);
+        assert!(
+            manifest["dependenciesMeta"]
+                .get("blocked-package")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn reads_a_yarn_lifecycle_allow_list_when_migrating_to_bun() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0","dependenciesMeta":{"esbuild":{"built":true},"sharp":{"built":false}}}"#,
+                ),
+                ("yarn.lock", "# fixture\n"),
+                (
+                    ".yarnrc.yml",
+                    "nodeLinker: node-modules\nenableScripts: false\n",
+                ),
+            ],
+            PackageManagerId::Bun,
+            false,
+        );
+
+        assert!(plan.executable);
+        let manifest: Value =
+            serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+        assert_eq!(manifest["trustedDependencies"], json!(["esbuild"]));
+        assert!(manifest.get("dependenciesMeta").is_none());
+    }
+
+    #[test]
+    fn blocks_yarn_build_denials_outside_allow_list_mode() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0","dependenciesMeta":{"native-addon":{"built":false}}}"#,
+                ),
+                ("yarn.lock", "# fixture\n"),
+                (".yarnrc.yml", "nodeLinker: node-modules\n"),
+            ],
+            PackageManagerId::Bun,
+            false,
+        );
+
+        assert!(!plan.executable);
+        assert!(
+            plan.diagnostics
+                .iter()
+                .any(|entry| { entry.code == "YARN_BUILD_POLICY_UNSUPPORTED" && entry.blocking })
+        );
+    }
+
+    #[test]
+    fn blocks_unknown_legacy_node_linker_values() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0"}"#,
+                ),
+                ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+                (".npmrc", "node-linker=mystery\n"),
+            ],
+            PackageManagerId::YarnModern,
+            false,
+        );
+
+        assert!(!plan.executable);
+        assert!(
+            plan.diagnostics
+                .iter()
+                .any(|entry| entry.code == "NPMRC_SETTING_UNSUPPORTED" && entry.blocking)
+        );
+    }
+
+    #[test]
+    fn preserves_an_empty_yarn_lifecycle_allow_list_in_pnpm() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0"}"#,
+                ),
+                ("yarn.lock", "# fixture\n"),
+                (
+                    ".yarnrc.yml",
+                    "nodeLinker: node-modules\nenableScripts: false\n",
+                ),
+            ],
+            PackageManagerId::Pnpm,
+            false,
+        );
+
+        assert!(plan.executable);
+        assert!(mutation_content(&plan, "pnpm-workspace.yaml").contains("allowBuilds: {}"));
     }
 }

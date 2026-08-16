@@ -5,7 +5,7 @@ description: Defines implemented package manager target tiers and execution boun
 tags: [support, npm, pnpm, yarn, bun, vlt, deno]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-16T22:38:36Z}
 sources:
   - id: npm-install
     resource: https://docs.npmjs.com/cli/install/
@@ -19,9 +19,21 @@ sources:
   - id: pnpm-import
     resource: https://pnpm.io/cli/import
     title: pnpm import documentation
+  - id: pnpm-node-linker
+    resource: https://pnpm.io/settings/node-modules
+    title: pnpm node linker documentation
+  - id: pnpm-build-policy
+    resource: https://pnpm.io/settings/build
+    title: pnpm build policy documentation
   - id: yarn-modern
     resource: https://yarnpkg.com/
     title: Yarn documentation
+  - id: yarn-configuration
+    resource: https://yarnpkg.com/configuration/yarnrc
+    title: Yarn configuration documentation
+  - id: yarn-manifest
+    resource: https://yarnpkg.com/configuration/manifest
+    title: Yarn manifest documentation
   - id: yarn-classic
     resource: https://classic.yarnpkg.com/lang/en/docs/workspaces/
     title: Yarn Classic workspace documentation
@@ -67,10 +79,10 @@ The labels below describe current technical MVP behavior. Production target mean
 | Adapter | MVP tier | Boundary |
 | --- | --- | --- |
 | npm | Production target | Manifests, lockfile, workspaces, overrides, registry configuration, scripts, CI, and containers. |
-| pnpm | Production target | npm-compatible semantics plus workspace files, catalogs, overrides, patches, and linker-related policy. |
+| pnpm | Production target | npm-compatible semantics plus workspace files, catalogs, overrides, patches, explicit linker selection, and `allowBuilds` lifecycle policy. |
 | Yarn Classic | Production target | Classic lockfile, workspace behavior, resolutions, registry configuration, and script commands. |
-| Yarn Modern | Production target | Modern lockfile, workspace tools, protocols, constraints, patches, plugins, and linker modes where portable. |
-| Bun | Production target | Bun lockfile, install behavior, workspaces, overrides, catalogs where supported, registry configuration, and script commands. |
+| Yarn Modern | Production target | Modern lockfile, workspace tools, protocols, constraints, patches, plugins, portable linker modes, environment-backed registry translation, and lifecycle allow-lists. |
+| Bun | Production target | Bun lockfile, install behavior, workspaces, overrides, catalogs where supported, isolated linking, trusted dependencies, registry configuration, and script commands. |
 | vlt | Preview target | Detection, capability reporting, and guarded migration planning before production guarantees. |
 | Deno dependency mode | Preview target | npm and JSR dependency declarations plus workspace dependency behavior; not a runtime migration. |
 
@@ -123,8 +135,11 @@ Production targets provide:
 - Normalized source lock graph extraction and blocking target resolution-set verification in the Rust primary path.
 - Registered target-native importer or install-integrated migration selection where official behavior supports it.
 - Approved isolated execution trials through the Rust primary CLI.
+- Bidirectional lifecycle allow-list translation among Bun `trustedDependencies`, pnpm `allowBuilds`, and Yarn Modern `dependenciesMeta` with `enableScripts: false`.
+- Plug and Play or isolated linker translation to pnpm, Yarn Modern, Bun, or an explicitly accepted hoisted layout.
+- Secret-safe `.npmrc` registry translation to Yarn Modern for default and scoped registries, boolean authentication policy, and environment-backed tokens.
 
-Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, unsupported patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. Edge-level and platform-aware graph policies remain release-hardening extensions beyond the blocking `resolution-set-v1` policy.
+Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, Yarn build denials outside allow-list mode, unsupported patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, dependency-level lifecycle policy targeting npm or Yarn Classic, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. Edge-level and platform-aware graph policies remain release-hardening extensions beyond the blocking `resolution-set-v1` policy.
 
 # Native Migration Paths
 

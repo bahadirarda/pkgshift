@@ -2,6 +2,10 @@
 
 ## 2026-08-17
 
+* **Parity**: Ported Plug and Play and isolated linker rendering plus Yarn Modern registry translation into the Rust primary engine.
+* **Lifecycle policy**: Added bidirectional Bun, pnpm, and Yarn Modern allow-list conversion, emitting current pnpm `allowBuilds` output and Yarn `enableScripts: false` with per-dependency build metadata.
+* **Safety**: Kept literal registry credentials out of persisted Rust plans, required environment references for Yarn authentication, and blocked unsupported `.npmrc` settings.
+* **Verification**: Added Rust unit and subprocess coverage, TypeScript parity fixtures, and a real Bun installer acceptance migration for linker and lifecycle behavior.
 * **Parity**: Ported deterministic npm and pnpm override plus Yarn resolution rendering to the Rust primary engine.
 * **Safety**: Added pnpm workspace policy discovery and blocking diagnostics for nested or scoped selector forms that cannot preserve target semantics.
 * **Verification**: Added Rust unit and subprocess coverage for nested override translation, Yarn-to-npm policy migration, scoped package resolutions, pnpm workspace policy retention, and unsupported selector rejection.
