@@ -50,3 +50,36 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION_BRANCH: changeset-release/${{ github.ref_name }}
         run: gh workflow run ci.yml --ref "$VERSION_BRANCH"
+
+      - name: Remove redundant approval placeholder
+        if: steps.changesets.outputs['pr-number'] != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_BRANCH: changeset-release/${{ github.ref_name }}
+          VERSION_PR_NUMBER: ${{ steps.changesets.outputs['pr-number'] }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_sha="$(gh pr view "$VERSION_PR_NUMBER" --json headRefOid --jq .headRefOid)"
+
+          for attempt in {1..15}; do
+            mapfile -t placeholder_run_ids < <(
+              gh api --method GET "repos/$GITHUB_REPOSITORY/actions/runs" \
+                -f event=pull_request \
+                -f branch="$VERSION_BRANCH" \
+                -f status=action_required \
+                -f per_page=100 \
+                --jq ".workflow_runs[] | select(.head_sha == \"$version_sha\") | .id"
+            )
+
+            if (( ${#placeholder_run_ids[@]} > 0 )); then
+              for run_id in "${placeholder_run_ids[@]}"; do
+                gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$run_id"
+              done
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "No approval-only placeholder was created for $version_sha."
