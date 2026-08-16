@@ -411,6 +411,65 @@ fn collect_manifest_features(
     }
 }
 
+fn yaml_mapping(content: &str) -> Option<Map<String, Value>> {
+    noyalib::from_str::<Value>(content)
+        .ok()
+        .and_then(|value| value.as_object().cloned())
+}
+
+fn yarn_lifecycle_allow_list_enabled(configuration: &Map<String, Value>) -> bool {
+    configuration.get("enableScripts").and_then(Value::as_bool) == Some(false)
+}
+
+fn collect_yarn_lifecycle_features(
+    manifest: &Map<String, Value>,
+    configuration: &Map<String, Value>,
+    features: &mut BTreeMap<String, Vec<String>>,
+) {
+    if !yarn_lifecycle_allow_list_enabled(configuration) {
+        return;
+    }
+    let location = manifest
+        .get("dependenciesMeta")
+        .and_then(Value::as_object)
+        .filter(|entries| !entries.is_empty())
+        .map_or(
+            ".yarnrc.yml#/enableScripts",
+            |_| "package.json#/dependenciesMeta",
+        );
+    add_feature(features, "lifecycle.trusted-dependencies", location);
+}
+
+fn npmrc_setting(line: &str) -> Option<(&str, &str)> {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+        return None;
+    }
+    line.split_once('=')
+        .map(|(key, value)| (key.trim(), value.trim()))
+}
+
+fn bun_install_linker(content: &str) -> Option<&str> {
+    let mut in_install = false;
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            in_install = line == "[install]";
+            continue;
+        }
+        if in_install
+            && let Some((key, value)) = line.split_once('=')
+            && key.trim() == "linker"
+        {
+            return Some(value.trim().trim_matches(['\'', '"']));
+        }
+    }
+    None
+}
+
 pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<ProjectIr>> {
     let Some(source) = inspection.package_manager.selected else {
         return Ok(None);
@@ -423,6 +482,20 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
     let mut packages = Vec::new();
     let mut features = BTreeMap::<String, Vec<String>>::new();
     let mut diagnostics = inspection.diagnostics.clone();
+    let yarn_configuration = if let Some(content) = read_text(&root.join(".yarnrc.yml"))? {
+        if let Some(configuration) = yaml_mapping(&content) {
+            configuration
+        } else {
+            diagnostics.push(Diagnostic::blocking(
+                "CONFIGURATION_PARSE_FAILED",
+                ".yarnrc.yml could not be parsed as a mapping.",
+                vec!["Repair .yarnrc.yml before retrying inspection.".to_owned()],
+            ));
+            Map::new()
+        }
+    } else {
+        Map::new()
+    };
     if inspection.workspace.configured {
         add_feature(
             &mut features,
@@ -454,6 +527,9 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
             continue;
         };
         collect_manifest_features(&manifest, &manifest_path, &mut features);
+        if package_path == "." {
+            collect_yarn_lifecycle_features(&manifest, &yarn_configuration, &mut features);
+        }
         let mut dependencies = Vec::new();
         for section in [
             "dependencies",
@@ -508,18 +584,38 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
         });
     }
 
-    if root.join(".npmrc").exists() {
-        add_feature(&mut features, "registry.npmrc", ".npmrc");
-        if read_text(&root.join(".npmrc"))?
-            .is_some_and(|content| content.contains("node-linker=isolated"))
-        {
-            add_feature(&mut features, "install.isolated-linker", ".npmrc");
+    if let Some(content) = read_text(&root.join(".npmrc"))? {
+        let mut has_registry_configuration = false;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
+                continue;
+            }
+            let Some((setting, value)) = npmrc_setting(line) else {
+                has_registry_configuration = true;
+                continue;
+            };
+            if setting == "node-linker" {
+                match value {
+                    "pnp" => add_feature(&mut features, "install.pnp-linker", ".npmrc"),
+                    "isolated" => {
+                        add_feature(&mut features, "install.isolated-linker", ".npmrc");
+                    }
+                    "hoisted" | "node-modules" => {}
+                    _ => has_registry_configuration = true,
+                }
+            } else {
+                has_registry_configuration = true;
+            }
+        }
+        if has_registry_configuration {
+            add_feature(&mut features, "registry.npmrc", ".npmrc");
         }
     }
-    if read_text(&root.join(".yarnrc.yml"))?
-        .is_some_and(|content| content.contains("nodeLinker: pnp"))
-    {
-        add_feature(&mut features, "install.pnp-linker", ".yarnrc.yml");
+    match yarn_configuration.get("nodeLinker").and_then(Value::as_str) {
+        Some("pnp") => add_feature(&mut features, "install.pnp-linker", ".yarnrc.yml"),
+        Some("pnpm") => add_feature(&mut features, "install.isolated-linker", ".yarnrc.yml"),
+        _ => {}
     }
     if root.join(".pnpmfile.cjs").exists() {
         add_feature(&mut features, "hook.pnpmfile", ".pnpmfile.cjs");
@@ -531,6 +627,19 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
         match noyalib::from_str::<Value>(&content) {
             Ok(Value::Object(configuration)) => {
                 collect_policy_features(&configuration, "pnpm-workspace.yaml#", &mut features);
+                match configuration.get("nodeLinker").and_then(Value::as_str) {
+                    Some("pnp") => add_feature(
+                        &mut features,
+                        "install.pnp-linker",
+                        "pnpm-workspace.yaml#/nodeLinker",
+                    ),
+                    Some("isolated") => add_feature(
+                        &mut features,
+                        "install.isolated-linker",
+                        "pnpm-workspace.yaml#/nodeLinker",
+                    ),
+                    _ => {}
+                }
             }
             Ok(_) => diagnostics.push(Diagnostic::blocking(
                 "CONFIGURATION_PARSE_FAILED",
@@ -543,6 +652,15 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
                 vec!["Repair pnpm-workspace.yaml before retrying inspection.".to_owned()],
             )),
         }
+    }
+    if let Some(content) = read_text(&root.join("bunfig.toml"))?
+        && bun_install_linker(&content) == Some("isolated")
+    {
+        add_feature(
+            &mut features,
+            "install.isolated-linker",
+            "bunfig.toml#[install].linker",
+        );
     }
 
     let observed_features = features

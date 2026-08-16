@@ -5,7 +5,7 @@ description: Defines the versioned, evidence-linked semantic representation cons
 tags: [architecture, ir, manifests, workspaces, provenance]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-15T19:53:59Z}
+generated: { by: bahadirarda, at: 2026-08-16T22:38:36Z}
 sources:
   - id: migration-engine
     resource: /architecture/migration-engine.md
@@ -48,7 +48,7 @@ Every Project IR artifact contains:
 
 Workspace packages are selected from root manifest, pnpm workspace, or Deno workspace patterns. The fingerprint covers all discovered package manifests, package manager configuration, lockfiles, patch evidence, and detected integrations.
 
-Authentication material is never stored in Project IR. Registry configuration contributes only file presence and redacted evidence. Fingerprinting redacts credential assignments, URL user information, sensitive query values, and bearer tokens before hashing.
+Authentication material is never stored in Project IR. Registry configuration contributes only file presence and redacted evidence. Fingerprinting redacts credential assignments, URL user information, sensitive query values, and bearer tokens before hashing. Linker evidence is normalized from current pnpm workspace settings, Yarn configuration, Bun install configuration, and legacy pnpm `.npmrc` input. Yarn lifecycle metadata becomes an allow-list feature only when dependency scripts are disabled globally.
 
 # Dependency Protocols
 

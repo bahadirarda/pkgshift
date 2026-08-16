@@ -144,6 +144,117 @@ describe("target transformations", () => {
     expect(parsed.overrides).toEqual({ "parent>child": "1.2.3" });
   });
 
+  test("renders current pnpm linker and lifecycle policy", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "bun@1.3.14",
+        trustedDependencies: ["esbuild", "sharp"],
+      }),
+      "bun.lock": "{}\n",
+      "bunfig.toml": "[install]\nlinker = \"isolated\"\n",
+    }, "pnpm");
+
+    expect(plan.executable).toBeTrue();
+    const configuration = mutations(plan).find((entry) => entry.path === "pnpm-workspace.yaml");
+    const parsed = Bun.YAML.parse(configuration?.content ?? "") as {
+      nodeLinker: string;
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(parsed.nodeLinker).toBe("isolated");
+    expect(parsed.allowBuilds).toEqual({ esbuild: true, sharp: true });
+    expect(configuration?.content).not.toContain("onlyBuiltDependencies");
+  });
+
+  test("renders a Yarn lifecycle allow-list with dependency scripts disabled", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "pnpm@11.21.0",
+      }),
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "pnpm-workspace.yaml": [
+        "nodeLinker: isolated",
+        "allowBuilds:",
+        "  esbuild: true",
+        "  blocked-package: false",
+        "",
+      ].join("\n"),
+    }, "yarn-modern");
+
+    expect(plan.executable).toBeTrue();
+    const configuration = mutations(plan).find((entry) => entry.path === ".yarnrc.yml");
+    const parsed = Bun.YAML.parse(configuration?.content ?? "") as Record<string, unknown>;
+    expect(parsed.nodeLinker).toBe("pnpm");
+    expect(parsed.enableScripts).toBeFalse();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    const root = JSON.parse(manifest?.content ?? "{}") as {
+      dependenciesMeta: Record<string, { built: boolean }>;
+    };
+    expect(root.dependenciesMeta).toEqual({ esbuild: { built: true } });
+  });
+
+  test("reads a Yarn lifecycle allow-list when migrating to Bun", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "yarn@4.18.0",
+        dependenciesMeta: {
+          esbuild: { built: true },
+          "blocked-package": { built: false },
+        },
+      }),
+      "yarn.lock": "# fixture\n",
+      ".yarnrc.yml": "nodeLinker: node-modules\nenableScripts: false\n",
+    }, "bun");
+
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    const root = JSON.parse(manifest?.content ?? "{}") as Record<string, unknown>;
+    expect(root.trustedDependencies).toEqual(["esbuild"]);
+    expect(root.dependenciesMeta).toBeUndefined();
+  });
+
+  test("blocks Yarn build denials outside allow-list mode", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "yarn@4.18.0",
+        dependenciesMeta: { "native-addon": { built: false } },
+      }),
+      "yarn.lock": "# fixture\n",
+      ".yarnrc.yml": "nodeLinker: node-modules\n",
+    }, "bun");
+
+    expect(plan.executable).toBeFalse();
+    expect(plan.diagnostics.map((entry) => entry.code)).toContain(
+      "YARN_BUILD_POLICY_UNSUPPORTED",
+    );
+  });
+
+  test("preserves an empty Yarn lifecycle allow-list in pnpm", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "yarn@4.18.0",
+      }),
+      "yarn.lock": "# fixture\n",
+      ".yarnrc.yml": "nodeLinker: node-modules\nenableScripts: false\n",
+    }, "pnpm");
+
+    expect(plan.executable).toBeTrue();
+    const configuration = mutations(plan).find((entry) => entry.path === "pnpm-workspace.yaml");
+    const parsed = Bun.YAML.parse(configuration?.content ?? "") as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(parsed.allowBuilds).toEqual({});
+  });
+
   test("preserves a bare scoped Yarn resolution as an npm override", async () => {
     const { plan } = await planFixture({
       "package.json": JSON.stringify({

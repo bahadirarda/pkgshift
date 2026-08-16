@@ -37,6 +37,7 @@ const IMPLEMENTED_TRANSFORMATIONS = new Set([
   "linker.isolated-to-hoisted",
   "registry.npmrc-to-yarnrc",
   "lifecycle.to-pnpm-build-policy",
+  "lifecycle.to-yarn-build-policy",
 ]);
 
 const SOURCE_CONFIGURATION: Record<PackageManagerId, string[]> = {
@@ -349,22 +350,33 @@ function flattenNestedOverrides(
 function sourcePolicies(
   rootManifest: Record<string, unknown>,
   pnpmConfiguration: Record<string, unknown> | null,
+  yarnConfiguration: Record<string, unknown> | null,
 ): {
   overrides: Record<string, unknown>;
   resolutions: Record<string, unknown>;
   packageExtensions: Record<string, unknown>;
   patchedDependencies: Record<string, unknown>;
   trustedDependencies: string[];
+  lifecyclePolicyPresent: boolean;
+  yarnAllowList: boolean;
 } {
   const pnpmManifest = isObject(rootManifest.pnpm) ? rootManifest.pnpm : {};
   const trusted = [
     rootManifest.trustedDependencies,
     pnpmManifest.onlyBuiltDependencies,
     pnpmConfiguration?.onlyBuiltDependencies,
-  ].find(Array.isArray);
+  ].flatMap((value) => Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : []);
   const allowBuilds = isObject(pnpmConfiguration?.allowBuilds)
     ? Object.entries(pnpmConfiguration.allowBuilds)
         .filter((entry) => entry[1] === true)
+        .map(([name]) => name)
+    : [];
+  const yarnBuiltDependencies = yarnConfiguration?.enableScripts === false
+    && isObject(rootManifest.dependenciesMeta)
+    ? Object.entries(rootManifest.dependenciesMeta)
+        .filter((entry) => isObject(entry[1]) && entry[1].built === true)
         .map(([name]) => name)
     : [];
   return {
@@ -391,12 +403,36 @@ function sourcePolicies(
           ? rootManifest.patchedDependencies
           : {},
     trustedDependencies: [...new Set([
-      ...(Array.isArray(trusted)
-        ? trusted.filter((entry): entry is string => typeof entry === "string")
-        : []),
+      ...trusted,
       ...allowBuilds,
+      ...yarnBuiltDependencies,
     ])].sort(),
+    lifecyclePolicyPresent: rootManifest.trustedDependencies !== undefined
+      || pnpmManifest.onlyBuiltDependencies !== undefined
+      || pnpmConfiguration?.onlyBuiltDependencies !== undefined
+      || pnpmConfiguration?.allowBuilds !== undefined
+      || yarnConfiguration?.enableScripts === false,
+    yarnAllowList: yarnConfiguration?.enableScripts === false,
   };
+}
+
+function removeLifecyclePolicy(
+  manifest: Record<string, unknown>,
+  removeYarnBuildPolicy: boolean,
+): void {
+  delete manifest.trustedDependencies;
+  if (isObject(manifest.pnpm)) {
+    delete manifest.pnpm.onlyBuiltDependencies;
+    delete manifest.pnpm.allowBuilds;
+    if (Object.keys(manifest.pnpm).length === 0) delete manifest.pnpm;
+  }
+  if (!removeYarnBuildPolicy || !isObject(manifest.dependenciesMeta)) return;
+  for (const [name, value] of Object.entries(manifest.dependenciesMeta)) {
+    if (!isObject(value)) continue;
+    delete value.built;
+    if (Object.keys(value).length === 0) delete manifest.dependenciesMeta[name];
+  }
+  if (Object.keys(manifest.dependenciesMeta).length === 0) delete manifest.dependenciesMeta;
 }
 
 function compatibleResolutions(
@@ -426,7 +462,7 @@ function configurePolicies(
   delete manifest.resolutions;
   delete manifest.packageExtensions;
   delete manifest.patchedDependencies;
-  delete manifest.trustedDependencies;
+  removeLifecyclePolicy(manifest, policies.yarnAllowList);
 
   let overrides = policies.overrides;
   if (Object.keys(overrides).length === 0 && Object.keys(policies.resolutions).length > 0) {
@@ -461,8 +497,10 @@ function configurePolicies(
     if (Object.keys(policies.patchedDependencies).length > 0) {
       targetConfiguration.patchedDependencies = policies.patchedDependencies;
     }
-    if (policies.trustedDependencies.length > 0) {
-      targetConfiguration.onlyBuiltDependencies = policies.trustedDependencies;
+    if (policies.lifecyclePolicyPresent) {
+      targetConfiguration.allowBuilds = Object.fromEntries(
+        policies.trustedDependencies.map((name) => [name, true]),
+      );
     }
     if (Object.keys(catalogs.default).length > 0) targetConfiguration.catalog = catalogs.default;
     if (Object.keys(catalogs.named).length > 0) targetConfiguration.catalogs = catalogs.named;
@@ -494,6 +532,9 @@ function configurePolicies(
     }
     if (target === "yarn-modern" && Object.keys(policies.packageExtensions).length > 0) {
       targetConfiguration.packageExtensions = policies.packageExtensions;
+    }
+    if (target === "yarn-modern" && policies.lifecyclePolicyPresent) {
+      targetConfiguration.enableScripts = false;
     }
     if (target === "yarn-modern" && policies.trustedDependencies.length > 0) {
       manifest.dependenciesMeta = {
@@ -553,7 +594,9 @@ function parseNpmrcForYarn(
     if (separator < 1) continue;
     const setting = line.slice(0, separator).trim();
     const value = line.slice(separator + 1).trim();
-    if (setting === "registry") {
+    if (setting === "node-linker" && ["pnp", "isolated", "hoisted", "node-modules"].includes(value)) {
+      continue;
+    } else if (setting === "registry") {
       output.npmRegistryServer = value;
     } else if (/^@[^:]+:registry$/.test(setting)) {
       const scope = setting.slice(1, setting.indexOf(":"));
@@ -672,8 +715,36 @@ export async function transformProject(
       ));
     }
   }
+  const yarnText = await readText(join(inspection.root, ".yarnrc.yml"));
+  let yarnConfiguration: Record<string, unknown> | null = null;
+  if (yarnText !== null) {
+    try {
+      const parsed: unknown = Bun.YAML.parse(yarnText);
+      yarnConfiguration = isObject(parsed) ? parsed : null;
+    } catch (error) {
+      diagnostics.push(diagnostic(
+        "CONFIGURATION_PARSE_FAILED",
+        error instanceof Error ? error.message : ".yarnrc.yml could not be parsed.",
+        ".yarnrc.yml",
+      ));
+    }
+  }
   const catalogs = catalogState(rootManifest, pnpmConfiguration);
-  const policies = sourcePolicies(rootManifest, pnpmConfiguration);
+  const policies = sourcePolicies(rootManifest, pnpmConfiguration, yarnConfiguration);
+  if (
+    source === "yarn-modern"
+    && !policies.yarnAllowList
+    && isObject(rootManifest.dependenciesMeta)
+    && Object.values(rootManifest.dependenciesMeta).some((entry) =>
+      isObject(entry) && entry.built === false
+    )
+  ) {
+    diagnostics.push(diagnostic(
+      "YARN_BUILD_POLICY_UNSUPPORTED",
+      "The target cannot preserve Yarn per-dependency build denials safely.",
+      "package.json",
+    ));
+  }
   const targetConfiguration: Record<string, unknown> = {};
   const targetDefinition = getPackageManager(target);
 
