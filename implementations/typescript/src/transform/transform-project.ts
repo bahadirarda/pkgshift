@@ -404,7 +404,8 @@ function compatibleResolutions(
 ): Record<string, string> | null {
   const output: Record<string, string> = {};
   for (const [selector, value] of Object.entries(resolutions)) {
-    if (typeof value !== "string" || selector.includes("**") || selector.includes("/")) {
+    const barePackage = /^(?:@[^/@*]+\/)?[^/@*]+$/.test(selector);
+    if (typeof value !== "string" || !barePackage) {
       return null;
     }
     output[selector] = value;

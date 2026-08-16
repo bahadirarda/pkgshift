@@ -4,7 +4,7 @@ title: Repository Layout
 description: Maps the MVP source tree to migration planning, execution, verification, recovery, CLI, documentation, and skill boundaries.
 tags: [architecture, codebase, rust, typescript, monorepo, testing]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-16T21:09:25Z}
 sources:
   - id: migration-engine
     resource: /architecture/migration-engine.md
@@ -59,12 +59,13 @@ Tests create isolated temporary repositories and remove only generated fixtures.
 - Project IR extraction and secret-safe repository fingerprints.
 - Native, transformed, lossy, unsupported, and unknown capability decisions.
 - Deterministic target rendering for npm, pnpm, both Yarn families, and Bun.
+- Rust policy fixtures for npm and pnpm overrides, Yarn resolutions, scoped packages, unsupported selectors, and policy discovered in `pnpm-workspace.yaml`.
 - Exact approval and stale-plan rejection before mutation.
 - Artifact, snapshot, execution report, and journal integrity.
 - Journal revision conflicts and orphan-lock recovery.
 - Successful and failed target installation paths.
 - Mid-run precondition conflicts and partial-failure rollback.
-- Rust subprocess migrations for pnpm-to-Bun with rollback and npm-to-pnpm.
+- Rust subprocess migrations for pnpm-to-Bun with rollback and npm-to-pnpm with nested override rendering.
 - Rust subprocess trial with no source writes, native importer ordering, intentional target graph drift, and fail-closed lock format fixtures.
 - Rust planning coverage for all 20 basic production-adapter directions.
 - Live Rust runs with Bun 1.3.14 covering dependency-bearing npm-to-Bun trial, native migration, install, graph proof, apply, and rollback.

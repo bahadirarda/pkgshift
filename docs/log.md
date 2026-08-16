@@ -1,5 +1,11 @@
 # Documentation Update Log
 
+## 2026-08-17
+
+* **Parity**: Ported deterministic npm and pnpm override plus Yarn resolution rendering to the Rust primary engine.
+* **Safety**: Added pnpm workspace policy discovery and blocking diagnostics for nested or scoped selector forms that cannot preserve target semantics.
+* **Verification**: Added Rust unit and subprocess coverage for nested override translation, Yarn-to-npm policy migration, scoped package resolutions, pnpm workspace policy retention, and unsupported selector rejection.
+
 ## 2026-08-16
 
 * **Calendar versioning**: Replaced counter-only pre-1 package versions with deterministic `0.YYYYMMDD.REVISION` identities while preserving Changesets as the compatibility-impact and release-note ledger.
