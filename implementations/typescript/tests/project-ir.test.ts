@@ -170,4 +170,27 @@ describe("Project IR", () => {
     expect(JSON.stringify(first)).not.toContain("first-secret");
     expect(JSON.stringify(second)).not.toContain("second-secret");
   });
+
+  test("includes arbitrary project patch files in repository fingerprints", async () => {
+    const root = await createProject({
+      "package.json": JSON.stringify({
+        name: "fixture",
+        packageManager: "bun@1.3.14",
+        patchedDependencies: { "left-pad@1.3.0": "patches/left-pad.patch" },
+      }),
+      "bun.lock": "{}\n",
+      "patches/left-pad.patch": "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n",
+    });
+    const first = await inspectProject(root);
+
+    await writeFile(
+      join(root, "patches/left-pad.patch"),
+      "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n+changed\n",
+      "utf8",
+    );
+    const second = await inspectProject(root);
+
+    expect(first.relevantFiles).toContain("patches/left-pad.patch");
+    expect(first.fingerprint).not.toBe(second.fingerprint);
+  });
 });

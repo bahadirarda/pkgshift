@@ -2,6 +2,10 @@
 
 ## 2026-08-17
 
+* **Parity**: Added validated `packageExtensions` translation among npm, pnpm, and Yarn Modern in both engines.
+* **Patching**: Added exact-version text patch conversion among Yarn Modern, pnpm, and Bun, including transitive Yarn resolutions and current pnpm workspace policy output.
+* **Safety**: Added fail-closed patch selector, path, format, and conflict diagnostics, and bound every project `.patch` file to repository fingerprints and exact approvals.
+* **Verification**: Added bidirectional renderer fixtures, CLI subprocess migrations, post-plan patch drift rejection, and a real Bun patch-application acceptance run.
 * **Parity**: Ported Plug and Play and isolated linker rendering plus Yarn Modern registry translation into the Rust primary engine.
 * **Lifecycle policy**: Added bidirectional Bun, pnpm, and Yarn Modern allow-list conversion, emitting current pnpm `allowBuilds` output and Yarn `enableScripts: false` with per-dependency build metadata.
 * **Safety**: Kept literal registry credentials out of persisted Rust plans, required environment references for Yarn authentication, and blocked unsupported `.npmrc` settings.

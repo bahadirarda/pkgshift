@@ -28,7 +28,7 @@
 </p>
 
 > [!NOTE]
-> pkgshift is a tested technical MVP. GitHub Releases is the native binary channel, while the `pkgshift` and `pkgshift-core` crates use crates.io. Registry publication is an explicit, separately approved step because published crate versions are permanent. Both implementations live under `implementations/`: Rust is the primary CLI, while TypeScript remains an executable compatibility reference.
+> pkgshift is a tested technical MVP. GitHub Releases is the native binary channel; the `pkgshift` and `pkgshift-core` crates are prepared for crates.io but are not published there yet. Registry publication is an explicit, separately approved step because published crate versions are permanent. Both implementations live under `implementations/`: Rust is the primary CLI, while TypeScript remains an executable compatibility reference.
 
 ## Install
 
@@ -38,7 +38,7 @@ Install the latest native binary on Linux or macOS with the checksum-verifying i
 curl --proto '=https' --tlsv1.2 -LsSf https://bahadirarda.github.io/pkgshift/install.sh | sh
 ```
 
-Set `PKGSHIFT_VERSION=v0.20260816.0` to pin an exact calendar release or `PKGSHIFT_INSTALL_DIR` to select a destination. The [installer source](site/install.sh) is tracked in this repository and verifies the release archive against `SHA256SUMS` before extraction.
+Set `PKGSHIFT_VERSION=v0.20260817.1` to pin an exact calendar release or `PKGSHIFT_INSTALL_DIR` to select a destination. The [installer source](site/install.sh) is tracked in this repository and verifies the release archive against `SHA256SUMS` before extraction.
 
 Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, and place `pkgshift` on your `PATH`. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations. Its bundled `release.json` records the calendar version and exact source commit.
 
@@ -94,7 +94,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | --- | --- |
 | Repository understanding | Combines manifest, lockfile, workspace, configuration, and integration evidence instead of guessing from one file. |
 | Semantic planning | Builds a versioned Project IR and evaluates every observed capability against the target adapter. |
-| Policy translation | Converts supported linker, registry, override, resolution, and lifecycle allow-list semantics into deterministic target configuration. |
+| Policy translation | Converts supported linker, registry, override, resolution, package-extension, exact text-patch, and lifecycle allow-list semantics into deterministic target configuration. |
 | Approval boundary | Produces an immutable plan identifier and requires approval for that exact plan before mutation. |
 | Transactional execution | Rechecks preconditions, snapshots affected files, journals operations, and stops at the first unsafe transition. |
 | Verification | Normalizes source and target lock graphs, blocks resolution or comparable integrity drift, and checks planned digests, target selection, workspace membership, and installer completion. |
@@ -142,7 +142,7 @@ Rust and TypeScript share product terminology, adapter baselines, approval seman
 | Implementation | Role | Toolchain | Validation boundary |
 | --- | --- | --- | --- |
 | Rust | Primary product engine and CLI | Rust 1.97.1 | Lock graph format tests, 20-direction planning, policy conversion, subprocess migrations, real Bun acceptance, isolated trial, drift failure, rollback, and release build |
-| TypeScript | Executable compatibility and parity reference | Bun 1.3.14, strict TypeScript | 66 unit, integration, policy, safety, skill, and real CLI transaction tests |
+| TypeScript | Executable compatibility and parity reference | Bun 1.3.14, strict TypeScript | Full unit, integration, policy, safety, skill, and real CLI transaction suite |
 
 ## Agent workflow
 

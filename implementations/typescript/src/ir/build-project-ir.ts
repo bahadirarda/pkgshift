@@ -399,6 +399,9 @@ export async function buildProjectIR(
     addPolicy(policies, "trusted-dependencies", "pnpm-workspace.yaml", "/onlyBuiltDependencies", pnpmConfiguration.onlyBuiltDependencies);
     addPolicy(policies, "trusted-dependencies", "pnpm-workspace.yaml", "/allowBuilds", pnpmConfiguration.allowBuilds);
   }
+  if (yarnConfiguration) {
+    addPolicy(policies, "package-extensions", ".yarnrc.yml", "/packageExtensions", yarnConfiguration.packageExtensions);
+  }
   if (isObject(rootManifest.workspaces)) {
     addPolicy(policies, "catalog", "package.json", "/workspaces/catalog", rootManifest.workspaces.catalog);
     addPolicy(policies, "catalogs", "package.json", "/workspaces/catalogs", rootManifest.workspaces.catalogs);
@@ -452,6 +455,17 @@ export async function buildProjectIR(
       addObservedFeature(features, "patch.patched-dependencies", evidence, policy.entries);
     } else if (policy.kind === "trusted-dependencies") {
       addObservedFeature(features, "lifecycle.trusted-dependencies", evidence, policy.entries);
+    }
+  }
+  if (isObject(rootManifest.resolutions)) {
+    for (const [selector, specifier] of Object.entries(rootManifest.resolutions)) {
+      if (typeof specifier === "string" && specifier.startsWith("patch:")) {
+        addObservedFeature(features, "dependency.patch-protocol", {
+          location: "package.json",
+          pointer: `/resolutions/${selector.replaceAll("~", "~0").replaceAll("/", "~1")}`,
+          detail: `${selector} uses the patch protocol through a root resolution`,
+        });
+      }
     }
   }
 

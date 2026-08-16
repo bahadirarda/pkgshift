@@ -63,7 +63,7 @@ function isMigrationRelevantFile(path: string): boolean {
   if (path === "package.json" || path.endsWith("/package.json")) {
     return true;
   }
-  if (path.startsWith(".yarn/patches/") && path.endsWith(".patch")) {
+  if (path.endsWith(".patch")) {
     return true;
   }
   return [

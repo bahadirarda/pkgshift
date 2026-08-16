@@ -5,11 +5,14 @@ description: Defines implemented package manager target tiers and execution boun
 tags: [support, npm, pnpm, yarn, bun, vlt, deno]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-16T22:38:36Z}
+generated: { by: bahadirarda, at: 2026-08-16T23:32:12Z}
 sources:
   - id: npm-install
     resource: https://docs.npmjs.com/cli/install/
     title: npm install documentation
+  - id: npm-package-json
+    resource: https://docs.npmjs.com/cli/configuring-npm/package-json/
+    title: npm package manifest documentation
   - id: pnpm-workspaces
     resource: https://pnpm.io/workspaces
     title: pnpm workspace documentation
@@ -25,6 +28,12 @@ sources:
   - id: pnpm-build-policy
     resource: https://pnpm.io/settings/build
     title: pnpm build policy documentation
+  - id: pnpm-resolution-policy
+    resource: https://pnpm.io/settings/dependency-resolution
+    title: pnpm dependency resolution policy documentation
+  - id: pnpm-patching
+    resource: https://pnpm.io/cli/patch
+    title: pnpm patch documentation
   - id: yarn-modern
     resource: https://yarnpkg.com/
     title: Yarn documentation
@@ -34,12 +43,18 @@ sources:
   - id: yarn-manifest
     resource: https://yarnpkg.com/configuration/manifest
     title: Yarn manifest documentation
+  - id: yarn-patching
+    resource: https://yarnpkg.com/features/patching
+    title: Yarn patching documentation
   - id: yarn-classic
     resource: https://classic.yarnpkg.com/lang/en/docs/workspaces/
     title: Yarn Classic workspace documentation
   - id: bun-install
     resource: https://bun.com/docs/pm/cli/install
     title: Bun install documentation
+  - id: bun-patching
+    resource: https://bun.sh/docs/pm/cli/patch
+    title: Bun patch documentation
   - id: bun-pm-migrate
     resource: https://bun.sh/docs/pm/cli/pm#migrate
     title: Bun package manager migration documentation
@@ -82,7 +97,7 @@ The labels below describe current technical MVP behavior. Production target mean
 | pnpm | Production target | npm-compatible semantics plus workspace files, catalogs, overrides, patches, explicit linker selection, and `allowBuilds` lifecycle policy. |
 | Yarn Classic | Production target | Classic lockfile, workspace behavior, resolutions, registry configuration, and script commands. |
 | Yarn Modern | Production target | Modern lockfile, workspace tools, protocols, constraints, patches, plugins, portable linker modes, environment-backed registry translation, and lifecycle allow-lists. |
-| Bun | Production target | Bun lockfile, install behavior, workspaces, overrides, catalogs where supported, isolated linking, trusted dependencies, registry configuration, and script commands. |
+| Bun | Production target | Bun lockfile, install behavior, workspaces, overrides, catalogs where supported, exact text patches, isolated linking, trusted dependencies, registry configuration, and script commands. |
 | vlt | Preview target | Detection, capability reporting, and guarded migration planning before production guarantees. |
 | Deno dependency mode | Preview target | npm and JSR dependency declarations plus workspace dependency behavior; not a runtime migration. |
 
@@ -138,8 +153,10 @@ Production targets provide:
 - Bidirectional lifecycle allow-list translation among Bun `trustedDependencies`, pnpm `allowBuilds`, and Yarn Modern `dependenciesMeta` with `enableScripts: false`.
 - Plug and Play or isolated linker translation to pnpm, Yarn Modern, Bun, or an explicitly accepted hoisted layout.
 - Secret-safe `.npmrc` registry translation to Yarn Modern for default and scoped registries, boolean authentication policy, and environment-backed tokens.
+- Shared-schema `packageExtensions` translation among npm, pnpm, and Yarn Modern.
+- Exact-version text patch translation among Yarn Modern `patch:` locators, pnpm `patchedDependencies`, and Bun `patchedDependencies`, including transitive Yarn patch resolutions.
 
-Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, Yarn build denials outside allow-list mode, unsupported patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, dependency-level lifecycle policy targeting npm or Yarn Classic, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. Edge-level and platform-aware graph policies remain release-hardening extensions beyond the blocking `resolution-set-v1` policy.
+Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, Yarn build denials outside allow-list mode, range or binary patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, dependency-level lifecycle policy targeting npm or Yarn Classic, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. Edge-level and platform-aware graph policies remain release-hardening extensions beyond the blocking `resolution-set-v1` policy.
 
 # Native Migration Paths
 
