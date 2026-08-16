@@ -1,6 +1,6 @@
 {
   "name": "pkgshift-workspace",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Polyglot workspace for deterministic, transactional package manager migrations.",
   "private": true,
   "packageManager": "bun@1.3.14",
