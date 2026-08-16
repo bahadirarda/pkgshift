@@ -1,5 +1,11 @@
 # pkgshift-core
 
+## 0.20260817.0
+
+### Minor Changes
+
+- f0dd77a: Render the deterministic npm and pnpm override plus Yarn resolution subset in the Rust primary path. Detect policy in `pnpm-workspace.yaml`, preserve bare scoped package resolutions, and block selector shapes whose semantics cannot be retained.
+
 ## 0.20260816.0
 
 ### Patch Changes

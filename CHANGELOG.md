@@ -7,6 +7,12 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 
 ## [Unreleased]
 
+## [0.20260817.0] - 2026-08-17
+
+### Changed
+
+- Render the deterministic npm and pnpm override plus Yarn resolution subset in the Rust primary path. Detect policy in `pnpm-workspace.yaml`, preserve bare scoped package resolutions, and block selector shapes whose semantics cannot be retained.
+
 ## [0.20260816.0] - 2026-08-16
 
 ### Changed
@@ -44,7 +50,8 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 - Added cross-platform GitHub Release archives, SHA-256 checksums, and build provenance attestations.
 - Added crates.io-ready package metadata and an explicitly approved publication workflow.
 
-[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260816.0...HEAD
+[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.0...HEAD
+[0.20260817.0]: https://github.com/bahadirarda/pkgshift/compare/v0.20260816.0...v0.20260817.0
 [0.20260816.0]: https://github.com/bahadirarda/pkgshift/compare/v0.2.0...v0.20260816.0
 [0.2.0]: https://github.com/bahadirarda/pkgshift/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/bahadirarda/pkgshift/compare/v0.1.1...v0.1.2
