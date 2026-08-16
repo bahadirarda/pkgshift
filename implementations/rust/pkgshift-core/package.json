@@ -1,0 +1,6 @@
+{
+  "name": "pkgshift-core",
+  "version": "0.1.0",
+  "description": "Changesets version proxy for the pkgshift-core Rust crate.",
+  "private": true
+}

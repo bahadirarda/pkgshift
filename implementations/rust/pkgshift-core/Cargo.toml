@@ -13,6 +13,7 @@ documentation = "https://docs.rs/pkgshift-core"
 readme = "README.md"
 keywords = ["package-manager", "migration", "codemod", "automation"]
 categories = ["development-tools", "filesystem"]
+exclude = ["package.json"]
 
 [dependencies]
 serde.workspace = true

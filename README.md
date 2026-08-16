@@ -26,7 +26,7 @@
 
 ## Install
 
-Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, and place `pkgshift` on your `PATH`. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations.
+Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, and place `pkgshift` on your `PATH`. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations. Its bundled `release.json` records the stable version plus a date-and-commit build identity.
 
 The registry package installs with Cargo once the matching version is available on crates.io:
 
@@ -107,6 +107,7 @@ implementations/
 
 docs/                    shared OKF knowledge bundle
 skills/pkgshift/         shared portable Agent Skill
+.changeset/              committed release intent and fixed-group policy
 Cargo.toml               Rust workspace orchestration
 package.json             polyglot repository orchestration
 ```
@@ -202,6 +203,8 @@ bun run check:typescript  # strict types, 57 reference tests, and bundle validat
 bun run validate          # OKF, links, Agent Skill, and English-only content
 bun run check             # complete polyglot validation suite
 bun run build             # Rust release binary and TypeScript reference bundle
+bun run changeset         # declare user-visible release intent
+bun run changeset:status  # inspect the calculated fixed-group release plan
 bun run version:check     # synchronized SemVer, package identities, changelog, and release tag
 ```
 

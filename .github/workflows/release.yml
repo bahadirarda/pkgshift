@@ -89,6 +89,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Install pinned Rust toolchain
         shell: bash
@@ -104,9 +106,22 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           staging="pkgshift-v${version}-${TARGET}"
+          commit="$(git rev-parse "$GITHUB_SHA^{commit}")"
+          commit_date="$(git show -s --format=%cs "$commit")"
+          build_id="${version}+${commit_date//-/}.sha.${commit:0:12}"
           mkdir -p "$staging" dist
           cp "target/${TARGET}/release/pkgshift" "$staging/pkgshift"
           cp README.md LICENSE "$staging/"
+          jq --null-input \
+            --arg name "pkgshift" \
+            --arg version "$version" \
+            --arg buildId "$build_id" \
+            --arg tag "$GITHUB_REF_NAME" \
+            --arg commit "$commit" \
+            --arg commitDate "$commit_date" \
+            --arg target "$TARGET" \
+            '{name: $name, version: $version, buildId: $buildId, tag: $tag, commit: $commit, commitDate: $commitDate, target: $target}' \
+            > "$staging/release.json"
           tar -czf "dist/${staging}.tar.gz" "$staging"
 
       - name: Create Windows release archive
@@ -115,9 +130,21 @@ jobs:
         run: |
           $Version = $env:GITHUB_REF_NAME.TrimStart("v")
           $Staging = "pkgshift-v$Version-$env:TARGET"
+          $Commit = (git rev-parse "$env:GITHUB_SHA^{commit}").Trim()
+          $CommitDate = (git show -s --format=%cs $Commit).Trim()
+          $BuildId = "$Version+$($CommitDate.Replace('-', '')).sha.$($Commit.Substring(0, 12))"
           New-Item -ItemType Directory -Force -Path $Staging, dist | Out-Null
           Copy-Item "target/$env:TARGET/release/pkgshift.exe" "$Staging/pkgshift.exe"
           Copy-Item README.md, LICENSE $Staging
+          [ordered]@{
+            name = "pkgshift"
+            version = $Version
+            buildId = $BuildId
+            tag = $env:GITHUB_REF_NAME
+            commit = $Commit
+            commitDate = $CommitDate
+            target = $env:TARGET
+          } | ConvertTo-Json | Set-Content "$Staging/release.json"
           Compress-Archive -Path $Staging -DestinationPath "dist/$Staging.zip"
 
       - name: Upload release archive

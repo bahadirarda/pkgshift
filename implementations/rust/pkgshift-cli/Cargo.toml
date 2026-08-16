@@ -13,6 +13,7 @@ documentation = "https://docs.rs/pkgshift"
 readme = "README.md"
 keywords = ["package-manager", "migration", "cli", "codemod", "automation"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = ["package.json"]
 
 [[bin]]
 name = "pkgshift"

@@ -28,9 +28,17 @@ interface CargoManifest {
   };
 }
 
+interface ChangesetsConfig {
+  fixed?: string[][];
+  privatePackages?: {
+    version?: boolean;
+    tag?: boolean;
+  };
+}
+
 async function filesMatching(pattern: string): Promise<string[]> {
   return (await Array.fromAsync(
-    new Bun.Glob(pattern).scan({ cwd: ".", onlyFiles: true }),
+    new Bun.Glob(pattern).scan({ cwd: ".", dot: true, onlyFiles: true }),
   )).sort();
 }
 
@@ -200,6 +208,39 @@ async function validateSkill(): Promise<void> {
   }
 }
 
+async function validateChangesets(): Promise<number> {
+  const allowedPackages = new Set([
+    "pkgshift",
+    "pkgshift-core",
+    "@bahadirarda/pkgshift-typescript",
+  ]);
+  const paths = (await filesMatching(".changeset/*.md"))
+    .filter((path) => !path.endsWith("/README.md"));
+  for (const path of paths) {
+    const content = await Bun.file(path).text();
+    const frontmatter = parseFrontmatter(path, content);
+    if (frontmatter) {
+      const packages = Object.keys(frontmatter);
+      if (packages.length === 0) {
+        errors.push(`${path}: Changeset must select at least one release package`);
+      }
+      for (const packageName of packages) {
+        if (!allowedPackages.has(packageName)) {
+          errors.push(`${path}: unsupported release package ${packageName}`);
+        }
+        if (!new Set(["major", "minor", "patch"]).has(String(frontmatter[packageName]))) {
+          errors.push(`${path}: ${packageName} requires a major, minor, or patch bump`);
+        }
+      }
+    }
+    const summary = content.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
+    if (!summary) {
+      errors.push(`${path}: Changeset summary must not be empty`);
+    }
+  }
+  return paths.length;
+}
+
 async function validateReleaseMetadata(): Promise<void> {
   const rootCargo = Bun.TOML.parse(
     await Bun.file("Cargo.toml").text(),
@@ -214,6 +255,12 @@ async function validateReleaseMetadata(): Promise<void> {
   const typescriptPackage = await Bun.file(
     "implementations/typescript/package.json",
   ).json() as PackageMetadata;
+  const cliProxy = await Bun.file(
+    "implementations/rust/pkgshift-cli/package.json",
+  ).json() as PackageMetadata;
+  const coreProxy = await Bun.file(
+    "implementations/rust/pkgshift-core/package.json",
+  ).json() as PackageMetadata;
 
   const version = rootCargo.workspace?.package?.version;
   const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/;
@@ -225,6 +272,8 @@ async function validateReleaseMetadata(): Promise<void> {
   const synchronizedVersions = [
     ["package.json", rootPackage.version],
     ["implementations/typescript/package.json", typescriptPackage.version],
+    ["implementations/rust/pkgshift-cli/package.json", cliProxy.version],
+    ["implementations/rust/pkgshift-core/package.json", coreProxy.version],
     [
       "implementations/rust/pkgshift-cli/Cargo.toml pkgshift-core dependency",
       cliCargo.dependencies?.["pkgshift-core"]?.version,
@@ -253,8 +302,42 @@ async function validateReleaseMetadata(): Promise<void> {
   if (cliCargo.package?.name !== "pkgshift") {
     errors.push("implementations/rust/pkgshift-cli/Cargo.toml: public CLI crate must be named pkgshift");
   }
+  if (cliProxy.name !== "pkgshift" || cliProxy.private !== true) {
+    errors.push("implementations/rust/pkgshift-cli/package.json: invalid private Changesets proxy");
+  }
+  if (coreProxy.name !== "pkgshift-core" || coreProxy.private !== true) {
+    errors.push("implementations/rust/pkgshift-core/package.json: invalid private Changesets proxy");
+  }
+
+  const changesetsConfig = await Bun.file(
+    ".changeset/config.json",
+  ).json() as ChangesetsConfig;
+  const fixedGroup = changesetsConfig.fixed?.find((group) => group.includes("pkgshift"));
+  const expectedFixedGroup = [
+    "@bahadirarda/pkgshift-typescript",
+    "pkgshift",
+    "pkgshift-core",
+  ];
+  if (
+    !fixedGroup
+    || [...fixedGroup].sort().join("\n") !== expectedFixedGroup.join("\n")
+  ) {
+    errors.push(".changeset/config.json: implementations must remain one fixed release group");
+  }
+  if (
+    changesetsConfig.privatePackages?.version !== true
+    || changesetsConfig.privatePackages.tag !== false
+  ) {
+    errors.push(".changeset/config.json: private proxies must be versioned but never tagged");
+  }
 
   const changelog = await Bun.file("CHANGELOG.md").text();
+  const unreleasedBody = changelog.match(
+    /^## \[Unreleased\]\n([\s\S]*?)(?=^## \[)/m,
+  )?.[1]?.trim();
+  if (unreleasedBody) {
+    errors.push("CHANGELOG.md: release notes must be declared through pending Changesets");
+  }
   const escapedVersion = version.replaceAll(".", "\\.");
   if (!new RegExp(`^## \\[${escapedVersion}\\] - \\d{4}-\\d{2}-\\d{2}$`, "m").test(changelog)) {
     errors.push(`CHANGELOG.md: missing dated ${version} release section`);
@@ -279,6 +362,7 @@ async function validateReleaseMetadata(): Promise<void> {
 async function validateEnglishOnly(): Promise<void> {
   const roots = ["AGENTS.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "README.md"];
   const patterns = [
+    ".changeset/*.{json,md}",
     "implementations/rust/**/*.rs",
     "implementations/rust/**/LICENSE",
     "docs/**/*.md",
@@ -302,6 +386,7 @@ async function validateEnglishOnly(): Promise<void> {
 
 const conceptCount = await validateOkf();
 await validateSkill();
+const changesetCount = await validateChangesets();
 await validateReleaseMetadata();
 await validateLinks("README.md", await Bun.file("README.md").text(), null);
 await validateEnglishOnly();
@@ -311,4 +396,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Validated ${conceptCount} OKF Markdown files, release metadata, the portable Agent Skill, internal links, and English-only content.`);
+console.log(`Validated ${conceptCount} OKF Markdown files, ${changesetCount} pending Changeset(s), release metadata, the portable Agent Skill, internal links, and English-only content.`);

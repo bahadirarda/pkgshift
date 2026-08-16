@@ -4,6 +4,7 @@
 
 * **Release**: Defined synchronized Semantic Versioning, Conventional Commit titles, curated changelogs, public crate identities, native artifact names, checksums, provenance, and ordered crates.io publication.
 * **Supply Chain**: Prepared complete draft releases before publication and enabled immutable tags and assets for future releases.
+* **Versioning**: Added fixed-group Changesets release intent, automated version pull requests, synchronized Cargo and Bun metadata, and date-plus-source-revision build identities without replacing SemVer.
 * **Architecture**: Established a Rust-primary polyglot monorepo with sibling `implementations/rust` and `implementations/typescript` boundaries.
 * **Decision**: Added the accepted Rust-primary monorepo decision, parity-gate policy, and shared schema boundary.
 * **Implementation**: Ported weighted detection, Project IR, capability analysis, deterministic planning, exact approval, state persistence, apply, verification, and rollback into Rust.
