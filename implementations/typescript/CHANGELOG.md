@@ -1,5 +1,11 @@
 # @bahadirarda/pkgshift-typescript
 
+## 0.2.0
+
+### Minor Changes
+
+- f8251a6: Add isolated migration trials, target-native lockfile importer selection, and blocking source-to-target resolution graph verification to the Rust primary path. Preserve native importer planning in the TypeScript reference, retain workspace pattern order, and publish the new trust workflow through the Agent Skill and product documentation.
+
 ## 0.1.2
 
 ### Patch Changes
