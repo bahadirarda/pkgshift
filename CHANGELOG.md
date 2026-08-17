@@ -7,6 +7,13 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 
 ## [Unreleased]
 
+## [0.20260817.7] - 2026-08-17
+
+### Changed
+
+- Add targets-optional aggregate migration readiness across every production adapter from one repository evidence context, without ranking candidates or crossing a mutation boundary.
+- Add deterministic, read-only migration readiness reports with target verdicts, capability and integration evidence, projected cleanup and process effects, and no plan or persisted repository state.
+
 ## [0.20260817.6] - 2026-08-17
 
 ### Changed
@@ -95,7 +102,8 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 - Added cross-platform GitHub Release archives, SHA-256 checksums, and build provenance attestations.
 - Added crates.io-ready package metadata and an explicitly approved publication workflow.
 
-[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.6...HEAD
+[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.7...HEAD
+[0.20260817.7]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.6...v0.20260817.7
 [0.20260817.6]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.5...v0.20260817.6
 [0.20260817.5]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.4...v0.20260817.5
 [0.20260817.4]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.3...v0.20260817.4

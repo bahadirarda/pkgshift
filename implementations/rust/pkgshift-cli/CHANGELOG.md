@@ -1,5 +1,12 @@
 # pkgshift
 
+## 0.20260817.7
+
+### Minor Changes
+
+- 920f752: Add targets-optional aggregate migration readiness across every production adapter from one repository evidence context, without ranking candidates or crossing a mutation boundary.
+- 419ca3d: Add deterministic, read-only migration readiness reports with target verdicts, capability and integration evidence, projected cleanup and process effects, and no plan or persisted repository state.
+
 ## 0.20260817.6
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "pkgshift-workspace",
-  "version": "0.20260817.6",
+  "version": "0.20260817.7",
   "description": "Polyglot workspace for deterministic, transactional JavaScript package manager and runtime migrations.",
   "private": true,
   "packageManager": "bun@1.3.14",
