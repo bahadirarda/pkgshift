@@ -32,7 +32,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Versioned Project IR across workspace packages, dependency protocols, policy shapes, linker settings, and integrations.
 - Source-to-target capability analysis backed by explicit rules and authoritative documentation.
 - Real `doctor`, `inspect`, `support`, `plan`, `apply`, `verify`, `rollback`, `explain`, `skill`, and `help` commands.
-- Deterministic migration readiness reports that reuse inspection, Project IR, capability, lock graph, and planning logic while omitting mutation content, plan identities, persistence, process execution, and repository writes.
+- Deterministic target-specific and all-adapter migration readiness reports that reuse one inspection, Project IR, integration, and lock graph context while omitting mutation content, plan identities, persistence, process execution, ranking, and repository writes.
 - A current-directory `pkgshift to <target>` workflow with read-only preview, interactive confirmation, hidden default state, apply, and verification orchestration.
 - An approved `--trial` workflow that executes the exact plan and verification in a disposable copy without persisting source repository state.
 - An aggregate `compare` workflow that binds two or more normalized target plans to one approval and runs each executable candidate in an independent disposable copy without ranking them.

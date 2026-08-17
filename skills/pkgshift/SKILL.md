@@ -12,7 +12,8 @@ Use pkgshift as the deterministic execution boundary. Prefer the guided `pkgshif
 Map the request to the narrowest operation:
 
 - Assess a repository or identify its package manager: inspect.
-- Assess a selected target without creating a plan: migration-readiness doctor.
+- Assess a selected target without creating a plan: target-specific migration-readiness doctor.
+- Discover readiness across every production target: aggregate migration-readiness doctor.
 - Preview a specific migration without execution: guided dry-run.
 - Prove importer, installer, and verification behavior without source writes: guided trial.
 - Compare two or more candidate targets without source writes: aggregate comparison preview, exact approval, then independent target trials.
@@ -23,7 +24,7 @@ Map the request to the narrowest operation:
 - Recover a failed run: explain, request approval, rollback, then verify the rollback.
 - Migrate supported Bun application APIs to Deno: use the dedicated runtime preview, explicit permissions, exact approval, runtime verification, and runtime rollback flow below.
 
-If the target is missing, inspect first. Suggest only targets compatible with the detected repository evidence and capability report.
+If the target is missing, run aggregate doctor. Present every candidate independently and let the user select; do not calculate or assert a winner.
 
 ## Establish the CLI Boundary
 
@@ -50,6 +51,14 @@ Confirm the repository root, source candidates, confidence, workspace topology, 
 When source detection is ambiguous, present the evidence and request a source selection. Do not choose based on one lockfile when other evidence conflicts.
 
 ## Assess Migration Readiness
+
+When the target is undecided, assess all production adapters from one repository context:
+
+```text
+pkgshift doctor --json --no-color --non-interactive
+```
+
+Find the `migration-readiness-matrix` artifact. Treat top-level completion as trustworthy evidence collection, not universal compatibility. Present each nested report's target, verdict, `migrationAvailable`, `availableAfterReview`, capability counts, diagnostics, integration impact, and effects. Retain blocked candidates as evidence. Do not rank candidates or choose a target. Read-only next actions exist only for candidates that are executable or become executable after reviewed lossy acceptance.
 
 When the target is known, assess it before requesting the complete plan:
 

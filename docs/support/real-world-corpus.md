@@ -32,7 +32,7 @@ sources:
 
 # Purpose
 
-Synthetic fixtures prove exact transformations. This corpus adds pinned upstream repositories to expose repository shapes, lockfile variants, integration constraints, installer behavior, and verification outcomes that small fixtures do not reproduce. Every case runs both read-only migration readiness and complete planning. Corpus failures are evidence: pkgshift must distinguish an unsupported capability, an external installer failure, and a post-install dependency graph mismatch instead of reporting all three as a successful migration.
+Synthetic fixtures prove exact transformations. This corpus adds pinned upstream repositories to expose repository shapes, lockfile variants, integration constraints, installer behavior, and verification outcomes that small fixtures do not reproduce. Every case is checked against both its target-specific report and the cached all-adapter readiness matrix before complete planning. Corpus failures are evidence: pkgshift must distinguish an unsupported capability, an external installer failure, and a post-install dependency graph mismatch instead of reporting all three as a successful migration.
 
 # Pinned Repositories
 
@@ -61,7 +61,7 @@ The Rust acceptance suite creates a two-package Bun workspace with a `workspace:
 
 # Automated Readiness and Planning Gate
 
-`validation/real-world-corpus.json` pins all three repository revisions and the expected source, target, doctor verdict, plan status, executability, operation count, capability counts, and required diagnostic codes for six migration directions. `bun run corpus:real-world` performs shallow detached checkouts, executes Rust doctor and plan for every case, asserts both read-only contracts, verifies that every checkout remains clean, and emits one bounded JSON summary.
+`validation/real-world-corpus.json` pins all three repository revisions and the expected source, target, doctor verdict, plan status, executability, operation count, capability counts, and required diagnostic codes for six migration directions. `bun run corpus:real-world` performs shallow detached checkouts, caches aggregate matrices by repository and lossy policy, executes target doctor and plan for every case, asserts all three read-only contracts, verifies that every checkout remains clean, and emits one bounded JSON summary.
 
 The `real-world-corpus` GitHub Actions workflow runs this gate every Monday and on manual dispatch. Default branches never enter the test, a plan identifier is not treated as a stable expectation, and the workflow uploads the summary for 30 days. Installer trials remain in the separately pinned acceptance suite because planning regressions and external registry failures have different ownership.
 

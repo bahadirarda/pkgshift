@@ -86,6 +86,14 @@ pkgshift doctor --to bun
 
 Doctor reuses the deterministic migration engine and reports `ready`, `review-required`, `blocked`, or `already-selected` with capability, integration, cleanup, source-artifact retirement, process, and verification evidence. It creates no plan, persists no state, executes no process, and changes no repository file.
 
+When the target is undecided, assess every production adapter from one repository scan:
+
+```bash
+pkgshift doctor
+```
+
+The returned `migration-readiness-matrix` keeps all seven target reports and their read-only planning actions separate. It does not rank a winner or hide blocked candidates.
+
 ```bash
 # Read-only human preview
 pkgshift to pnpm --dry-run
@@ -133,7 +141,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Capability | pkgshift behavior |
 | --- | --- |
 | Repository understanding | Combines manifest, lockfile, workspace, configuration, and integration evidence instead of guessing from one file. |
-| Migration readiness | Projects whether one target is available, reviewable, or blocked, including affected paths and declared effects, without creating a plan or writing state. |
+| Migration readiness | Projects one target or all seven adapters as available, reviewable, blocked, or already selected, including affected paths and declared effects, without creating a plan or writing state. |
 | Semantic planning | Builds a versioned Project IR and evaluates every observed capability against the target adapter. |
 | Policy translation | Converts supported linker, registry, override, resolution, package-extension, exact text-patch, and lifecycle allow-list semantics into deterministic target configuration. |
 | Approval boundary | Produces an immutable plan identifier and requires approval for that exact plan before mutation. |
@@ -193,7 +201,7 @@ Rust and TypeScript share product terminology, adapter baselines, approval seman
 
 pkgshift is designed for Codex, Claude Code, and other coding agents, but the engine remains deterministic and model-independent.
 
-1. The agent runs read-only doctor for the selected target and presents its readiness evidence.
+1. The agent runs read-only doctor for the selected target, or without `--to` to assess every adapter, and presents its readiness evidence.
 2. The agent requests a complete read-only structured preview only when migration is available or reviewed lossy behavior is accepted.
 3. pkgshift returns exit code `7`, a complete plan, and one exact `nextActions[].argv`.
 4. The agent presents the risks and waits for approval.
@@ -206,6 +214,8 @@ pkgshift to bun --json --no-color --non-interactive
 ```
 
 The `migration-readiness` artifact's `migrationAvailable` field is authoritative. A `doctor_...` report identifier is evidence only and cannot authorize planning or mutation.
+
+With no target, consume the `migration-readiness-matrix` reports independently. Top-level completion means the matrix is trustworthy, not that every target is executable. pkgshift never selects or ranks a target.
 
 For target selection, agents can use `pkgshift compare bun deno --json --no-color --non-interactive`, present the aggregate plan, obtain one process-execution approval, and compare the returned candidate reports. A failed or blocked candidate is evidence, not an internal command failure, when the comparison report itself completes and `repositoryUnchanged` is true.
 

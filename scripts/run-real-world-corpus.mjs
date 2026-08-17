@@ -111,6 +111,50 @@ function doctorCase(testCase, repository) {
   return { report, counts, errors };
 }
 
+const matrixCache = new Map();
+
+function doctorMatrix(testCase, repository) {
+  const cacheKey = `${repository}:${testCase.acceptLossy === true}`;
+  if (matrixCache.has(cacheKey)) {
+    const cached = matrixCache.get(cacheKey);
+    return { ...cached, errors: [...cached.errors] };
+  }
+  const argv = [
+    binary,
+    "doctor",
+    "--cwd",
+    repository,
+    "--json",
+    "--no-color",
+    "--non-interactive",
+  ];
+  if (testCase.acceptLossy) {
+    argv.push("--accept-lossy");
+  }
+  const { execution, result, errors } = executeJson(argv, repository);
+  if (!result) {
+    const failed = { errors };
+    matrixCache.set(cacheKey, failed);
+    return failed;
+  }
+  const matrix = result.artifacts?.find(
+    (artifact) => artifact.type === "migration-readiness-matrix",
+  )?.content;
+  requireEqual(errors, "matrix doctor exit code", execution.exitCode, 0);
+  requireEqual(errors, "matrix doctor status", result.status, "completed");
+  requireEqual(errors, "matrix doctor source", matrix?.source, testCase.expect.source);
+  requireEqual(errors, "matrix doctor read-only", matrix?.readOnly, true);
+  requireEqual(errors, "matrix doctor targets", matrix?.summary?.targets, 7);
+  requireEqual(errors, "matrix doctor plan identifier", result.planId, null);
+  requireEqual(errors, "matrix doctor run identifier", result.runId, null);
+  if (result.artifacts?.some((artifact) => artifact.type === "package-manager-plan")) {
+    errors.push("matrix doctor exposed a package-manager plan artifact");
+  }
+  const value = { matrix, errors };
+  matrixCache.set(cacheKey, value);
+  return { ...value, errors: [...errors] };
+}
+
 async function checkoutRepository(workspace, repository) {
   const destination = join(workspace, repository.id);
   const initialized = run(["git", "init", "--quiet", destination]);
@@ -154,8 +198,10 @@ function executeCase(testCase, repository) {
     argv.push("--accept-lossy");
   }
   const doctor = doctorCase(testCase, repository);
+  const matrix = doctorMatrix(testCase, repository);
   const { execution, result, errors } = executeJson(argv, repository);
   errors.push(...doctor.errors);
+  errors.push(...matrix.errors);
   if (!result) {
     return {
       id: testCase.id,
@@ -165,11 +211,14 @@ function executeCase(testCase, repository) {
   }
 
   const plan = result.artifacts?.find((artifact) => artifact.type === "package-manager-plan")?.content;
+  const matrixReport = matrix.matrix?.reports?.find((report) => report.target === testCase.target);
   requireEqual(errors, "exit code", execution.exitCode, testCase.expect.status === "blocked" ? 3 : 0);
   requireEqual(errors, "status", result.status, testCase.expect.status);
   requireEqual(errors, "source", result.summary?.source, testCase.expect.source);
   requireEqual(errors, "target", result.summary?.target, testCase.target);
   requireEqual(errors, "executable", plan?.executable, testCase.expect.executable);
+  requireEqual(errors, "matrix target verdict", matrixReport?.verdict, testCase.expect.doctorVerdict);
+  requireEqual(errors, "matrix target report", matrixReport?.reportId, doctor.report?.reportId);
   requireEqual(errors, "operations", plan?.operations?.length, testCase.expect.operations);
   for (const [classification, expected] of Object.entries(testCase.expect.capabilities)) {
     requireEqual(
@@ -209,6 +258,7 @@ function executeCase(testCase, repository) {
     doctorVerdict: doctor.report?.verdict,
     doctorReportId: doctor.report?.reportId,
     doctorDiagnosticCounts: doctor.counts,
+    doctorMatrixId: matrix.matrix?.matrixId,
     errors,
   };
 }

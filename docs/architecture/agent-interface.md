@@ -50,6 +50,8 @@ pkgshift doctor --to bun --json --no-color --non-interactive
 
 Doctor returns a deterministic `migration-readiness` artifact with one of `ready`, `review-required`, `blocked`, or `already-selected`. `migrationAvailable` is the authoritative planning signal. The command reuses the engine's inspection, Project IR, capability, lock graph, and planning logic, but emits no package-manager plan, persists no state, runs no process, and performs no repository write. Its optional next action is read-only and does not require approval. A `doctor_...` report identifier never authorizes another command.
 
+When no target is selected, agents omit `--to`. The aggregate command reads common evidence once and emits a deterministic `migration-readiness-matrix` with all seven target reports, summary counts, and independent read-only planning actions. Top-level success means evidence collection completed. It does not rank candidates or imply that every target is executable.
+
 Agents disable prompts and request the same plan as structured data:
 
 ```text
@@ -66,7 +68,7 @@ The staged commands remain available for diagnostics, integration, and recovery:
 
 ```text
 pkgshift inspect [package-manager]
-pkgshift doctor --to <target> [--verify-script <name>]...
+pkgshift doctor [--to <target>] [--verify-script <name>]...
 pkgshift compare <target> <target>... [--verify-script <name>]...
 pkgshift plan package-manager --to <target>
 pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
@@ -162,6 +164,8 @@ Apply persists the run journal, package-local dependency-state cleanup records, 
 Planning with a source lockfile also emits a redacted `source-lock-graph` artifact. Verification emits `lockGraphComparison` inside its report. Trial emits a `trial-report` containing withheld process records and nested verification.
 
 Doctor emits the ordinary inspection, Project IR, capability analysis, optional source lock graph, and one `migration-readiness` artifact. The readiness projection contains paths and argument arrays for expected effects but no file contents, package-manager plan, `planId`, or `runId`. Its `doctor_...` identity is deterministic for the same repository evidence and options but is never an approval identity.
+
+Aggregate doctor emits the shared inspection, Project IR, optional source lock graph, and one `migration-readiness-matrix`. Each nested report follows the target-specific readiness contract. The `doctor_matrix_...` identity binds the repository fingerprint, options, and ordered report identities; it is evidence, not approval.
 
 Multi-target comparison emits one `target-comparison-plan` before approval and one `target-comparison-report` afterward. Its aggregate plan identifier binds every normalized candidate plan. Each executable candidate owns an independent nested trial report; blocked candidates retain their plan diagnostics without process execution. Candidate failures are comparison data, so top-level completion means the report is trustworthy and the source stayed unchanged, not that every target passed.
 

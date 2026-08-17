@@ -1,27 +1,21 @@
 use std::collections::BTreeSet;
-use std::path::Path;
 
 use serde::Serialize;
 
 use crate::catalog::get_package_manager;
+use crate::doctor::context::ReadinessContext;
 use crate::doctor::model::{
     IntegrationImpact, MigrationEffects, MigrationReadiness, ReadinessVerdict,
 };
-use crate::inspect::{build_project_ir, inspect_project};
-use crate::lock_graph::extract_lock_graph;
 use crate::model::{
     CapabilityAnalysis, CapabilitySummary, Diagnostic, DiagnosticSeverity, IntegrationKind,
-    LockGraph, MigrationPlan, MutationAction, PackageManagerId, ProjectInspection, ProjectIr,
-    SupportTier,
+    MigrationPlan, MutationAction, PackageManagerId, ProjectIr, SupportTier,
 };
 use crate::plan::{analyze_capabilities, plan_package_manager_migration};
 use crate::util::{Result, short_digest};
 
 pub(crate) struct ReadinessAssessment {
-    pub inspection: ProjectInspection,
-    pub project_ir: Option<ProjectIr>,
     pub capability_analysis: Option<CapabilityAnalysis>,
-    pub source_lock_graph: Option<LockGraph>,
     pub report: MigrationReadiness,
 }
 
@@ -162,27 +156,21 @@ fn verdict(
 }
 
 pub(crate) fn assess(
-    cwd: &Path,
+    context: &ReadinessContext,
     target: PackageManagerId,
     accepted_lossy: bool,
     verification_scripts: &[String],
 ) -> Result<ReadinessAssessment> {
-    let inspection = inspect_project(cwd)?;
-    let project_ir = build_project_ir(&inspection)?;
-    let capability_analysis = match project_ir.as_ref() {
+    let capability_analysis = match context.project_ir.as_ref() {
         Some(project) => analyze_capabilities(project, target)?,
         None => None,
     };
-    let source_lock_graph = match project_ir.as_ref().and_then(|project| project.source) {
-        Some(source) => extract_lock_graph(Path::new(&inspection.root), source)?,
-        None => None,
-    };
-    let plan = match (project_ir.as_ref(), capability_analysis.as_ref()) {
+    let plan = match (context.project_ir.as_ref(), capability_analysis.as_ref()) {
         (Some(project), Some(analysis)) => plan_package_manager_migration(
-            &inspection,
+            &context.inspection,
             project,
             analysis,
-            source_lock_graph.as_ref(),
+            context.source_lock_graph.as_ref(),
             target,
             accepted_lossy,
             verification_scripts,
@@ -191,27 +179,37 @@ pub(crate) fn assess(
     };
     let diagnostics = plan.as_ref().map_or_else(
         || {
-            project_ir.as_ref().map_or_else(
-                || inspection.diagnostics.clone(),
+            context.project_ir.as_ref().map_or_else(
+                || context.inspection.diagnostics.clone(),
                 |project| project.diagnostics.clone(),
             )
         },
         |value| value.diagnostics.clone(),
     );
-    let source = project_ir.as_ref().and_then(|project| project.source);
+    let source = context
+        .project_ir
+        .as_ref()
+        .and_then(|project| project.source);
     let executable = plan.as_ref().is_some_and(|value| value.executable);
     let (verdict, available_after_review) = verdict(source, target, &diagnostics, executable);
-    let integrations = integration_impact(project_ir.as_ref());
+    let integrations = integration_impact(context.project_ir.as_ref());
     let effects = migration_effects(plan.as_ref(), verification_scripts);
     let capabilities = capability_analysis
         .as_ref()
         .map_or_else(CapabilitySummary::default, |value| value.summary.clone());
-    let package_count = project_ir.as_ref().map_or(0, |value| value.packages.len());
-    let workspace_patterns = project_ir
+    let package_count = context
+        .project_ir
+        .as_ref()
+        .map_or(0, |value| value.packages.len());
+    let workspace_patterns = context
+        .project_ir
         .as_ref()
         .map_or_else(Vec::new, |value| value.workspace_patterns.clone());
-    let scripts = available_root_scripts(project_ir.as_ref());
-    let project_ir_id = project_ir.as_ref().map(|value| value.project_ir_id.clone());
+    let scripts = available_root_scripts(context.project_ir.as_ref());
+    let project_ir_id = context
+        .project_ir
+        .as_ref()
+        .map(|value| value.project_ir_id.clone());
     let capability_analysis_id = capability_analysis
         .as_ref()
         .map(|value| value.analysis_id.clone());
@@ -219,7 +217,7 @@ pub(crate) fn assess(
     let report_id = short_digest(
         "doctor_",
         &ReportIdentity {
-            repository_fingerprint: &inspection.fingerprint,
+            repository_fingerprint: &context.inspection.fingerprint,
             project_ir_id: project_ir_id.as_deref(),
             capability_analysis_id: capability_analysis_id.as_deref(),
             source,
@@ -249,11 +247,11 @@ pub(crate) fn assess(
         source,
         target,
         target_tier,
-        repository_fingerprint: inspection.fingerprint.clone(),
+        repository_fingerprint: context.inspection.fingerprint.clone(),
         project_ir_id,
         capability_analysis_id,
         package_count,
-        workspace_configured: inspection.workspace.configured,
+        workspace_configured: context.inspection.workspace.configured,
         workspace_patterns,
         available_root_scripts: scripts,
         integrations,
@@ -262,10 +260,7 @@ pub(crate) fn assess(
         diagnostics,
     };
     Ok(ReadinessAssessment {
-        inspection,
-        project_ir,
         capability_analysis,
-        source_lock_graph,
         report,
     })
 }

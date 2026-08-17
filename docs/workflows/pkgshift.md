@@ -24,6 +24,12 @@ pkgshift doctor --to bun
 
 Doctor reports whether migration is ready, reviewable after explicit lossy acceptance, or blocked. It projects integrations, cleanup, artifact retirement, process commands, and verification effects without writing state or exposing mutation content. See [Migration Readiness](/workflows/migration-readiness.md).
 
+When the target is undecided, omit `--to`. Aggregate doctor assesses all seven production adapters from one repository context and preserves each result without ranking:
+
+```text
+pkgshift doctor
+```
+
 From the repository root, run:
 
 ```text
@@ -70,7 +76,7 @@ When the user requests a trial first, add `--trial` to the initial preview and e
 
 When the user names representative root scripts, add one `--verify-script <name>` per script to the initial preview. Do not infer defaults such as `test`, `lint`, or `build`. The returned next action preserves the selection, target argv, and timeout in the immutable plan.
 
-When the target is undecided, run `pkgshift compare <target> <target>...` instead of serial ad hoc trials. Present the aggregate plan and request its exact process-execution approval. Read each candidate's passed, failed, or blocked status from the comparison report; do not infer a winner. Create a separate ordinary preview and request repository-write approval only after the user selects a target.
+When the target is undecided, run aggregate doctor first. After the user narrows the candidates and requests execution proof, run `pkgshift compare <target> <target>...` instead of serial ad hoc trials. Present the aggregate plan and request its exact process-execution approval. Read each candidate's passed, failed, or blocked status from the comparison report; do not infer a winner. Create a separate ordinary preview and request repository-write approval only after the user selects a target.
 
 # Preconditions
 
