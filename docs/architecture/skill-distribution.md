@@ -42,23 +42,25 @@ Codex scans `.agents/skills` from the current working directory through the repo
 # Installer Commands
 
 ```text
-pkgshift skill install --scope project --client codex --mode copy --approve skill:pkgshift:project:codex
-pkgshift skill install --scope user --client codex --mode link --approve skill:pkgshift:user:codex
-pkgshift skill install --scope project --client claude --mode copy --approve skill:pkgshift:project:claude
+pkgshift skill install --scope project --client codex --mode copy
+pkgshift skill install --scope user --client codex --mode link
+pkgshift skill install --scope project --client claude --mode copy
 pkgshift skill status --scope project --client codex
 pkgshift skill doctor --scope project --client claude
-pkgshift skill uninstall --scope project --client codex --approve skill:pkgshift:project:codex
+pkgshift skill uninstall --scope project --client codex
 ```
 
-Project, Codex, and managed-copy are the CLI defaults. User scope changes only the client root; it never modifies a repository.
+Project, Codex, and managed-copy are the CLI defaults. User scope changes only the client root; it never modifies a repository. Install and uninstall first return a read-only `skill-status` artifact, exit code `7`, and one exact approval-bound `filesystem-write` next action. Its `skill_plan_...` identifier binds the operation, scope, client, mode, portable-source digest, installed digest, ownership state, and exact source and destination paths; callers execute the returned argument array unchanged. `--dry-run` remains read-only even when an approval identifier is present.
 
 # Modes
 
 `copy` atomically prepares a managed copy and compares its content digest with the portable source. `link` creates one directory symlink to the resolved portable source. Status and doctor identify the mode, destination, source digest, installed digest, health, and local modification state.
 
+The primary Rust CLI resolves the portable source from a release shared-data directory or a complete source checkout. A missing or invalid source blocks installation. Release archives and installers therefore ship `skills/pkgshift` with the executable instead of duplicating an independently maintained skill.
+
 # Safety Invariants
 
-- Require an exact scope- and client-bound approval token for install and uninstall.
+- Require an exact digest- and destination-bound `skill_plan_...` approval identifier for install and uninstall.
 - Never replace an existing directory, file, or link with different ownership.
 - Resolve and validate the portable source before mutation.
 - Reject destination paths whose parent directories traverse symbolic links outside the declared project or user scope.

@@ -14,6 +14,8 @@ const TEXT_PATCH: &str = "diff --git a/index.js b/index.js\n--- a/index.js\n+++ 
 mod comparison;
 #[path = "e2e/runtime.rs"]
 mod runtime;
+#[path = "e2e/skill.rs"]
+mod skill;
 
 fn write(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {

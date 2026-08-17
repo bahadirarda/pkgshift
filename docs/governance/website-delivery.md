@@ -45,8 +45,9 @@ The root `llms.txt` follows the community proposal for a concise Markdown projec
 2. Resolves either the latest stable release or an explicitly pinned stable version.
 3. Downloads the matching native archive and `SHA256SUMS` from the same GitHub Release.
 4. Verifies the archive checksum before extraction.
-5. Installs the executable into an explicit destination, `XDG_BIN_HOME`, or `$HOME/.local/bin`.
-6. Executes the installed binary's version check before reporting success.
+5. Installs the canonical portable Agent Skill into `PKGSHIFT_DATA_DIR`, `XDG_DATA_HOME/pkgshift`, or `$HOME/.local/share/pkgshift` through an atomic directory replacement.
+6. Installs the executable into an explicit destination, `XDG_BIN_HOME`, or `$HOME/.local/bin`.
+7. Executes the installed binary's version check and confirms that the Rust Skill lifecycle resolves the installed portable source before reporting success.
 
 The script does not require elevated privileges, edit shell profiles, run the migrated project, or install dependencies. Windows users install from the signed GitHub Release archive until a separate PowerShell installer receives an equivalent verification contract.
 

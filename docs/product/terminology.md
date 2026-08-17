@@ -37,6 +37,7 @@ sources:
 | Source runtime reference | Application semantics tied to the source runtime, reported during package-manager migration but never removed without a dedicated runtime transformation. |
 | Runtime recipe | A registered deterministic source, script, type, or configuration transformation owned by the dedicated runtime migration boundary. |
 | Side effect | Any operation that changes repository files, dependency state, caches, processes, or external systems. |
+| Skill plan | An immutable `skill_plan_...` approval identity covering one Agent Skill operation, destination, source and installed digests, and ownership state. |
 | Transaction | The bounded lifecycle from an approved plan through apply, verification, and commit or rollback status. |
 | Trial | Exact-plan execution and verification in a disposable repository copy without source repository mutation or persistent source run state. |
 | Verify | A read-only evaluation of persisted artifacts and repository postconditions after apply. |
@@ -56,6 +57,8 @@ pkgshift explain <diagnostic-code>
 pkgshift rollback <run-id>
 pkgshift runtime to deno --deno-permission net
 pkgshift runtime rollback <runtime-run-id>
+pkgshift skill install --scope project --client codex --mode copy
+pkgshift skill doctor --scope project --client codex
 ```
 
 The primary `pkgshift to bun` command is guided and crosses into mutation only after exact approval. The `pkgshift pm to bun` shortcut resolves only to a read-only package manager plan.

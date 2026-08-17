@@ -53,7 +53,7 @@ The primary runtime is Rust 1.97.1. `pkgshift-core` owns detection, Project IR, 
 
 Production Rust modules are limited to 1,000 physical lines by repository validation. Test-only modules are excluded from that mechanical limit and remain colocated under their owning module directory. A file below the limit must still represent one cohesive responsibility; the limit is a regression gate rather than a design target.
 
-The TypeScript engine remains under `implementations/typescript` as an executable reference implementation. It has no third-party runtime dependencies and uses Bun 1.3.14 for runtime, YAML parsing, building, and tests. It remains the behavior oracle for capability renderers and ancillary commands that have not crossed the Rust parity gate.
+The TypeScript engine remains under `implementations/typescript` as an executable reference implementation. It has no third-party runtime dependencies and uses Bun 1.3.14 for runtime, YAML parsing, building, and tests. It remains the behavior oracle for capability renderers and diagnostic explanation until those paths cross the Rust parity gate.
 
 A Rust distribution compiles to one standalone CLI, but apply still requires the selected target package manager executable.
 
@@ -63,7 +63,7 @@ A Rust distribution compiles to one standalone CLI, but apply still requires the
 
 The guided `to` command keeps its first plan read-only, requests approval, then uses `.pkgshift/state` to persist and execute the exact plan before invoking verification. `to --trial` instead copies the repository into a disposable boundary, executes cleanup, importer, installer, and verifier there, and returns without source state. The dedicated `runtime to deno` surface uses its own fingerprint, recipe planner, content-redacted artifact, private state subtree, verification report, and rollback command without entering the package-manager adapter pipeline. The advanced staged interface persists a package-manager plan only when `--state-dir` is explicit. Rust stored plans and runs use digest-verified envelopes. Apply validates exact approval and the baseline fingerprint, creates recovery snapshots, atomically writes planned content, removes pre-migration package-local dependency state, and executes target-native import plus installation operations. Repository locks recover a dead Linux writer and serialize mutation per repository.
 
-Verify checks planned digests, clean-install records, source-artifact residue, package-manager selection, lockfile behavior, workspace membership, installer completion, and normalized source-to-target resolution parity. Rollback validates every backup digest, restores snapshot entries, and requires the repository fingerprint to match the plan baseline. The TypeScript reference retains managed Agent Skill lifecycle commands until that ancillary interface is ported or replaced by distribution tooling.
+Verify checks planned digests, clean-install records, source-artifact residue, package-manager selection, lockfile behavior, workspace membership, installer completion, and normalized source-to-target resolution parity. Rollback validates every backup digest, restores snapshot entries, and requires the repository fingerprint to match the plan baseline. The Rust primary path owns Agent Skill copy, link, status, doctor, and protected uninstall behavior; release tooling must install the same portable source into the shared data path resolved by that lifecycle.
 
 # Test Boundary
 
@@ -88,9 +88,9 @@ Tests create isolated temporary repositories and remove only generated fixtures.
 - Dedicated Bun-to-Deno runtime subprocess coverage for permission blocking, source and script recipes, type residue cleanup, redacted artifacts, verification, rollback, and a real Hono type-check and test on Deno 2.9.5.
 - Pinned upstream corpus runs covering executable plans, capability blockers, installer failures, post-install graph rejection, and source preservation.
 - TypeScript end-to-end guided and staged CLI plan, approval, apply, verify, and rollback.
-- Codex and Claude Code skill copy, link, conflict, and protected uninstall behavior.
+- Rust and TypeScript Codex and Claude Code skill copy, link, conflict, project/user confinement, read-only preview, and protected uninstall behavior.
 - rustfmt, warning-free Clippy, strict TypeScript, OKF, link, Agent Skill, and English-only validation.
 
 # Post-MVP Extensions
 
-The next architecture slices add configurable target-platform matrices and edge-equivalence graph policies, expand runtime recipes beyond the verified Bun-to-Deno subset, add target executable version resolution, and make a final ancillary-command ownership decision. These extensions must preserve [Migration Engine](/architecture/migration-engine.md), [Agent Interface](/architecture/agent-interface.md), and [Rust-Primary Polyglot Monorepo](/decisions/rust-primary-polyglot-monorepo.md).
+The next architecture slices port diagnostic explanation, add configurable target-platform matrices and edge-equivalence graph policies, expand runtime recipes beyond the verified Bun-to-Deno subset, and add target executable version resolution. These extensions must preserve [Migration Engine](/architecture/migration-engine.md), [Agent Interface](/architecture/agent-interface.md), and [Rust-Primary Polyglot Monorepo](/decisions/rust-primary-polyglot-monorepo.md).

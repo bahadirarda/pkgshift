@@ -112,6 +112,8 @@ jobs:
           mkdir -p "$staging" dist
           cp "target/${TARGET}/release/pkgshift" "$staging/pkgshift"
           cp README.md LICENSE "$staging/"
+          mkdir -p "$staging/skills"
+          cp -R skills/pkgshift "$staging/skills/pkgshift"
           jq --null-input \
             --arg name "pkgshift" \
             --arg version "$version" \
@@ -136,6 +138,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $Staging, dist | Out-Null
           Copy-Item "target/$env:TARGET/release/pkgshift.exe" "$Staging/pkgshift.exe"
           Copy-Item README.md, LICENSE $Staging
+          New-Item -ItemType Directory -Force -Path "$Staging/skills" | Out-Null
+          Copy-Item -Recurse skills/pkgshift "$Staging/skills/pkgshift"
           [ordered]@{
             name = "pkgshift"
             version = $Version

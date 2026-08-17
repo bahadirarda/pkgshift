@@ -38,7 +38,7 @@ Humans do not need to provide repository or state paths when running from the in
 
 # Implementation Availability
 
-The Rust CLI is the primary interface and implements `to`, isolated `to --trial`, isolated multi-target `compare`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, `rollback`, dedicated `runtime to deno`, and `runtime rollback`. The TypeScript reference preserves native-import planning and the established package-manager migration contract, and additionally retains `explain` plus managed `skill` lifecycle commands while their long-term ownership is decided. Isolated trial, multi-target comparison, blocking lock-graph comparison, and Bun-to-Deno runtime recipes are currently Rust-primary trust features.
+The Rust CLI is the primary interface and implements `to`, isolated `to --trial`, isolated multi-target `compare`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, `rollback`, dedicated `runtime to deno`, `runtime rollback`, and managed `skill install|status|doctor|uninstall`. The TypeScript reference preserves native-import planning, the established package-manager migration contract, and diagnostic `explain` while that final ancillary read interface is ported. Isolated trial, multi-target comparison, blocking lock-graph comparison, Bun-to-Deno runtime recipes, and Agent Skill lifecycle ownership are Rust-primary trust features.
 
 # Agent Flow
 
@@ -157,6 +157,6 @@ Runtime planning emits a content-redacted `runtime-migration-plan`; source mutat
 
 # Approval Contract
 
-An agent may run a guided preview, inspect, plan, explain, status, and doctor operations without migration approval. It must present the plan summary, warnings, and side effects before executing an approval-bound next action. Guided execution and advanced apply require `--approve <plan-id>`; rollback requires `--approve <run-id>`. Skill install and uninstall require the exact `skill:pkgshift:<scope>:<client>` approval token.
+An agent may run a guided preview, inspect, plan, explain, status, and doctor operations without migration approval. It must present the plan summary, warnings, and side effects before executing an approval-bound next action. Guided execution and advanced apply require `--approve <plan-id>`; rollback requires `--approve <run-id>`. Skill install and uninstall first emit a read-only status artifact and require the exact returned `skill_plan_...` identifier. That identity binds the operation, scope, client, mode, source and installed digests, ownership state, and exact paths. `--dry-run` suppresses skill mutation even when that identifier is present.
 
 Apply and trial remove accepted package-local source dependency state before running declared native import and target installation commands without lifecycle scripts. Explicit representative scripts run repository-defined code after installation and may create output outside the rollback snapshot; agents should prefer a trial before normal apply. Verify is filesystem- and artifact-read-only and therefore does not need a second approval. Rollback does not recreate the removed source `node_modules` state or remove unplanned script output.

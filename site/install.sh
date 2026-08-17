@@ -6,6 +6,7 @@ repository="bahadirarda/pkgshift"
 requested_version="${PKGSHIFT_VERSION:-latest}"
 install_dir="${PKGSHIFT_INSTALL_DIR:-${XDG_BIN_HOME:-}}"
 temporary_dir=""
+skill_temporary=""
 
 say() {
   printf '%s\n' "pkgshift: $*"
@@ -31,13 +32,18 @@ Options:
 Environment:
   PKGSHIFT_VERSION       Exact release tag or version.
   PKGSHIFT_INSTALL_DIR   Destination directory.
+  PKGSHIFT_DATA_DIR      Shared data root for the bundled Agent Skill.
   XDG_BIN_HOME           Fallback destination before $HOME/.local/bin.
+  XDG_DATA_HOME          Fallback shared data root before $HOME/.local/share.
 EOF
 }
 
 cleanup() {
   if [ -n "$temporary_dir" ] && [ -d "$temporary_dir" ]; then
     rm -rf -- "$temporary_dir"
+  fi
+  if [ -n "$skill_temporary" ] && [ -d "$skill_temporary" ]; then
+    rm -rf -- "$skill_temporary"
   fi
 }
 
@@ -66,7 +72,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-for command_name in curl grep awk tar uname mktemp; do
+for command_name in curl grep awk tar uname mktemp cp mv; do
   command -v "$command_name" >/dev/null 2>&1 || fail "required command not found: $command_name"
 done
 
@@ -148,7 +154,47 @@ fi
 
 tar -xzf "$temporary_dir/$archive" -C "$temporary_dir"
 source_binary="$temporary_dir/pkgshift-$release_tag-$target/pkgshift"
+source_skill="$temporary_dir/pkgshift-$release_tag-$target/skills/pkgshift"
 [ -f "$source_binary" ] || fail "release archive does not contain the pkgshift executable"
+[ -f "$source_skill/SKILL.md" ] || fail "release archive does not contain the portable Agent Skill"
+
+if [ -n "${PKGSHIFT_DATA_DIR:-}" ]; then
+  data_dir="$PKGSHIFT_DATA_DIR"
+elif [ -n "${XDG_DATA_HOME:-}" ]; then
+  data_dir="$XDG_DATA_HOME/pkgshift"
+else
+  [ -n "${HOME:-}" ] || fail "HOME is not set; pass PKGSHIFT_DATA_DIR"
+  data_dir="$HOME/.local/share/pkgshift"
+fi
+
+skill_parent="$data_dir/skills"
+skill_destination="$skill_parent/pkgshift"
+mkdir -p "$skill_parent" || fail "cannot create shared data directory: $skill_parent"
+[ ! -L "$skill_destination" ] || fail "portable Agent Skill destination must not be a symbolic link"
+if [ -e "$skill_destination" ] && [ ! -d "$skill_destination" ]; then
+  fail "portable Agent Skill destination is not a directory: $skill_destination"
+fi
+skill_temporary="$skill_parent/.pkgshift.$$.tmp"
+skill_backup="$skill_parent/.pkgshift.$$.backup"
+[ ! -e "$skill_temporary" ] || fail "temporary Agent Skill path already exists"
+[ ! -e "$skill_backup" ] || fail "backup Agent Skill path already exists"
+cp -R "$source_skill" "$skill_temporary" \
+  || fail "cannot stage the portable Agent Skill"
+if [ -d "$skill_destination" ]; then
+  mv "$skill_destination" "$skill_backup" \
+    || fail "cannot prepare the existing portable Agent Skill for replacement"
+  if ! mv "$skill_temporary" "$skill_destination"; then
+    mv "$skill_backup" "$skill_destination" \
+      || fail "cannot restore the previous portable Agent Skill from $skill_backup"
+    fail "cannot install the portable Agent Skill"
+  fi
+  skill_temporary=""
+  rm -rf -- "$skill_backup"
+else
+  mv "$skill_temporary" "$skill_destination" \
+    || fail "cannot install the portable Agent Skill"
+  skill_temporary=""
+fi
 
 mkdir -p "$install_dir" || fail "cannot create install directory: $install_dir"
 destination="$install_dir/pkgshift"
@@ -161,8 +207,12 @@ else
 fi
 
 "$destination" --version >/dev/null 2>&1 || fail "installed executable failed its version check"
+PKGSHIFT_DATA_DIR="$data_dir" "$destination" skill status \
+  --scope project --client codex --cwd "$temporary_dir" --json --non-interactive \
+  >/dev/null 2>&1 || fail "installed executable could not resolve its portable Agent Skill"
 
 say "installed $release_tag to $destination"
+say "installed portable Agent Skill data to $skill_destination"
 case ":${PATH:-}:" in
   *:"$install_dir":*) ;;
   *) say "add $install_dir to PATH before running pkgshift" ;;

@@ -64,6 +64,12 @@ The implementation may add codes while preserving the following baseline familie
 | `PLAN_PRECONDITION_FAILED` | Repository evidence changed after planning. |
 | `REPOSITORY_TRANSACTION_BUSY` | Another agent or run owns the repository transaction lock. |
 | `APPROVAL_REQUIRED` | A mutating command lacks the exact artifact-bound approval token. |
+| `SKILL_SOURCE_NOT_FOUND` | The portable Agent Skill source is unavailable from the distribution or source checkout. |
+| `SKILL_SOURCE_INVALID` | Portable Agent Skill content or frontmatter failed validation. |
+| `SKILL_TARGET_PATH_UNSAFE` | A project or user destination crosses a symbolic-link or non-directory parent. |
+| `SKILL_INSTALL_CONFLICT` | The selected destination has different ownership, content type, or concurrent state. |
+| `SKILL_INSTALL_MODIFIED` | A managed copy differs from the portable source and requires review. |
+| `SKILL_UNINSTALL_MODIFIED` | Protected uninstall refused to remove a locally modified managed copy. |
 | `INSTALL_COMMAND_FAILED` | The target install command failed after journaling began. |
 | `VERIFICATION_FAILED` | One or more structural post-apply checks failed. |
 | `ROLLBACK_FAILED` | Recovery data did not restore and verify the repository baseline. |

@@ -8,6 +8,7 @@ pub mod lock_graph;
 pub mod model;
 pub mod plan;
 pub mod runtime;
+mod skill;
 pub mod transaction;
 mod transformation;
 pub mod util;

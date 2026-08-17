@@ -38,15 +38,17 @@ Install the latest native binary on Linux or macOS with the checksum-verifying i
 curl --proto '=https' --tlsv1.2 -LsSf https://bahadirarda.github.io/pkgshift/install.sh | sh
 ```
 
-Set `PKGSHIFT_VERSION=v0.20260817.1` to pin an exact calendar release or `PKGSHIFT_INSTALL_DIR` to select a destination. The [installer source](site/install.sh) is tracked in this repository and verifies the release archive against `SHA256SUMS` before extraction.
+Set `PKGSHIFT_VERSION=v0.20260817.1` to pin an exact calendar release, `PKGSHIFT_INSTALL_DIR` to select the executable destination, or `PKGSHIFT_DATA_DIR` to select the shared portable-skill root. The [installer source](site/install.sh) is tracked in this repository and verifies the release archive against `SHA256SUMS` before extraction.
 
-Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, and place `pkgshift` on your `PATH`. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations. Its bundled `release.json` records the calendar version and exact source commit.
+Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, place `pkgshift` on your `PATH`, and retain its canonical `skills/pkgshift` tree beside the executable or in a supported shared-data path. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations. Its bundled `release.json` records the calendar version and exact source commit.
 
 The registry package installs with Cargo once the matching version is available on crates.io:
 
 ```bash
 cargo install pkgshift --locked
 ```
+
+Cargo distributes the executable crate. Use the native archive or set `PKGSHIFT_DATA_DIR` to a directory containing the canonical `skills/pkgshift` tree when managed Agent Skill commands are required.
 
 To build the current source directly:
 
@@ -125,6 +127,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Isolated trial | Runs the exact accepted plan in a disposable repository copy and proves the source remained unchanged. |
 | Target comparison | Binds two or more target plans to one approval, trials every executable candidate in a separate disposable copy, and reports evidence without ranking by guesswork. |
 | Runtime recipes | Applies a dedicated, permission-aware Bun-to-Deno source plan, blocks unsupported API shapes, verifies zero supported Bun residue, and retains an integrity-checked rollback. |
+| Agent Skill lifecycle | Previews and manages project or user Codex and Claude Code destinations through copy or exact-source link ownership, content digests, and protected uninstall. |
 | Recovery | Restores repository files from integrity-checked snapshots and verifies the original fingerprint. |
 
 Unsupported, unknown, unsafe, or unimplemented semantics block execution. pkgshift does not hide uncertainty behind a successful exit code.
@@ -142,7 +145,7 @@ flowchart LR
     G -->|failure| H[rollback]
 ```
 
-The normal command orchestrates this pipeline without exposing repository or state paths. Before target import or installation, pkgshift removes every package-local `node_modules` directory recorded by the accepted Project IR and journals whether each path was removed or already absent. Target-native importers then run when available; source-only lockfiles remain until import and installation complete. Context-aware integration adapters update registered package scripts, CI commands and setup actions, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins without rewriting ordinary prose or runtime commands. Verification requires the cleanup record, rejects any remaining source-only lockfile or configuration artifact, and runs only representative root scripts that were explicitly bound into the approved plan. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The TypeScript reference also retains diagnostic explanation and managed Agent Skill lifecycle commands during the port transition.
+The normal command orchestrates this pipeline without exposing repository or state paths. Before target import or installation, pkgshift removes every package-local `node_modules` directory recorded by the accepted Project IR and journals whether each path was removed or already absent. Target-native importers then run when available; source-only lockfiles remain until import and installation complete. Context-aware integration adapters update registered package scripts, CI commands and setup actions, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins without rewriting ordinary prose or runtime commands. Verification requires the cleanup record, rejects any remaining source-only lockfile or configuration artifact, and runs only representative root scripts that were explicitly bound into the approved plan. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The Rust primary CLI also owns managed Agent Skill installation, health inspection, and protected uninstall; the TypeScript reference retains diagnostic explanation during the remaining port transition.
 
 ## Monorepo layout
 
@@ -230,14 +233,15 @@ pkgshift to bun --dry-run
 
 ## Agent Skill
 
-The portable `pkgshift` Agent Skill teaches coding agents to treat the CLI as the execution boundary and preserve exact approval semantics. Install the repository-owned source into the shared modern project path:
+The portable `pkgshift` Agent Skill teaches coding agents to treat the CLI as the execution boundary and preserve exact approval semantics. Preview a managed project installation, then execute the exact returned action after approval:
 
 ```bash
-mkdir -p .agents/skills
-cp -R /path/to/pkgshift/skills/pkgshift .agents/skills/pkgshift
+pkgshift skill install --scope project --client codex --mode copy --json --non-interactive
+pkgshift skill install --scope project --client codex --mode copy \
+  --approve skill_plan_...
 ```
 
-The TypeScript reference still exposes managed copy, symlink, status, doctor, and protected uninstall flows through `bun run cli:typescript -- skill ...`. Codex uses `.agents/skills/pkgshift`; Claude Code uses `.claude/skills/pkgshift`.
+The Rust CLI supports managed copy and exact-source link modes, read-only `status` and `doctor`, project and user scopes, Codex at `.agents/skills/pkgshift`, Claude Code at `.claude/skills/pkgshift`, and protected uninstall that refuses locally modified copies. Released distributions place the portable source beside the executable's shared data path; source checkouts resolve the repository-owned `skills/pkgshift` directory.
 
 ## Safety contract
 
