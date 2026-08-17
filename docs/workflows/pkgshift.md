@@ -99,7 +99,7 @@ Present the plan summary to the user. Approval must identify the exact plan. Gen
 pkgshift apply <plan-id> --state-dir .pkgshift/state --approve <plan-id> --json --no-color --non-interactive
 ```
 
-The engine rechecks preconditions and creates owner-only recovery snapshots before mutation. It journals each operation, runs the target installer without a shell or lifecycle scripts, and persists a redacted process report. If the repository fingerprint conflicts, stop and re-plan. Preserve the returned run identifier even when apply fails.
+The engine rechecks preconditions and creates owner-only recovery snapshots before mutation. It removes accepted package-local `node_modules` paths, journals removed and already-absent dependency state, runs the target installer without a shell or lifecycle scripts, retires source-only repository artifacts, and persists a redacted process report. This cleanup is intentionally not rollback-snapshotted. If the repository fingerprint conflicts, stop and re-plan. Preserve the returned run identifier even when apply fails.
 
 ## 5. Verify
 
@@ -107,7 +107,7 @@ The engine rechecks preconditions and creates owner-only recovery snapshots befo
 pkgshift verify <run-id> --state-dir .pkgshift/state --json --no-color
 ```
 
-Assess planned digests, target selection, lockfile behavior, installation completion, workspace behavior, integrations, and the source-to-target lock graph comparison. Graph comparison is skipped only when no source lockfile existed. The engine does not automatically choose representative project scripts.
+Assess planned digests, the clean-install journal, source-artifact residue, target selection, lockfile behavior, installation completion, workspace behavior, integrations, and the source-to-target lock graph comparison. Graph comparison is skipped only when no source lockfile existed. The engine does not automatically choose representative project scripts.
 
 ## 6. Complete or Roll Back
 

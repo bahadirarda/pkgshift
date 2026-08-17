@@ -64,6 +64,8 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Digest-verified Rust plan and run envelopes, repository-scoped locking, byte-level snapshots, atomic mutations, installer output withholding, structural verification, and restored-fingerprint rollback.
 - Rust subprocess fixtures for pnpm-to-Bun-to-rollback, npm-to-pnpm, npm-to-Yarn Modern registry and lifecycle conversion, npm-to-vlt, and pnpm-to-Deno, plus 42-direction basic planning coverage.
 - Rust subprocess fixtures for isolated trial, native importer ordering, successful graph proof, intentional graph drift, and source repository preservation.
+- Deterministic package-local dependency-state cleanup before target installation, with fail-closed path validation, cleanup journal evidence, and explicit source-artifact residue verification.
+- Bounded Bun runtime-reference scanning for type dependencies, manifest scripts, global API use, and `bun:` imports, reported without conflating runtime migration with package-manager cleanup.
 - A real-installer Rust acceptance run for a multi-package pnpm workspace migrated to Bun and rolled back to its original fingerprint.
 - Real Bun 1.3.14 acceptance runs for dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback.
 - Real vlt 1.0.2 and Deno 2.9.5 acceptance runs for dependency-bearing multi-package Bun workspaces, workspace protocols, target installation, and graph proof.
@@ -78,7 +80,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Inspection and planning | MVP complete | Production targets render common manifest, workspace, catalog, override, linker, registry-reference, and integration semantics or fail closed. |
 | Plan artifact persistence | MVP complete | Persistence is explicit, atomic, immutable, digest-checked, and repository-bound. |
 | Transaction executor | MVP complete | Recovery snapshots, precondition rechecks, atomic writes, journal transitions, and partial-failure fixtures pass. |
-| Verification | MVP complete | Planned digests, target selection, lockfile behavior, workspace membership, install completion, and reachable resolution-set parity are checked. |
+| Verification | MVP complete | Planned digests, clean-install evidence, source-artifact residue, target selection, lockfile behavior, workspace membership, install completion, and reachable resolution-set parity are checked. |
 | Isolated trial | MVP complete | Exact approval executes the accepted plan in a disposable copy and reports repository preservation plus nested verification. |
 | Rollback | MVP complete | Successful, failed, and partially applied runs restore repository files and verify the baseline fingerprint. |
 | Skill installer | MVP complete | Codex and Claude Code project destinations pass copy, link, conflict, status, and protected-uninstall fixtures. |
@@ -94,7 +96,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Lossy decisions require `--accept-lossy` when the immutable plan is created.
 - Literal registry credentials, sensitive manifest fields, known token formats, and private keys cannot enter persisted plan content; environment references remain supported.
 - Dependency lifecycle scripts remain disabled during target installation.
-- Rollback does not restore `node_modules`, global stores, downloads, or package-manager caches.
+- Rollback does not restore pre-migration `node_modules`, global stores, downloads, or package-manager caches; successful migration removes package-local source dependency state before target installation and never deletes global stores.
 - Binary `bun.lockb` graph extraction fails closed until the repository converts it to the current text `bun.lock` format.
 - Reachable-resolution proof does not yet make dependency edge shape blocking because peer placement, hoisting, and deduplication representations differ between managers.
 - Representative project scripts are not selected or executed automatically.

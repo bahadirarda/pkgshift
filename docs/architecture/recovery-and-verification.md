@@ -35,7 +35,7 @@ Apply requires:
 - Mutation paths whose current digests equal their planned before digests.
 - Writable journal and snapshot state.
 
-Every write uses atomic replacement and verifies its after digest. Delete operations verify absence. The target install command runs only after configuration mutations and before source artifact cleanup.
+Every write uses atomic replacement and verifies its after digest. Delete operations verify absence. After configuration mutations, a dedicated dependency-state cleanup operation removes each package-local `node_modules` directory from the accepted Project IR. It rejects symbolic links, non-directory targets, paths outside the repository, and paths not ending in `node_modules`. The run journal records removed and already-absent paths. Target import and installation run only after this cleanup; source lockfiles remain available until those operations complete, then source-only repository artifacts are retired.
 
 Apply, verify, and rollback share a non-blocking repository-scoped transaction lock. A second agent receives `REPOSITORY_TRANSACTION_BUSY` instead of racing snapshots, journal transitions, or repository writes. A lock whose recorded process no longer exists can be recovered safely.
 
@@ -46,8 +46,10 @@ Verify reads the plan, journal, and repository. It records these MVP checks:
 | Check | Blocking condition |
 | --- | --- |
 | Planned file digests | Any write or deletion differs from the plan. |
+| Clean target install | A planned package-local dependency-state path has no matching removed or already-absent journal record. |
 | Target selection | Detection does not select the planned target. |
 | Target lockfile | No registered target lockfile exists. |
+| Source artifact residue | A source-only lockfile or configuration file remains after migration. |
 | Workspace membership | Package paths differ from the source Project IR. |
 | Target install | The journaled install operation is not successful. |
 | Dependency graph drift | Added or removed resolutions, comparable integrity mismatches, a missing non-empty target graph, or incomplete parsing. |
@@ -68,4 +70,4 @@ The run reaches `rolled-back` only when the restored repository fingerprint equa
 
 # External Effects
 
-The repository transaction does not snapshot `node_modules`, package-manager caches, global stores, or downloaded content. A successful rollback therefore emits `ROLLBACK_EXTERNAL_EFFECTS_REMAIN`. Reinstall the source dependency state when exact local dependency parity is required.
+The repository transaction deliberately does not snapshot `node_modules`, package-manager caches, global stores, or downloaded content. Clean target installation removes pre-migration package-local `node_modules`, and the target installer may recreate it with target-owned state. A successful rollback therefore emits `ROLLBACK_EXTERNAL_EFFECTS_REMAIN`; reinstall the source dependency state when exact local dependency parity is required. pkgshift never deletes global package-manager caches or stores during migration.

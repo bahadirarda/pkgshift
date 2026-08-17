@@ -19,6 +19,7 @@ sources:
 | Apply | The explicit operation that executes an approved plan and writes a run journal. |
 | Artifact | A durable, addressable output such as an inspection report, plan, graph diff, run journal, or verification report. |
 | Capability | A behavior a package manager or integration can represent, such as workspaces, catalogs, overrides, patches, or registry configuration. |
+| Clean target install | Target installation performed only after every package-local pre-migration dependency-state directory has been removed or proven absent. |
 | Diagnostic | A structured observation with a stable code, severity, evidence, explanation, and possible remediation. |
 | Evidence | A repository fact captured during inspection, including its location and relevant fingerprint. |
 | Explain | A read-only operation that expands a diagnostic code or artifact decision into human-readable reasoning. |
@@ -32,6 +33,8 @@ sources:
 | Reachable resolution set | The lockfile resolutions connected to external manifest roots through normalized dependency topology. |
 | Rollback | A compensating operation derived from a run journal that attempts to restore the pre-apply state. |
 | Run | One apply attempt against one plan and repository fingerprint. |
+| Source artifact residue | A source-only lockfile or package-manager configuration file that remains after the planned retirement phase. |
+| Source runtime reference | Application semantics tied to the source runtime, reported during package-manager migration but never removed without a dedicated runtime transformation. |
 | Side effect | Any operation that changes repository files, dependency state, caches, processes, or external systems. |
 | Transaction | The bounded lifecycle from an approved plan through apply, verification, and commit or rollback status. |
 | Trial | Exact-plan execution and verification in a disposable repository copy without source repository mutation or persistent source run state. |

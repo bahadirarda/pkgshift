@@ -26,9 +26,9 @@
         "source": "bun",
         "status": "planned",
         "executable": true,
-        "operations": 6,
+        "operations": 7,
         "capabilities": { "native": 0, "transform": 0, "lossy": 0, "unsupported": 0 },
-        "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE"]
+        "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE", "SOURCE_RUNTIME_REFERENCES_PRESERVED"]
       }
     },
     {
@@ -39,9 +39,9 @@
         "source": "bun",
         "status": "planned",
         "executable": true,
-        "operations": 6,
+        "operations": 7,
         "capabilities": { "native": 0, "transform": 0, "lossy": 0, "unsupported": 0 },
-        "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE"]
+        "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE", "SOURCE_RUNTIME_REFERENCES_PRESERVED"]
       }
     },
     {
@@ -52,7 +52,7 @@
         "source": "pnpm",
         "status": "blocked",
         "executable": false,
-        "operations": 6,
+        "operations": 7,
         "capabilities": { "native": 1, "transform": 2, "lossy": 0, "unsupported": 4 },
         "diagnosticCodes": ["CAPABILITY_UNSUPPORTED"]
       }
@@ -65,7 +65,7 @@
         "source": "pnpm",
         "status": "blocked",
         "executable": false,
-        "operations": 6,
+        "operations": 7,
         "capabilities": { "native": 2, "transform": 1, "lossy": 0, "unsupported": 4 },
         "diagnosticCodes": ["CAPABILITY_UNSUPPORTED", "DENO_DEPENDENCY_PROTOCOL_UNSUPPORTED"]
       }
@@ -78,7 +78,7 @@
         "source": "vlt",
         "status": "planned",
         "executable": true,
-        "operations": 6,
+        "operations": 7,
         "capabilities": { "native": 5, "transform": 0, "lossy": 0, "unsupported": 0 },
         "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE"]
       }
@@ -92,7 +92,7 @@
         "source": "vlt",
         "status": "planned",
         "executable": true,
-        "operations": 6,
+        "operations": 7,
         "capabilities": { "native": 2, "transform": 1, "lossy": 2, "unsupported": 0 },
         "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE"]
       }

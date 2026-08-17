@@ -614,6 +614,10 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
                     ("files", json!(files)),
                     ("repositoryChanged", json!(!report.repository_unchanged)),
                     ("repositoryUnchanged", json!(report.repository_unchanged)),
+                    (
+                        "dependencyStateCleanups",
+                        json!(report.dependency_state_cleanups.len()),
+                    ),
                     ("processes", json!(report.processes.len())),
                 ]),
                 report.diagnostics.clone(),
@@ -676,6 +680,10 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
                 ("guided", json!(true)),
                 ("files", json!(files)),
                 ("operations", json!(planned.plan.operations.len())),
+                (
+                    "dependencyStateCleanups",
+                    json!(outcome.run.dependency_state_cleanups.len()),
+                ),
                 ("runStatus", json!(outcome.run.state)),
             ]),
             outcome.run.diagnostics.clone(),
@@ -742,6 +750,10 @@ fn apply_command(options: &CommandOptions, plan_id: &str) -> Result<CommandExecu
             },
             summary([
                 ("runStatus", json!(outcome.run.state)),
+                (
+                    "dependencyStateCleanups",
+                    json!(outcome.run.dependency_state_cleanups.len()),
+                ),
                 ("processes", json!(outcome.run.processes.len())),
                 ("rollbackAvailable", json!(true)),
             ]),

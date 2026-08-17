@@ -37,7 +37,7 @@ Expect these top-level fields:
 
 Each next action contains an `argv` array. It also declares `requiresApproval` and `sideEffect`. Execute the array directly through the available process tool; do not convert it to a shell string when an array-capable interface is available.
 
-For guided migration, exit code `7` with `status: planned` means the immutable preview is ready for user approval. It must not have changed the repository. After exact approval, execute the returned array; a successful apply returns plan and run identifiers together with verification counts. A successful trial returns a `trial-report`, `repositoryUnchanged: true`, and a null `runId`.
+For guided migration, exit code `7` with `status: planned` means the immutable preview is ready for user approval. It must not have changed the repository. The plan declares package-local dependency-state cleanup as a non-reversible generated-state side effect: rollback restores repository files but not the removed source `node_modules`. After exact approval, execute the returned array; a successful apply returns plan and run identifiers together with cleanup journal evidence and verification counts. A successful trial returns a `trial-report`, `repositoryUnchanged: true`, and a null `runId`.
 
 ## Exit Codes
 

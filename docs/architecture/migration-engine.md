@@ -95,7 +95,7 @@ Render target-native configuration and commands from the Project IR and capabili
 
 ## Executor
 
-Apply operations through a journaled workspace transaction. Require exact plan approval. Before the first mutation, snapshot every planned file and target lockfile with owner-only permissions and content digests. Recheck each mutation digest, use atomic replacement, execute the target installer without a shell or lifecycle scripts, persist redacted process evidence, and stop at the first failed required operation.
+Apply operations through a journaled workspace transaction. Require exact plan approval. Before the first mutation, snapshot every planned file and target lockfile with owner-only permissions and content digests. Recheck each mutation digest, use atomic replacement, remove accepted package-local `node_modules` paths without following symbolic links, execute the target installer without a shell or lifecycle scripts, persist cleanup and redacted process evidence, and stop at the first failed required operation.
 
 ## Verifier
 

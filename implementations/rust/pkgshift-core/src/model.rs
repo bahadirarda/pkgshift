@@ -490,6 +490,8 @@ pub struct StoredRun {
     pub state: String,
     pub snapshot_directory: String,
     pub snapshot_entries: Vec<SnapshotEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependency_state_cleanups: Vec<DependencyStateCleanupRecord>,
     pub processes: Vec<ProcessExecutionRecord>,
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -523,6 +525,14 @@ pub struct ProcessExecutionRecord {
     pub stdout: String,
     pub stderr: String,
     pub success: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyStateCleanupRecord {
+    pub operation_id: String,
+    pub removed_paths: Vec<String>,
+    pub absent_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -596,6 +606,8 @@ pub struct TrialReport {
     pub plan_id: String,
     pub status: VerificationStatus,
     pub repository_unchanged: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependency_state_cleanups: Vec<DependencyStateCleanupRecord>,
     pub processes: Vec<ProcessExecutionRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verification: Option<VerificationReport>,
