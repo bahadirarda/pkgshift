@@ -248,6 +248,49 @@ async function readDenoConfiguration(
   }
 }
 
+async function readVltConfiguration(
+  root: string,
+  diagnostics: Diagnostic[],
+): Promise<Record<string, unknown> | null> {
+  const content = await readText(join(root, "vlt.json"));
+  if (content === null) return null;
+  try {
+    const value: unknown = JSON.parse(content);
+    if (!isObject(value)) throw new Error("Configuration root must be an object");
+    return value;
+  } catch (error) {
+    diagnostics.push({
+      code: "CONFIGURATION_PARSE_FAILED",
+      severity: "error",
+      summary: "vlt.json could not be parsed safely.",
+      blocking: true,
+      evidence: [{
+        location: "vlt.json",
+        detail: error instanceof Error ? error.message : "JSON parsing failed",
+      }],
+      remediation: ["Repair the configuration before planning a migration."],
+    });
+    return null;
+  }
+}
+
+function denoWorkspacePatterns(configuration: Record<string, unknown>): string[] {
+  if (Array.isArray(configuration.workspace)) return stringArray(configuration.workspace);
+  return isObject(configuration.workspace)
+    ? stringArray(configuration.workspace.members)
+    : [];
+}
+
+function vltWorkspacePatterns(configuration: Record<string, unknown>): string[] {
+  const workspaces = configuration.workspaces;
+  if (typeof workspaces === "string") return [workspaces];
+  if (Array.isArray(workspaces)) return stringArray(workspaces);
+  if (!isObject(workspaces)) return [];
+  return Object.values(workspaces).flatMap((value) =>
+    typeof value === "string" ? [value] : stringArray(value)
+  );
+}
+
 function addObservedFeature(
   features: Map<FeatureId, ObservedFeature>,
   id: FeatureId,
@@ -297,6 +340,7 @@ export async function buildProjectIR(
     diagnostics,
   );
   const denoConfiguration = await readDenoConfiguration(inspection.root, diagnostics);
+  const vltConfiguration = await readVltConfiguration(inspection.root, diagnostics);
 
   const workspaceSources: EvidenceReference[] = [];
   const patterns: string[] = [];
@@ -314,7 +358,10 @@ export async function buildProjectIR(
     addPatterns("pnpm-workspace.yaml", stringArray(pnpmConfiguration.packages));
   }
   if (denoConfiguration) {
-    addPatterns(denoConfiguration.location, stringArray(denoConfiguration.value.workspace));
+    addPatterns(denoConfiguration.location, denoWorkspacePatterns(denoConfiguration.value));
+  }
+  if (vltConfiguration) {
+    addPatterns("vlt.json", vltWorkspacePatterns(vltConfiguration));
   }
 
   const normalizedPatterns = [...new Set(
@@ -406,6 +453,20 @@ export async function buildProjectIR(
     addPolicy(policies, "catalog", "package.json", "/workspaces/catalog", rootManifest.workspaces.catalog);
     addPolicy(policies, "catalogs", "package.json", "/workspaces/catalogs", rootManifest.workspaces.catalogs);
   }
+  if (vltConfiguration) {
+    addPolicy(policies, "catalog", "vlt.json", "/catalog", vltConfiguration.catalog);
+    addPolicy(policies, "catalogs", "vlt.json", "/catalogs", vltConfiguration.catalogs);
+    addPolicy(policies, "overrides", "vlt.json", "/modifiers", vltConfiguration.modifiers);
+  }
+  if (denoConfiguration) {
+    addPolicy(
+      policies,
+      "trusted-dependencies",
+      denoConfiguration.location,
+      "/allowScripts",
+      denoConfiguration.value.allowScripts,
+    );
+  }
   policies.sort((left, right) =>
     left.location.localeCompare(right.location) || left.pointer.localeCompare(right.pointer),
   );
@@ -456,6 +517,43 @@ export async function buildProjectIR(
     } else if (policy.kind === "trusted-dependencies") {
       addObservedFeature(features, "lifecycle.trusted-dependencies", evidence, policy.entries);
     }
+  }
+  if (
+    vltConfiguration
+    && isObject(vltConfiguration.modifiers)
+    && Object.keys(vltConfiguration.modifiers).some((selector) => selector.includes(" > "))
+  ) {
+    addObservedFeature(features, "resolution.nested-overrides", {
+      location: "vlt.json",
+      pointer: "/modifiers",
+      detail: "vlt modifiers contain contextual dependency selectors",
+    });
+  }
+  if (
+    vltConfiguration
+    && (
+      typeof (isObject(vltConfiguration.config) ? vltConfiguration.config.registry : vltConfiguration.registry) === "string"
+      || isObject(isObject(vltConfiguration.config)
+        ? vltConfiguration.config["scoped-registries"]
+        : vltConfiguration["scoped-registries"])
+    )
+  ) {
+    addObservedFeature(features, "registry.npmrc", {
+      location: "vlt.json",
+      detail: "vlt registry configuration is present",
+    });
+  }
+  if (
+    denoConfiguration
+    && (
+      isObject(denoConfiguration.value.imports)
+      || isObject(denoConfiguration.value.scopes)
+    )
+  ) {
+    addObservedFeature(features, "dependency.deno-import-map", {
+      location: denoConfiguration.location,
+      detail: "Deno imports or scopes contain dependency declarations outside package.json",
+    });
   }
   if (isObject(rootManifest.resolutions)) {
     for (const [selector, specifier] of Object.entries(rootManifest.resolutions)) {

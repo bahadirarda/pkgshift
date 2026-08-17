@@ -112,6 +112,12 @@ fn split_locator(locator: &str) -> Option<(String, String)> {
     Some((name, version))
 }
 
+fn is_local_pnpm_locator(locator: &str) -> bool {
+    ["file:", "link:", "workspace:"]
+        .iter()
+        .any(|protocol| locator.starts_with(protocol) || locator.contains(&format!("@{protocol}")))
+}
+
 fn npm_name_from_path(path: &str) -> Option<String> {
     let marker = "node_modules/";
     let index = path.rfind(marker)?;
@@ -229,7 +235,7 @@ fn parse_pnpm_checked(
             .as_object()
             .ok_or_else(|| "packages must be a map".to_owned())?;
         for locator in packages.keys() {
-            if split_locator(locator).is_none() {
+            if split_locator(locator).is_none() && !is_local_pnpm_locator(locator) {
                 return Err(format!("unsupported pnpm package locator {locator}"));
             }
         }
@@ -488,6 +494,146 @@ fn parse_bun_checked(
     Ok(parse_bun(value))
 }
 
+fn parse_deno_entry(
+    locator: &str,
+    metadata: &Value,
+    nodes: &mut Vec<LockGraphNode>,
+    edges: &mut Vec<LockGraphEdge>,
+) -> std::result::Result<(), String> {
+    let Some((name, version)) = split_deno_locator(locator) else {
+        return Err(format!("unsupported Deno package locator {locator}"));
+    };
+    let metadata = metadata
+        .as_object()
+        .ok_or_else(|| format!("unsupported Deno package entry {locator}"))?;
+    let parent = format!("{name}@{version}");
+    nodes.push(LockGraphNode {
+        locator: locator.to_owned(),
+        name,
+        version,
+        integrity: metadata
+            .get("integrity")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+    });
+    for (section, kind) in [
+        ("dependencies", "dependency"),
+        ("optionalDependencies", "optional"),
+    ] {
+        let Some(dependencies) = metadata.get(section) else {
+            continue;
+        };
+        if let Some(dependencies) = dependencies.as_array() {
+            edges.extend(
+                dependencies
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(|dependency| LockGraphEdge {
+                        from: parent.clone(),
+                        dependency: split_deno_locator(dependency)
+                            .map_or_else(|| dependency.to_owned(), |(name, _)| name),
+                        kind: kind.to_owned(),
+                    }),
+            );
+        } else if let Some(dependencies) = dependencies.as_object() {
+            edges.extend(dependencies.keys().map(|dependency| LockGraphEdge {
+                from: parent.clone(),
+                dependency: dependency.clone(),
+                kind: kind.to_owned(),
+            }));
+        } else {
+            return Err(format!("unsupported Deno {section} entry for {locator}"));
+        }
+    }
+    Ok(())
+}
+
+fn split_deno_locator(locator: &str) -> Option<(String, String)> {
+    let locator = locator
+        .trim()
+        .trim_matches(|character| character == '\'' || character == '"');
+    let locator = locator
+        .strip_prefix("npm:")
+        .or_else(|| locator.strip_prefix("jsr:"))
+        .unwrap_or(locator);
+    let separator = if locator.starts_with('@') {
+        let slash = locator.find('/')?;
+        locator[slash + 1..]
+            .find('@')
+            .map(|index| slash + 1 + index)?
+    } else {
+        locator.find('@')?
+    };
+    let name = locator[..separator].to_owned();
+    let version = locator[separator + 1..]
+        .split('_')
+        .next()
+        .unwrap_or_default()
+        .to_owned();
+    (!name.is_empty() && !version.is_empty()).then_some((name, version))
+}
+
+fn parse_deno_checked(
+    value: &Value,
+) -> std::result::Result<(Vec<LockGraphNode>, Vec<LockGraphEdge>), String> {
+    if !value
+        .get("version")
+        .is_some_and(|version| version.is_number() || version.is_string())
+    {
+        return Err("missing Deno lock version".to_owned());
+    }
+    let mut nodes = Vec::new();
+    let mut edges = Vec::new();
+    if let Some(npm) = value.get("npm") {
+        let npm = npm
+            .as_object()
+            .ok_or_else(|| "Deno npm entries must be a map".to_owned())?;
+        for (locator, metadata) in npm {
+            parse_deno_entry(locator, metadata, &mut nodes, &mut edges)?;
+        }
+    }
+    if let Some(jsr) = object(value, "jsr") {
+        for (locator, metadata) in jsr {
+            parse_deno_entry(locator, metadata, &mut nodes, &mut edges)?;
+        }
+    }
+    Ok((nodes, edges))
+}
+
+fn vlt_locator_version(locator: &str) -> Option<String> {
+    let separator = locator.rfind('@')?;
+    let version = locator[separator + 1..].split('~').next()?.trim();
+    (!version.is_empty()).then(|| version.to_owned())
+}
+
+fn parse_vlt_checked(
+    value: &Value,
+) -> std::result::Result<(Vec<LockGraphNode>, Vec<LockGraphEdge>), String> {
+    if !has_lockfile_version(value) {
+        return Err("missing vlt lockfileVersion".to_owned());
+    }
+    let entries = object(value, "nodes").ok_or_else(|| "missing vlt nodes map".to_owned())?;
+    let mut nodes = Vec::new();
+    for (locator, entry) in entries {
+        let Some(values) = entry.as_array() else {
+            return Err(format!("unsupported vlt node {locator}"));
+        };
+        let Some(name) = values.get(1).and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(version) = vlt_locator_version(locator) else {
+            continue;
+        };
+        nodes.push(LockGraphNode {
+            locator: locator.clone(),
+            name: name.to_owned(),
+            version,
+            integrity: values.get(2).and_then(Value::as_str).map(str::to_owned),
+        });
+    }
+    Ok((nodes, Vec::new()))
+}
+
 fn incomplete_graph(
     manager: PackageManagerId,
     path: &str,
@@ -586,9 +732,14 @@ pub fn extract_lock_graph(root: &Path, manager: PackageManagerId) -> Result<Opti
             .map_err(|error| error.to_string())
             .and_then(|value| parse_bun_checked(&value))
             .map(|graph| ("bun-text-lock", graph)),
-        PackageManagerId::Vlt | PackageManagerId::Deno => Err(format!(
-            "{manager} lock graph extraction is not implemented"
-        )),
+        PackageManagerId::Vlt => serde_json::from_str::<Value>(content)
+            .map_err(|error| error.to_string())
+            .and_then(|value| parse_vlt_checked(&value))
+            .map(|graph| ("vlt-lock-v1", graph)),
+        PackageManagerId::Deno => serde_json::from_str::<Value>(content)
+            .map_err(|error| error.to_string())
+            .and_then(|value| parse_deno_checked(&value))
+            .map(|graph| ("deno-lock-v5", graph)),
     };
     let (format, (mut nodes, mut edges)) = match parsed {
         Ok(parsed) => parsed,
@@ -793,6 +944,24 @@ mod tests {
     }
 
     #[test]
+    fn excludes_local_pnpm_package_locators_from_the_registry_graph() {
+        let directory = tempdir().expect("pnpm fixture");
+        fs::write(
+            directory.path().join("pnpm-lock.yaml"),
+            "lockfileVersion: '9.0'\npackages:\n  example@1.2.3:\n    resolution: {integrity: sha512-example}\n  '@fixture/local@file:packages/local':\n    resolution: {directory: packages/local, type: directory}\nsnapshots:\n  example@1.2.3: {}\n  '@fixture/local@file:packages/local': {}\n",
+        )
+        .expect("pnpm lockfile");
+
+        let graph = extract_lock_graph(directory.path(), PackageManagerId::Pnpm)
+            .expect("pnpm extraction")
+            .expect("pnpm graph");
+
+        assert!(graph.complete);
+        assert_eq!(graph.nodes.len(), 1);
+        assert_eq!(graph.nodes[0].name, "example");
+    }
+
+    #[test]
     fn reports_resolution_drift() {
         let source = LockGraph {
             schema_version: SCHEMA_VERSION.to_owned(),
@@ -878,6 +1047,79 @@ mod tests {
         assert_eq!(bun.nodes[0].name, "left-pad");
         assert_eq!(bun.nodes[0].version, "1.3.0");
         assert_eq!(bun.edges[0].dependency, "repeat-string");
+    }
+
+    #[test]
+    fn extracts_vlt_and_deno_lock_graphs() {
+        let vlt = tempdir().expect("vlt fixture");
+        fs::write(
+            vlt.path().join("vlt-lock.json"),
+            r#"{
+  "lockfileVersion": 1,
+  "nodes": {
+    "~npm~left-pad@1.3.0": [0, "left-pad", "sha512-example", "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"],
+    "~npm~@scope+package@2.1.0~peer.1": [0, "@scope/package", "sha512-scoped", "https://registry.npmjs.org/@scope/package/-/package-2.1.0.tgz"]
+  },
+  "edges": {}
+}"#,
+        )
+        .expect("vlt lockfile");
+        let vlt = extract_lock_graph(vlt.path(), PackageManagerId::Vlt)
+            .expect("vlt extraction")
+            .expect("vlt graph");
+        assert!(vlt.complete);
+        assert_eq!(vlt.nodes.len(), 2);
+        assert!(
+            vlt.nodes
+                .iter()
+                .any(|node| node.name == "@scope/package" && node.version == "2.1.0")
+        );
+
+        let deno = tempdir().expect("Deno fixture");
+        fs::write(
+            deno.path().join("deno.lock"),
+            r#"{
+  "version": "5",
+  "specifiers": {"npm:left-pad@^1.0.0": "1.3.0"},
+  "npm": {
+    "left-pad@1.3.0": {"integrity": "sha512-example", "dependencies": ["repeat-string@1.6.1"]},
+    "repeat-string@1.6.1": {"integrity": "sha512-child"}
+  }
+}"#,
+        )
+        .expect("Deno lockfile");
+        let deno = extract_lock_graph(deno.path(), PackageManagerId::Deno)
+            .expect("Deno extraction")
+            .expect("Deno graph");
+        assert!(deno.complete);
+        assert_eq!(deno.nodes.len(), 2);
+        assert_eq!(deno.edges[0].dependency, "repeat-string");
+    }
+
+    #[test]
+    fn normalizes_deno_peer_contexts_to_registry_versions() {
+        let directory = tempdir().expect("Deno fixture");
+        fs::write(
+            directory.path().join("deno.lock"),
+            r#"{
+  "version": "5",
+  "npm": {
+    "eslint-plugin-example@1.2.3_eslint@9.0.0": {
+      "integrity": "sha512-example",
+      "dependencies": ["eslint@9.0.0"]
+    }
+  }
+}"#,
+        )
+        .expect("Deno lockfile");
+
+        let graph = extract_lock_graph(directory.path(), PackageManagerId::Deno)
+            .expect("Deno extraction")
+            .expect("Deno graph");
+
+        assert!(graph.complete);
+        assert_eq!(graph.nodes[0].name, "eslint-plugin-example");
+        assert_eq!(graph.nodes[0].version, "1.2.3");
     }
 
     #[test]

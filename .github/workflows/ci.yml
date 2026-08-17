@@ -99,3 +99,39 @@ jobs:
 
       - name: Build Rust release binary
         run: cargo build --workspace --release --locked
+
+  adapter-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Set up Node for vlt
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.22.0
+
+      - name: Install pinned vlt adapter runtime
+        shell: bash
+        run: |
+          npm install --global vlt@1.0.2
+          echo "PKGSHIFT_REAL_VLT_BIN=$(dirname "$(command -v vlt)")" >> "$GITHUB_ENV"
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.97.1 --profile minimal
+
+      - name: Exercise real vlt workspace migration
+        run: >-
+          cargo test --package pkgshift --test e2e
+          migrates_a_dependency_with_real_vlt -- --ignored
+
+      - name: Exercise real Deno workspace migration
+        run: >-
+          cargo test --package pkgshift --test e2e
+          migrates_a_dependency_with_real_deno -- --ignored

@@ -5,7 +5,7 @@ description: Defines implemented package manager target tiers and execution boun
 tags: [support, npm, pnpm, yarn, bun, vlt, deno]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-16T23:32:12Z}
+generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
 sources:
   - id: npm-install
     resource: https://docs.npmjs.com/cli/install/
@@ -67,12 +67,33 @@ sources:
   - id: vlt-migration
     resource: https://docs.vlt.sh/cli/migration
     title: vlt migration documentation
+  - id: vlt-configuring
+    resource: https://docs.vlt.sh/cli/configuring
+    title: vlt configuration documentation
+  - id: vlt-workspaces
+    resource: https://docs.vlt.sh/cli/workspaces
+    title: vlt workspace documentation
+  - id: vlt-catalogs
+    resource: https://docs.vlt.sh/cli/catalogs
+    title: vlt catalog documentation
+  - id: vlt-modifiers
+    resource: https://docs.vlt.sh/cli/graph-modifiers
+    title: vlt graph modifier documentation
   - id: deno-packages
     resource: https://docs.deno.com/runtime/packages/
     title: Deno package documentation
   - id: deno-workspaces
     resource: https://docs.deno.com/runtime/fundamentals/workspaces/
     title: Deno workspace documentation
+  - id: deno-migration
+    resource: https://docs.deno.com/runtime/migrate/migrate_from_npm/
+    title: Deno migration from npm documentation
+  - id: deno-configuration
+    resource: https://docs.deno.com/runtime/reference/deno_json/
+    title: Deno configuration documentation
+  - id: deno-lockfile
+    resource: https://docs.deno.com/examples/dependency_lockfile_tutorial/
+    title: Deno lockfile documentation
   - id: npm-releases
     resource: https://github.com/npm/cli/releases
     title: npm CLI releases
@@ -98,10 +119,10 @@ The labels below describe current technical MVP behavior. Production target mean
 | Yarn Classic | Production target | Classic lockfile, workspace behavior, resolutions, registry configuration, and script commands. |
 | Yarn Modern | Production target | Modern lockfile, workspace tools, protocols, constraints, patches, plugins, portable linker modes, environment-backed registry translation, and lifecycle allow-lists. |
 | Bun | Production target | Bun lockfile, install behavior, workspaces, overrides, catalogs where supported, exact text patches, isolated linking, trusted dependencies, registry configuration, and script commands. |
-| vlt | Preview target | Detection, capability reporting, and guarded migration planning before production guarantees. |
-| Deno dependency mode | Preview target | npm and JSR dependency declarations plus workspace dependency behavior; not a runtime migration. |
+| vlt | Production target | Workspaces, workspace protocols, catalogs, graph modifiers, public registry and scope configuration, integration commands, installation, and vlt v1 lock graph proof. |
+| Deno dependency mode | Production target | npm dependency declarations, workspaces, overrides, catalog expansion, isolated linking, npm registry configuration, preserved Deno runtime configuration, integration commands, installation, and Deno v5 lock graph proof. This does not migrate the application runtime. |
 
-Preview target means the versioned adapter may inspect and plan, but apply remains unavailable.
+Every production target remains capability-gated. A production label does not bypass unsupported repository semantics, lossy-decision acceptance, exact approval, installer success, or lock graph verification.
 
 # Version Baselines
 
@@ -155,6 +176,8 @@ Production targets provide:
 - Secret-safe `.npmrc` registry translation to Yarn Modern for default and scoped registries, boolean authentication policy, and environment-backed tokens.
 - Shared-schema `packageExtensions` translation among npm, pnpm, and Yarn Modern.
 - Exact-version text patch translation among Yarn Modern `patch:` locators, pnpm `patchedDependencies`, and Bun `patchedDependencies`, including transitive Yarn patch resolutions.
+- vlt workspace, catalog, graph modifier, public registry, command integration, installer, and v1 lock graph handling in both engines.
+- Deno workspace, npm override, catalog expansion, isolated linker, preserved runtime configuration, `deno task`, installer, and v5 npm and JSR lock graph handling in both engines.
 
 Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, Yarn build denials outside allow-list mode, range or binary patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, dependency-level lifecycle policy targeting npm or Yarn Classic, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. Edge-level and platform-aware graph policies remain release-hardening extensions beyond the blocking `resolution-set-v1` policy.
 
@@ -170,9 +193,10 @@ The Rust planner preserves source lockfiles through import and installation, the
 | npm | Yarn Classic | `yarn import`, then lifecycle-script-disabled `yarn install`. |
 | Yarn Classic | Yarn Modern | Install-integrated Yarn migration. |
 | Yarn Classic | npm | npm's `yarn.lock`-aware install path. |
+| npm | Deno dependency mode | Deno's install-integrated Node dependency migration path. |
 
 Other directions generate target dependency state and emit `NATIVE_IMPORT_UNAVAILABLE` when a source lockfile exists. Every production direction still passes or fails on target verification; a native importer is not treated as proof by itself.
 
 # Freshness
 
-Package manager behavior changes frequently. When this concept reaches `stale_after`, re-check all production and preview boundaries against official documentation before treating the matrix as current.
+Package manager behavior changes frequently. When this concept reaches `stale_after`, re-check every production boundary against official documentation and the pinned real-installer suite before treating the matrix as current.

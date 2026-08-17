@@ -6,11 +6,11 @@
     <title>pkgshift — Transactional package manager migrations</title>
     <meta
       name="description"
-      content="Migrate JavaScript repositories between npm, pnpm, Yarn, and Bun with isolated trials, deterministic planning, lock graph proof, exact approval, and rollback."
+      content="Migrate JavaScript repositories between npm, pnpm, Yarn, Bun, vlt, and Deno with isolated trials, deterministic planning, lock graph proof, exact approval, and rollback."
    >
     <meta
       name="keywords"
-      content="package manager migration, npm to pnpm, npm to bun, pnpm to bun, yarn migration, lockfile migration, JavaScript CLI, monorepo migration"
+      content="package manager migration, npm to pnpm, pnpm to bun, vlt migration, Deno dependency migration, yarn migration, lockfile migration, JavaScript CLI, monorepo migration"
    >
     <meta name="author" content="bahadirarda">
     <meta name="robots" content="index, follow, max-image-preview:large">
@@ -58,7 +58,7 @@
             "name": "pkgshift",
             "applicationCategory": "DeveloperApplication",
             "operatingSystem": "Linux, macOS, Windows",
-            "description": "A deterministic CLI for transactional migrations between npm, pnpm, Yarn, and Bun.",
+            "description": "A deterministic CLI for transactional migrations between npm, pnpm, Yarn, Bun, vlt, and Deno dependency mode.",
             "url": "https://bahadirarda.github.io/pkgshift/",
             "downloadUrl": "https://github.com/bahadirarda/pkgshift/releases/latest",
             "installUrl": "https://bahadirarda.github.io/pkgshift/install.sh",
@@ -166,8 +166,8 @@
 
       <section class="signal-strip" aria-label="pkgshift capabilities">
         <div class="shell signal-grid">
-          <div><strong>20</strong><span>production planning directions</span></div>
-          <div><strong>5</strong><span>production adapters</span></div>
+          <div><strong>42</strong><span>production planning directions</span></div>
+          <div><strong>7</strong><span>production adapters</span></div>
           <div><strong>1</strong><span>exact approval boundary</span></div>
           <div><strong>0</strong><span>AI-authored repository edits</span></div>
         </div>
@@ -283,7 +283,7 @@
           <div class="section-heading" data-reveal>
             <p class="section-index">04 / Package managers</p>
             <h2>Move between the tools your repository already uses.</h2>
-            <p>Production adapters support planning across every source-to-target direction. Preview adapters remain read-only until their execution contracts are complete.</p>
+            <p>Seven production adapters support deterministic planning across every source-to-target direction and execute only inside their verified capability boundaries.</p>
           </div>
 
           <div class="manager-grid" data-reveal>
@@ -292,8 +292,8 @@
             <div class="manager manager-active"><span class="manager-glyph">y1</span><strong>Yarn Classic</strong><small>production</small></div>
             <div class="manager manager-active"><span class="manager-glyph">y4</span><strong>Yarn Modern</strong><small>production</small></div>
             <div class="manager manager-active"><span class="manager-glyph">b</span><strong>Bun</strong><small>production</small></div>
-            <div class="manager"><span class="manager-glyph">v</span><strong>vlt</strong><small>preview</small></div>
-            <div class="manager"><span class="manager-glyph">d</span><strong>Deno</strong><small>preview</small></div>
+            <div class="manager manager-active"><span class="manager-glyph">v</span><strong>vlt</strong><small>production</small></div>
+            <div class="manager manager-active"><span class="manager-glyph">d</span><strong>Deno</strong><small>production</small></div>
           </div>
 
           <a class="text-link support-link" href="https://github.com/bahadirarda/pkgshift/blob/main/docs/support/capability-matrix.md">

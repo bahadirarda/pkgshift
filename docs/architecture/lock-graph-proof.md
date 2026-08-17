@@ -5,7 +5,7 @@ description: Defines normalized source and target lock graphs, native importer s
 tags: [architecture, lockfile, dependency-graph, verification, integrity]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
 sources:
   - id: pnpm-import
     resource: https://pnpm.io/cli/import
@@ -22,6 +22,12 @@ sources:
   - id: npm-install
     resource: https://docs.npmjs.com/cli/install/
     title: npm install documentation
+  - id: vlt-lockfile
+    resource: https://docs.vlt.sh/cli/migration/from-npm
+    title: vlt migration from npm documentation
+  - id: deno-lockfile
+    resource: https://docs.deno.com/examples/dependency_lockfile_tutorial/
+    title: Deno lockfile documentation
 ---
 
 # Proof Boundary
@@ -41,12 +47,13 @@ Registry URLs, credentials, and arbitrary lockfile fields do not enter the graph
 | Adapter | Format | Trust behavior |
 | --- | --- | --- |
 | npm | `package-lock.json` and `npm-shrinkwrap.json` JSON package maps | Complete graph for regular resolved packages. |
-| pnpm | `pnpm-lock.yaml` package and snapshot maps | Complete graph for regular resolved packages. |
+| pnpm | `pnpm-lock.yaml` package and snapshot maps | Complete graph for registry resolutions; local `file:`, `link:`, and `workspace:` package locators are excluded from the cross-manager registry set. |
 | Yarn Classic | Yarn v1 lock entries | Complete graph for resolved entries and declared edges. |
 | Yarn Modern | Yarn lock YAML entries | Complete graph for resolved entries, checksums, and declared edges. |
 | Bun | Text `bun.lock` JSONC-style package entries | Complete graph for resolved entries and declared edges. |
 | Bun | Binary `bun.lockb` | Blocking `LOCK_GRAPH_FORMAT_UNSUPPORTED`; convert to text before planning. |
-| vlt and Deno | Preview formats | Apply remains unavailable, so production graph proof is not claimed. |
+| vlt | `vlt-lock.json` v1 node map | Complete graph for registry nodes, including the current registry-qualified locator form. |
+| Deno | `deno.lock` v5 npm and JSR maps | Complete graph for registry entries and declared edges; peer-context suffixes normalize to their base registry versions. |
 
 Malformed, non-UTF-8, structurally unsupported, or incomplete production lockfiles produce blocking diagnostics. pkgshift does not silently fall back to a manifest-only success claim when a source lockfile exists.
 
@@ -72,9 +79,12 @@ The planner chooses a registered target-native migration path when official pack
 - Bun's install-integrated pnpm migration path for pnpm sources.
 - `yarn import` for npm to Yarn Classic.
 - Install-integrated Yarn Classic migration for Yarn Modern and npm where documented behavior applies.
+- Install-integrated npm migration for Deno dependency mode.
 
 A dedicated importer runs after deterministic target configuration is rendered and before the target install. Source lockfiles remain present through import and install, then source-only artifacts are retired. When no verified native importer exists, planning emits `NATIVE_IMPORT_UNAVAILABLE`; installation may continue only with the same blocking graph proof afterward.
 
 # Failure Semantics
 
 Graph extraction diagnostics participate in plan executability. Graph comparison participates in run verification. Failure preserves the run journal and recovery snapshot so the operator can inspect evidence and approve rollback. No graph mismatch is converted into an automatic manifest edit, dependency upgrade, or AI-authored repair.
+
+The first policy is intentionally conservative: a source lockfile containing stale but no-longer-reachable resolutions can fail against a target installer that prunes them. Isolated trial exposes this before repository writes. A future reachability-aware policy may distinguish obsolete lock entries and platform-specific optional packages without weakening version and integrity proof.

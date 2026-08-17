@@ -141,7 +141,7 @@ Rust and TypeScript share product terminology, adapter baselines, approval seman
 
 | Implementation | Role | Toolchain | Validation boundary |
 | --- | --- | --- | --- |
-| Rust | Primary product engine and CLI | Rust 1.97.1 | Lock graph format tests, 20-direction planning, policy conversion, subprocess migrations, real Bun acceptance, isolated trial, drift failure, rollback, and release build |
+| Rust | Primary product engine and CLI | Rust 1.97.1 | Lock graph format tests, 42-direction planning, policy conversion, subprocess migrations, real Bun, vlt, and Deno acceptance, isolated trial, drift failure, rollback, and release build |
 | TypeScript | Executable compatibility and parity reference | Bun 1.3.14, strict TypeScript | Full unit, integration, policy, safety, skill, and real CLI transaction suite |
 
 ## Agent workflow
@@ -171,10 +171,10 @@ The model does not author migration edits. Detection, capability analysis, trans
 | Yarn Classic | Production target | `yarn@1.22.22` |
 | Yarn Modern | Production target | `yarn@4.18.0` |
 | Bun | Production target | `bun@1.3.14` |
-| vlt | Preview, planning only | `vlt@1.0.2` |
-| Deno dependency mode | Preview, planning only | `deno@2.9.5` |
+| vlt | Production target | `vlt@1.0.2` |
+| Deno dependency mode | Production target | `deno@2.9.5` |
 
-Both engines cover all 20 basic directions between the five production adapters at planning level. The planner selects `pnpm import`, `bun pm migrate`, Bun's pnpm migration path, `yarn import`, or a verified install-integrated path where applicable. The Rust renderer translates the supported npm and pnpm override and Yarn resolution subset, Plug and Play and isolated linkers, environment-backed `.npmrc` registry settings for Yarn Modern, and lifecycle allow-lists among Bun, pnpm, and Yarn Modern. Unsupported selectors, literal credentials, and configuration outside the deterministic subset fail closed. Rust subprocess fixtures execute `pnpm -> bun -> rollback`, `npm -> pnpm`, `npm -> yarn-modern`, isolated trial, and deliberate graph drift; live Bun checks cover dependency-bearing migration, apply, graph proof, and rollback. The TypeScript reference retains the remaining complex-capability fixtures and native-import planning while serving as the renderer parity oracle during the port.
+Both engines cover all 42 basic directions between the seven production adapters at planning level. vlt support includes workspaces, workspace protocols, catalogs, graph modifiers, public registry and scope configuration, command integration rewriting, installation, and vlt lock graph proof. Deno dependency mode includes workspaces, npm-compatible overrides and registry configuration, catalog expansion, isolated linking, preserved runtime configuration, `deno task` integration rewriting, installation, and Deno v5 lock graph proof. Deno runtime migration remains outside this package-manager boundary. Unsupported protocols, lifecycle policies, selectors, literal credentials, and configuration outside the deterministic subset fail closed. Rust subprocess fixtures execute vlt and Deno migrations, while pinned real installers validate multi-package workspace migration and lock graph equivalence. See the [real-world validation corpus](docs/support/real-world-corpus.md) for pinned upstream planning, installer, and verification evidence.
 
 See the full [support policy](docs/support/package-managers.md) and [capability matrix](docs/support/capability-matrix.md).
 
@@ -252,6 +252,7 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 - [Agent interface](docs/architecture/agent-interface.md)
 - [Recovery and verification](docs/architecture/recovery-and-verification.md)
 - [Lock graph proof](docs/architecture/lock-graph-proof.md)
+- [Real-world validation corpus](docs/support/real-world-corpus.md)
 - [Package manager workflow](docs/workflows/pkgshift.md)
 - [Isolated migration trial](docs/workflows/isolated-trial.md)
 - [Release system](docs/governance/release-system.md)
@@ -259,4 +260,4 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 
 ## Current boundaries
 
-Automatic representative project-script execution is not part of the MVP. `resolution-set-v1` makes resolved version and comparable integrity drift blocking, while dependency edge differences remain evidence for later platform-aware policies. Binary `bun.lockb` graph extraction fails closed until converted to text. Preview adapters cannot be applied, and lossy decisions require explicit acceptance when the plan is created. Rust target rendering currently fails closed for advanced transformations that have not crossed the parity gate; the TypeScript reference documents and tests the intended behavior until each renderer is ported.
+Automatic representative project-script execution is not part of the MVP. `resolution-set-v1` makes resolved version and comparable integrity drift blocking, while dependency edge differences remain evidence for later platform-aware policies. Binary `bun.lockb` graph extraction fails closed until converted to text. vlt and Deno are production targets only for their documented deterministic subsets; unsupported repository semantics still block apply, and lossy decisions require explicit acceptance when the plan is created. The TypeScript reference remains the renderer parity oracle for future capability expansion.

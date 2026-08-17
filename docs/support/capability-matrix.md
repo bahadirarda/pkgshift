@@ -5,7 +5,7 @@ description: Defines normalized capability dimensions and how planning decisions
 tags: [support, capabilities, adapters, testing]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-16T23:32:12Z}
+generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
 sources:
   - id: package-managers
     resource: /support/package-managers.md
@@ -44,15 +44,17 @@ Each adapter declares every capability using one of these values:
 
 This matrix identifies the implemented planning focus. Individual plans still fail closed when a feature-specific execution renderer is unavailable.
 
-| Adapter | Workspaces | Catalog-like policy | Override policy | Patches or plugins | Linker or layout modes | Preview gate |
+| Adapter | Workspaces | Catalog-like policy | Override policy | Patches or plugins | Linker or layout modes | Apply capable |
 | --- | --- | --- | --- | --- | --- | --- |
 | npm | Required | Analyze/transform | Required | Detect and diagnose | Detect assumptions | No |
 | pnpm | Required | Required | Required | Required | Required | No |
 | Yarn Classic | Required | Analyze/transform | Required | Detect and diagnose | Detect assumptions | No |
 | Yarn Modern | Required | Analyze/transform | Required | Required | Required | No |
 | Bun | Required | Required where available | Required | Required for exact text patches | Detect assumptions | No |
-| vlt | Required for preview scenarios | Unknown until adapter research | Required for preview scenarios | Unknown until adapter research | Unknown until adapter research | Yes |
-| Deno dependency mode | Required for preview scenarios | Analyze/transform | Analyze/transform | Not applicable to MVP | Not applicable to MVP | Yes |
+| vlt | Required | Required | Required through graph modifiers | Unsupported and blocking | Native isolated layout | Yes |
+| Deno dependency mode | Required | Lossy expansion | Required through npm overrides | Unsupported and blocking | Native isolated layout | Yes |
+
+vlt apply is limited to the deterministic workspace, catalog, modifier, public registry, integration, installer, and lock graph subset. Deno apply is limited to npm-compatible package metadata and registry behavior, workspace configuration, override policy, catalog expansion, isolated linking, preserved Deno configuration, integration commands, installation, and lock proof. Neither production tier converts unsupported protocols or lifecycle allow-lists, and Deno dependency mode does not imply a runtime migration.
 
 # Rule Shape
 

@@ -2,7 +2,7 @@
 
 > pkgshift is an open-source CLI for deterministic, transactional package manager migrations in JavaScript repositories.
 
-pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, and Bun as production planning targets. It inspects the repository, creates an immutable plan, requires approval for that exact plan, applies the planned operations, verifies the result, and retains rollback artifacts. Coding agents operate the CLI; they do not author migration edits.
+pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode as production targets. It inspects the repository, creates an immutable plan, requires approval for that exact plan, applies the planned operations, verifies the result, and retains rollback artifacts. Coding agents operate the CLI; they do not author migration edits.
 
 ## Product
 

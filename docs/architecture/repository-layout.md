@@ -4,7 +4,7 @@ title: Repository Layout
 description: Maps the MVP source tree to migration planning, execution, verification, recovery, CLI, documentation, and skill boundaries.
 tags: [architecture, codebase, rust, typescript, monorepo, testing]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T21:09:25Z}
+generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
 sources:
   - id: migration-engine
     resource: /architecture/migration-engine.md
@@ -58,7 +58,7 @@ Tests create isolated temporary repositories and remove only generated fixtures.
 - Explicit, ambiguous, and conflicting package-manager detection.
 - Project IR extraction and secret-safe repository fingerprints.
 - Native, transformed, lossy, unsupported, and unknown capability decisions.
-- Deterministic target rendering for npm, pnpm, both Yarn families, and Bun.
+- Deterministic target rendering for npm, pnpm, both Yarn families, Bun, vlt, and Deno dependency mode.
 - Rust policy fixtures for npm and pnpm overrides, Yarn resolutions, scoped packages, unsupported selectors, and policy discovered in `pnpm-workspace.yaml`.
 - Exact approval and stale-plan rejection before mutation.
 - Artifact, snapshot, execution report, and journal integrity.
@@ -67,8 +67,10 @@ Tests create isolated temporary repositories and remove only generated fixtures.
 - Mid-run precondition conflicts and partial-failure rollback.
 - Rust subprocess migrations for pnpm-to-Bun with rollback and npm-to-pnpm with nested override rendering.
 - Rust subprocess trial with no source writes, native importer ordering, intentional target graph drift, and fail-closed lock format fixtures.
-- Rust planning coverage for all 20 basic production-adapter directions.
+- Rust planning coverage for all 42 basic production-adapter directions.
 - Live Rust runs with Bun 1.3.14 covering dependency-bearing npm-to-Bun trial, native migration, install, graph proof, apply, and rollback.
+- Live Rust runs with vlt 1.0.2 and Deno 2.9.5 covering dependency-bearing workspaces, target installation, and graph proof.
+- Pinned upstream corpus runs covering executable plans, capability blockers, installer failures, post-install graph rejection, and source preservation.
 - TypeScript end-to-end guided and staged CLI plan, approval, apply, verify, and rollback.
 - Codex and Claude Code skill copy, link, conflict, and protected uninstall behavior.
 - rustfmt, warning-free Clippy, strict TypeScript, OKF, link, Agent Skill, and English-only validation.

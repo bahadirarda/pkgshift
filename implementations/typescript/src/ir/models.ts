@@ -82,6 +82,7 @@ export type FeatureId =
   | "dependency.patch-protocol"
   | "dependency.portal-protocol"
   | "dependency.link-protocol"
+  | "dependency.deno-import-map"
   | "policy.catalogs"
   | "resolution.overrides"
   | "resolution.nested-overrides"
@@ -118,4 +119,3 @@ export interface ProjectIR {
   }>;
   diagnostics: Diagnostic[];
 }
-

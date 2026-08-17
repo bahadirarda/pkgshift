@@ -56,7 +56,7 @@ describe("package manager planning", () => {
     });
   });
 
-  test("labels preview targets without blocking planning", async () => {
+  test("plans vlt as a production target", async () => {
     const root = await createProject({
       "package.json": JSON.stringify({
         name: "fixture",
@@ -72,8 +72,9 @@ describe("package manager planning", () => {
 
     const plan = await planPackageManagerMigration(inspection, projectIr!, analysis!, "vlt");
 
-    expect(plan?.targetTier).toBe("preview-target");
-    expect(plan?.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+    expect(plan?.targetTier).toBe("production-target");
+    expect(plan?.executable).toBeTrue();
+    expect(plan?.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain(
       "PM_TARGET_PREVIEW",
     );
   });

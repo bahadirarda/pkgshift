@@ -81,26 +81,26 @@ export const PACKAGE_MANAGERS: readonly PackageManagerDefinition[] = [
   {
     id: "vlt",
     displayName: "vlt",
-    tier: "preview-target",
+    tier: "production-target",
     aliases: ["vlt"],
     lockfiles: ["vlt-lock.json"],
-    configurationFiles: ["vlt.json", ".npmrc"],
+    configurationFiles: ["vlt.json"],
     installCommand: ["vlt", "install"],
-    implementationStatus: "preview",
+    implementationStatus: "production",
     packageManagerPin: "vlt@1.0.2",
-    scope: "preview detection, capability reporting, and guarded migration planning",
+    scope: "vlt manifests, lockfiles, workspaces, catalogs, graph modifiers, registries, CI, and containers",
   },
   {
     id: "deno",
     displayName: "Deno dependency mode",
-    tier: "preview-target",
+    tier: "production-target",
     aliases: ["deno"],
     lockfiles: ["deno.lock"],
-    configurationFiles: ["deno.json", "deno.jsonc"],
+    configurationFiles: ["deno.json", "deno.jsonc", ".npmrc"],
     installCommand: ["deno", "install"],
-    implementationStatus: "preview",
+    implementationStatus: "production",
     packageManagerPin: "deno@2.9.5",
-    scope: "preview npm and JSR dependency declarations and workspaces, excluding runtime migration",
+    scope: "Deno npm-compatible dependency declarations, lockfiles, workspaces, registries, CI, and containers; runtime modernization remains out of scope",
   },
 ] as const;
 
@@ -205,7 +205,7 @@ export function nativeImportStrategy(
   }
   if (
     target === "deno"
-    && ["npm", "pnpm", "yarn-classic", "yarn-modern"].includes(source)
+    && source === "npm"
   ) {
     return {
       id: "deno-install-migration",
