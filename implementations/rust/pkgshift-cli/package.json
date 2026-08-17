@@ -1,6 +1,6 @@
 {
   "name": "pkgshift",
-  "version": "0.20260817.5",
+  "version": "0.20260817.6",
   "description": "Changesets version proxy for the pkgshift Rust CLI crate.",
   "private": true
 }

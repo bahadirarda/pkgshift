@@ -1,5 +1,20 @@
 # pkgshift-core
 
+## 0.20260817.6
+
+### Minor Changes
+
+- a645ddc: Add a dedicated, permission-aware Bun-to-Deno runtime migration with deterministic source, script, import, and type-cleanup recipes; content-redacted plans; exact approval; residue verification; private snapshots; runtime rollback; and real Hono acceptance coverage.
+- dd947e0: Add deterministic multi-target comparison with one aggregate approval, independent isolated trials, nested candidate evidence, capability-blocked candidates, source-preservation proof, and explicit no-ranking semantics.
+- d22a49a: Add deterministic repository integration migration for package scripts, registered CI setup and command fields, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins, with fail-closed diagnostics for ambiguous or unsupported target semantics.
+- 951853a: Add explicit representative root-script verification with immutable target commands, bounded shell-free execution, operation-bound process journals, withheld output, and verification reports that never rerun repository code.
+- 5100987: Port managed Agent Skill copy, link, status, doctor, dry-run, exact approval, project and user confinement, content-digest health checks, and protected uninstall behavior to the Rust primary CLI.
+- 7f9bb0b: Port diagnostic and integrity-checked stored-artifact explanation to the primary Rust CLI.
+
+### Patch Changes
+
+- ab3d22e: Split lock graph extraction and comparison into focused modules and enforce a production Rust module-size boundary during repository validation.
+
 ## 0.20260817.5
 
 ### Minor Changes
