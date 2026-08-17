@@ -107,7 +107,7 @@ The MVP evaluates declared postconditions at these levels:
 4. Workspace membership preservation.
 5. Planned integration file digests.
 
-The Rust verifier independently extracts the target lock graph. It applies `reachable-resolution-set-v2` when both formats expose dependency topology and retains `resolution-set-v1` for formats without that evidence. V2 prunes proven unreachable entries, distinguishes optional-only package-name absence, and fails closed on unresolved required paths. Added or removed reachable `name@version` resolutions and comparable integrity mismatches block completion. Edge changes remain evidence because package managers encode peer placement, hoisting, and deduplication differently. When no source lockfile existed, graph comparison is explicitly skipped. Representative project script execution remains a post-MVP extension.
+The Rust verifier independently extracts the target lock graph. It applies `reachable-resolution-set-v2` when both formats expose dependency topology and retains `resolution-set-v1` for formats without that evidence. V2 prunes proven unreachable entries, distinguishes optional-only package-name absence, and fails closed on unresolved required paths. Added or removed reachable `name@version` resolutions and comparable integrity mismatches block completion. Edge changes remain evidence because package managers encode peer placement, hoisting, and deduplication differently. When no source lockfile existed, graph comparison is explicitly skipped. Explicitly selected representative root scripts execute through bounded, shell-free operations and are verified from their journaled results without rerunning repository code.
 
 ## Trial Executor
 

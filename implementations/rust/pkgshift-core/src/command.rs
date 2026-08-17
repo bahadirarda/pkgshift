@@ -26,7 +26,7 @@ use lifecycle::{apply_command, rollback_command, verify_command};
 pub enum CommandKind {
     Inspect,
     Doctor {
-        target: String,
+        target: Option<String>,
     },
     Compare {
         targets: Vec<String>,
@@ -849,7 +849,7 @@ pub fn execute(options: &CommandOptions) -> CommandExecution {
     };
     let execution = match &options.command {
         CommandKind::Inspect => inspect_command(&options.cwd),
-        CommandKind::Doctor { target } => doctor::doctor_command(options, target),
+        CommandKind::Doctor { target } => doctor::doctor_command(options, target.as_deref()),
         CommandKind::Compare { targets } => comparison::comparison_command(options, targets),
         CommandKind::Plan { target } => plan_command(options, target),
         CommandKind::To { target } => guided_command(options, target),

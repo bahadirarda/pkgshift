@@ -68,3 +68,54 @@ impl MigrationReadiness {
         SCHEMA_VERSION.to_owned()
     }
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadinessMatrixSummary {
+    pub targets: usize,
+    pub migration_available_targets: usize,
+    pub available_after_review_targets: usize,
+    pub ready_targets: usize,
+    pub review_required_targets: usize,
+    pub blocked_targets: usize,
+    pub already_selected_targets: usize,
+}
+
+impl ReadinessMatrixSummary {
+    pub fn from_reports(reports: &[MigrationReadiness]) -> Self {
+        let mut summary = Self {
+            targets: reports.len(),
+            migration_available_targets: reports
+                .iter()
+                .filter(|report| report.migration_available)
+                .count(),
+            available_after_review_targets: reports
+                .iter()
+                .filter(|report| report.available_after_review)
+                .count(),
+            ..Self::default()
+        };
+        for report in reports {
+            match report.verdict {
+                ReadinessVerdict::Ready => summary.ready_targets += 1,
+                ReadinessVerdict::ReviewRequired => summary.review_required_targets += 1,
+                ReadinessVerdict::Blocked => summary.blocked_targets += 1,
+                ReadinessVerdict::AlreadySelected => summary.already_selected_targets += 1,
+            }
+        }
+        summary
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrationReadinessMatrix {
+    pub schema_version: String,
+    pub matrix_id: String,
+    pub read_only: bool,
+    pub accepted_lossy: bool,
+    pub source: Option<PackageManagerId>,
+    pub repository_fingerprint: String,
+    pub summary: ReadinessMatrixSummary,
+    pub reports: Vec<MigrationReadiness>,
+}

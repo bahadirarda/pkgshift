@@ -4,6 +4,181 @@ fn readiness(result: &Value) -> &Value {
     artifact_content(result, "migration-readiness")
 }
 
+fn readiness_matrix(result: &Value) -> &Value {
+    artifact_content(result, "migration-readiness-matrix")
+}
+
+#[test]
+fn assesses_every_target_from_one_read_only_repository_context() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "doctor-matrix-fixture",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "workspaces": ["packages/*"],
+  "scripts": { "check": "node check.js" }
+}
+"#,
+    );
+    write(
+        &root.join("packages/app/package.json"),
+        r#"{"name":"@fixture/app","private":true}"#,
+    );
+    write(
+        &root.join("pnpm-lock.yaml"),
+        "lockfileVersion: '9.0'\npackages: {}\nsnapshots: {}\n",
+    );
+    write(
+        &root.join("pnpm-workspace.yaml"),
+        "packages:\n  - 'packages/*'\n",
+    );
+    write(&root.join("node_modules/.pnpm/source"), "preserve\n");
+
+    let first = run(&root, &binaries, &["doctor", "--verify-script", "check"]);
+    assert!(
+        first.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&first.stdout),
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let first = json_output(&first);
+    assert_eq!(first["status"], "completed");
+    assert_eq!(first["planId"], Value::Null);
+    assert_eq!(first["runId"], Value::Null);
+    assert_eq!(first["summary"]["targets"], 7);
+    assert_eq!(first["summary"]["migrationAvailableTargets"], 6);
+    assert_eq!(first["summary"]["alreadySelectedTargets"], 1);
+    assert_eq!(first["summary"]["repositoryChanged"], false);
+    assert!(
+        first["artifacts"]
+            .as_array()
+            .expect("artifacts")
+            .iter()
+            .all(|artifact| artifact["type"] != "package-manager-plan")
+    );
+
+    let matrix = readiness_matrix(&first);
+    assert!(
+        matrix["matrixId"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("doctor_matrix_"))
+    );
+    assert_eq!(matrix["readOnly"], true);
+    assert_eq!(matrix["source"], "pnpm");
+    let reports = matrix["reports"].as_array().expect("matrix reports");
+    assert_eq!(reports.len(), 7);
+    assert_eq!(
+        reports
+            .iter()
+            .map(|report| report["target"].as_str().expect("target"))
+            .collect::<Vec<_>>(),
+        vec![
+            "npm",
+            "pnpm",
+            "yarn-classic",
+            "yarn-modern",
+            "bun",
+            "vlt",
+            "deno"
+        ]
+    );
+    assert_eq!(
+        reports
+            .iter()
+            .filter(|report| report["verdict"] == "already-selected")
+            .count(),
+        1
+    );
+    assert!(reports.iter().all(|report| {
+        report["repositoryFingerprint"] == matrix["repositoryFingerprint"]
+            && report["readOnly"] == true
+    }));
+    let next_actions = first["nextActions"].as_array().expect("next actions");
+    assert_eq!(next_actions.len(), 6);
+    assert!(next_actions.iter().all(|action| {
+        action["requiresApproval"] == false
+            && action["sideEffect"] == "none"
+            && action["argv"][1] == "plan"
+    }));
+
+    let second = json_output(&run(
+        &root,
+        &binaries,
+        &["doctor", "--verify-script", "check"],
+    ));
+    assert_eq!(
+        readiness_matrix(&first)["matrixId"],
+        readiness_matrix(&second)["matrixId"]
+    );
+    assert!(root.join("pnpm-lock.yaml").is_file());
+    assert!(root.join("pnpm-workspace.yaml").is_file());
+    assert!(root.join("node_modules/.pnpm/source").is_file());
+    assert!(!root.join(".pkgshift").exists());
+}
+
+#[test]
+fn retains_blocked_candidates_as_target_scoped_matrix_evidence() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "doctor-matrix-blocked-fixture",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "patchedDependencies": { "left-pad@1.3.0": "patches/left-pad.patch" }
+}
+"#,
+    );
+    write(
+        &root.join("patches/left-pad.patch"),
+        "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+    );
+    write(
+        &root.join("pnpm-lock.yaml"),
+        "lockfileVersion: '9.0'\npackages: {}\nsnapshots: {}\n",
+    );
+
+    let output = run(&root, &binaries, &["doctor"]);
+    assert!(output.status.success());
+    let output = json_output(&output);
+    let reports = readiness_matrix(&output)["reports"]
+        .as_array()
+        .expect("matrix reports");
+    for target in ["vlt", "deno"] {
+        let report = reports
+            .iter()
+            .find(|report| report["target"] == target)
+            .expect("target report");
+        assert_eq!(report["verdict"], "blocked");
+        assert_eq!(report["migrationAvailable"], false);
+        assert!(
+            report["diagnostics"]
+                .as_array()
+                .expect("diagnostics")
+                .iter()
+                .any(|diagnostic| diagnostic["code"] == "CAPABILITY_UNSUPPORTED")
+        );
+    }
+    assert!(
+        output["nextActions"]
+            .as_array()
+            .expect("next actions")
+            .iter()
+            .all(|action| action["argv"]
+                .as_array()
+                .expect("argv")
+                .iter()
+                .all(|argument| argument != "vlt" && argument != "deno"))
+    );
+    assert!(!root.join(".pkgshift").exists());
+}
+
 #[test]
 fn reports_deterministic_readiness_and_repository_effects_without_writes() {
     let directory = tempfile::tempdir().expect("fixture directory");

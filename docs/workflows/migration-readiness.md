@@ -16,6 +16,14 @@ sources:
 
 # Purpose
 
+Assess every production target from one repository scan when the target is undecided:
+
+```text
+pkgshift doctor
+```
+
+The command returns one `migration-readiness-matrix` containing independent reports for npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode. It preserves blocked candidates and never calculates a winner.
+
 Assess one package-manager target from the repository root before creating or persisting a plan:
 
 ```text
@@ -29,12 +37,15 @@ The command runs the same inspection, Project IR, capability analysis, lock grap
 Use structured output:
 
 ```text
+pkgshift doctor --json --no-color --non-interactive
 pkgshift doctor --to bun --json --no-color --non-interactive
 ```
 
 Add `--verify-script <name>` only for exact root scripts selected by the user. The report lists their target commands as anticipated effects; doctor never executes them.
 
 # Readiness Contract
+
+Aggregate doctor reads inspection, Project IR, integration, and source lock graph evidence once. Its `migration-readiness-matrix` contains a deterministic `doctor_matrix_...` identity, summary counts, and one complete readiness report per catalog target. Top-level completion means evidence collection succeeded; it does not mean every target can migrate. Candidate order is stable catalog order, not a ranking.
 
 The `migration-readiness` artifact includes:
 
@@ -70,11 +81,12 @@ When only lossy acceptance is missing, the returned argument array includes `--a
 
 # Recommended Flow
 
-1. Run doctor for a selected target.
-2. Present the verdict, blockers, warnings, integration impact, cleanup, source-artifact retirement, and declared process effects.
-3. Resolve blockers or obtain explicit acceptance for reviewed lossy behavior.
-4. Execute the returned read-only planning argument array unchanged.
-5. Present the immutable plan and wait for its separate exact approval.
-6. Apply, verify, and roll back only through the ordinary [Package Manager Migration](/workflows/pkgshift.md) contract.
+1. Run aggregate doctor when the target is undecided, or target-specific doctor when it is known.
+2. Present every candidate independently and let the user select; never infer a winner.
+3. Present the verdict, blockers, warnings, integration impact, cleanup, source-artifact retirement, and declared process effects.
+4. Resolve blockers or obtain explicit acceptance for reviewed lossy behavior.
+5. Execute the selected target's returned read-only planning argument array unchanged.
+6. Present the immutable plan and wait for its separate exact approval.
+7. Apply, verify, and roll back only through the ordinary [Package Manager Migration](/workflows/pkgshift.md) contract.
 
 `pkgshift doctor` assesses migration readiness. `pkgshift skill doctor` is a different read-only command that inspects a managed Agent Skill installation.

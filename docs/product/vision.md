@@ -54,8 +54,10 @@ The MVP covers:
 - Structured diagnostics, explanations, and rollback.
 - Project and user installation of a portable Agent Skill.
 - Dedicated, permission-aware Bun-to-Deno runtime recipes for verified source and script shapes.
+- Explicitly selected, bounded representative root-script execution with withheld output and journal-backed verification.
+- Non-ranking readiness assessment for one target or every production adapter without creating a plan.
 
-Representative project-script execution remains a post-MVP extension because it requires an explicit selection and trust policy. Configurable target-platform matrices and strict edge-equivalence policies extend the MVP's blocking reachable-resolution proof.
+Configurable target-platform matrices and strict edge-equivalence policies extend the MVP's blocking reachable-resolution proof.
 
 # Non-goals
 

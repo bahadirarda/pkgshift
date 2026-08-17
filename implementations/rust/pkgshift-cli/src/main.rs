@@ -82,9 +82,9 @@ enum CliCommand {
 
     /// Assess migration readiness without writing repository or state files.
     Doctor {
-        /// Package manager target to assess.
+        /// Package manager target to assess; omit to assess every production target.
         #[arg(long)]
-        to: String,
+        to: Option<String>,
         /// Validate a root package script selection; repeat to select multiple scripts.
         #[arg(long, value_name = "NAME", action = clap::ArgAction::Append)]
         verify_script: Vec<String>,

@@ -46,11 +46,11 @@ This matrix identifies the implemented planning focus. Individual plans still fa
 
 | Adapter | Workspaces | Catalog-like policy | Override policy | Patches or plugins | Linker or layout modes | Apply capable |
 | --- | --- | --- | --- | --- | --- | --- |
-| npm | Required | Analyze/transform | Required | Detect and diagnose | Detect assumptions | No |
-| pnpm | Required | Required | Required | Required | Required | No |
-| Yarn Classic | Required | Analyze/transform | Required | Detect and diagnose | Detect assumptions | No |
-| Yarn Modern | Required | Analyze/transform | Required | Required | Required | No |
-| Bun | Required | Required where available | Required | Required for exact text patches | Detect assumptions | No |
+| npm | Required | Analyze/transform | Required | Detect and diagnose | Detect assumptions | Yes, capability-gated |
+| pnpm | Required | Required | Required | Required | Required | Yes, capability-gated |
+| Yarn Classic | Required | Analyze/transform | Required | Detect and diagnose | Detect assumptions | Yes, capability-gated |
+| Yarn Modern | Required | Analyze/transform | Required | Required | Required | Yes, capability-gated |
+| Bun | Required | Required where available | Required | Required for exact text patches | Detect assumptions | Yes, capability-gated |
 | vlt | Required | Required | Required through graph modifiers | Unsupported and blocking | Native isolated layout | Yes |
 | Deno dependency mode | Required | Lossy expansion | Required through npm overrides | Unsupported and blocking | Native isolated layout | Yes |
 
