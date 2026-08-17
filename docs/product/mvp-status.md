@@ -31,7 +31,8 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Target-native importer selection for verified pnpm, Bun, Yarn Classic, Yarn Modern, and npm migration paths.
 - Versioned Project IR across workspace packages, dependency protocols, policy shapes, linker settings, and integrations.
 - Source-to-target capability analysis backed by explicit rules and authoritative documentation.
-- Real `inspect`, `support`, `plan`, `apply`, `verify`, `rollback`, `explain`, `skill`, and `help` commands.
+- Real `doctor`, `inspect`, `support`, `plan`, `apply`, `verify`, `rollback`, `explain`, `skill`, and `help` commands.
+- Deterministic migration readiness reports that reuse inspection, Project IR, capability, lock graph, and planning logic while omitting mutation content, plan identities, persistence, process execution, and repository writes.
 - A current-directory `pkgshift to <target>` workflow with read-only preview, interactive confirmation, hidden default state, apply, and verification orchestration.
 - An approved `--trial` workflow that executes the exact plan and verification in a disposable copy without persisting source repository state.
 - An aggregate `compare` workflow that binds two or more normalized target plans to one approval and runs each executable candidate in an independent disposable copy without ranking them.
@@ -77,7 +78,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Real Bun 1.3.14 acceptance runs for dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback.
 - Real vlt 1.0.2 and Deno 2.9.5 acceptance runs for dependency-bearing multi-package Bun workspaces, workspace protocols, target installation, and graph proof.
 - A real Hono Bun-to-Deno runtime acceptance run that applies the approved source plan, installs with pinned Deno 2.9.5, type-checks the migrated server, and passes the migrated test suite.
-- A machine-readable pinned upstream corpus covering executable Bun-to-vlt and Bun-to-Deno plans, vlt-to-pnpm and accepted-lossy vlt-to-Deno plans, Vite capability blockers, clean-checkout enforcement, weekly CI, external vlt installer failure, and strict Deno post-install graph rejection without source writes.
+- A machine-readable pinned upstream corpus covering migration readiness and planning for Bun-to-vlt, Bun-to-Deno, vlt-to-pnpm, accepted-lossy vlt-to-Deno, and Vite capability blockers, with clean-checkout enforcement and weekly CI.
 - Sibling Rust and TypeScript engines under `implementations/`, with shared root orchestration for both implementations.
 
 # Delivery Gates
@@ -86,6 +87,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | --- | --- | --- |
 | Interface and knowledge contracts | MVP complete | Versioned results, exact approvals, OKF validation, and portable skill validation are automated. |
 | Inspection and planning | MVP complete | Production targets render common manifest, workspace, catalog, override, linker, registry-reference, and integration semantics or fail closed. |
+| Migration readiness | MVP complete | Rust doctor reports deterministic verdicts, diagnostics, integration impact, and projected effects without a plan, persisted state, process execution, or repository mutation. |
 | Plan artifact persistence | MVP complete | Persistence is explicit, atomic, immutable, digest-checked, and repository-bound. |
 | Transaction executor | MVP complete | Recovery snapshots, precondition rechecks, atomic writes, journal transitions, and partial-failure fixtures pass. |
 | Verification | MVP complete | Planned digests, clean-install evidence, source-artifact residue, target selection, lockfile behavior, workspace membership, install completion, and reachable resolution-set parity are checked. |

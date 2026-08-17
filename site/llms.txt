@@ -2,7 +2,7 @@
 
 > pkgshift is an open-source CLI for deterministic, transactional package manager and Bun-to-Deno runtime migrations in JavaScript repositories.
 
-pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode as production targets. A separate `pkgshift runtime to deno` surface applies permission-aware deterministic recipes for supported Bun application semantics without changing package-manager ownership. Managed `pkgshift skill` commands install the canonical portable Agent Skill for Codex or Claude Code through exact approval and protected ownership. The read-only `pkgshift explain` surface expands stable diagnostics and integrity-checks persisted package-manager or runtime plan, run, and verification evidence. The migration engine inspects the repository, creates an immutable plan, requires approval for that exact plan, applies the planned operations, verifies the result, and retains rollback artifacts. Coding agents operate the CLI; they do not author migration edits.
+pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode as production targets. `pkgshift doctor --to <target>` returns deterministic migration readiness, integration impact, and projected cleanup without creating a plan, persisting state, executing a process, or changing the repository. A separate `pkgshift runtime to deno` surface applies permission-aware deterministic recipes for supported Bun application semantics without changing package-manager ownership. Managed `pkgshift skill` commands install the canonical portable Agent Skill for Codex or Claude Code through exact approval and protected ownership. The read-only `pkgshift explain` surface expands stable diagnostics and integrity-checks persisted package-manager or runtime plan, run, and verification evidence. The migration engine inspects the repository, creates an immutable plan, requires approval for that exact plan, applies the planned operations, verifies the result, and retains rollback artifacts. Coding agents operate the CLI; they do not author migration edits.
 
 ## Product
 
@@ -15,6 +15,7 @@ pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno depen
 
 - [Migration engine](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/migration-engine.md): Inspect, plan, approve, apply, verify, and rollback pipeline.
 - [Agent interface](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/agent-interface.md): Machine-readable output, exit codes, next actions, and approval semantics.
+- [Migration readiness](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/workflows/migration-readiness.md): Deterministic target assessment without a plan, state persistence, process execution, or repository writes.
 - [Recovery and verification](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/recovery-and-verification.md): Snapshots, run journals, integrity checks, and rollback boundaries.
 - [Bun-to-Deno runtime recipes](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/runtime-migration-recipes.md): Dedicated runtime recipe, permission, transaction, and residue-verification contract.
 

@@ -1,7 +1,7 @@
 ---
 type: Validation Evidence
 title: Real-World Validation Corpus
-description: Records pinned upstream repositories used by automated planning, real installers, and lock graph verification.
+description: Records pinned upstream repositories used by automated readiness assessment, planning, real installers, and lock graph verification.
 tags: [support, validation, corpus, vlt, deno, safety]
 status: draft
 stale_after: 2026-09-17
@@ -32,7 +32,7 @@ sources:
 
 # Purpose
 
-Synthetic fixtures prove exact transformations. This corpus adds pinned upstream repositories to expose repository shapes, lockfile variants, installer behavior, and verification outcomes that small fixtures do not reproduce. Corpus failures are evidence: pkgshift must distinguish an unsupported capability, an external installer failure, and a post-install dependency graph mismatch instead of reporting all three as a successful migration.
+Synthetic fixtures prove exact transformations. This corpus adds pinned upstream repositories to expose repository shapes, lockfile variants, integration constraints, installer behavior, and verification outcomes that small fixtures do not reproduce. Every case runs both read-only migration readiness and complete planning. Corpus failures are evidence: pkgshift must distinguish an unsupported capability, an external installer failure, and a post-install dependency graph mismatch instead of reporting all three as a successful migration.
 
 # Pinned Repositories
 
@@ -46,9 +46,9 @@ Synthetic fixtures prove exact transformations. This corpus adds pinned upstream
 
 The results below were produced on 2026-08-17 with the pinned pkgshift source revision preceding this document, vlt 1.0.2 on Node 22.22.0, Deno 2.9.5, and the declared source package managers.
 
-| Case | Planning result | Execution or verification evidence |
+| Case | Readiness and planning result | Execution or verification evidence |
 | --- | --- | --- |
-| Hono, Bun to vlt | Executable production plan, seven operations including clean target installation, no capability blocker, one `NATIVE_IMPORT_UNAVAILABLE` warning, and bounded `SOURCE_RUNTIME_REFERENCES_PRESERVED` evidence. | Isolated trial preserved the source. vlt failed while resolving a transitive npm package as a malformed SSH git URL, so pkgshift reported installer failure and did not claim verification success. |
+| Hono, Bun to vlt | Blocked. Current integration rules reject Bun-specific setup actions and unsupported toolchain target rewrites through `INTEGRATION_SETUP_ACTION_UNSUPPORTED` and `INTEGRATION_TOOLCHAIN_TARGET_UNSUPPORTED`; runtime references remain bounded evidence. | No process runs for a blocked case. Doctor and plan both preserve the clean pinned checkout. |
 | Hono, Bun to Deno | Executable production plan, seven operations including clean target installation, no capability blocker, one `NATIVE_IMPORT_UNAVAILABLE` warning, and bounded `SOURCE_RUNTIME_REFERENCES_PRESERVED` evidence. | Deno installation succeeded. `reachable-resolution-set-v2` tolerated three optional-only package-name absences but rejected 48 reachable source-only versions. No source resolution was topology-proven stale, so the isolated trial correctly remained failed and reported `repositoryUnchanged: true`. |
 | Vite, pnpm to vlt | Blocked production plan with one native decision, two transforms, and four unsupported capabilities. | Link protocol, lifecycle allow-list, patched dependency, and package-extension semantics remain blocking. The source lock graph parses after excluding local pnpm package locators from the registry graph. |
 | Vite, pnpm to Deno | Blocked production plan with two native decisions, one transform, four unsupported capabilities, and 153 unsupported local dependency specifiers. | The UTF-8 BOM fixture is parsed correctly; unsupported local fixture dependencies fail closed before execution. |
@@ -59,9 +59,9 @@ The results below were produced on 2026-08-17 with the pinned pkgshift source re
 
 The Rust acceptance suite creates a two-package Bun workspace with a `workspace:*` edge and a registry dependency. It migrates the same source independently to vlt 1.0.2 and Deno 2.9.5, proves that Bun-owned package-local dependency state was removed before the real target installer, extracts the generated target lockfile, and requires normalized graph equivalence. Both migrations pass. This separates adapter correctness from upstream repository or installer limitations recorded in the corpus.
 
-# Automated Planning Gate
+# Automated Readiness and Planning Gate
 
-`validation/real-world-corpus.json` pins all three repository revisions and the expected source, target, plan status, executability, operation count, capability counts, and required diagnostic codes for six migration directions. `bun run corpus:real-world` performs shallow detached checkouts, executes read-only Rust plans, asserts the contracts, verifies that every checkout remains clean, and emits one bounded JSON summary.
+`validation/real-world-corpus.json` pins all three repository revisions and the expected source, target, doctor verdict, plan status, executability, operation count, capability counts, and required diagnostic codes for six migration directions. `bun run corpus:real-world` performs shallow detached checkouts, executes Rust doctor and plan for every case, asserts both read-only contracts, verifies that every checkout remains clean, and emits one bounded JSON summary.
 
 The `real-world-corpus` GitHub Actions workflow runs this gate every Monday and on manual dispatch. Default branches never enter the test, a plan identifier is not treated as a stable expectation, and the workflow uploads the summary for 30 days. Installer trials remain in the separately pinned acceptance suite because planning regressions and external registry failures have different ownership.
 
@@ -76,17 +76,19 @@ The corpus added regression coverage for three production inputs:
 
 # Reproduction Contract
 
-Run the complete pinned, read-only planning corpus from the pkgshift repository root:
+Run the complete pinned, read-only readiness and planning corpus from the pkgshift repository root:
 
 ```bash
 cargo build --package pkgshift --release --locked
 bun run corpus:real-world
 ```
 
-To reproduce one case manually, check out the exact revision from the table, build the current Rust CLI, and run the plan from that repository root:
+To reproduce one case manually, check out the exact revision from the table, build the current Rust CLI, and run doctor before the plan from that repository root:
 
 ```bash
+pkgshift doctor --to vlt --json --no-color --non-interactive
 pkgshift to vlt --json --no-color --non-interactive
+pkgshift doctor --to deno --json --no-color --non-interactive
 pkgshift to deno --json --no-color --non-interactive
 ```
 

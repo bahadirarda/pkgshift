@@ -24,11 +24,17 @@
       "target": "vlt",
       "expect": {
         "source": "bun",
-        "status": "planned",
-        "executable": true,
+        "status": "blocked",
+        "doctorVerdict": "blocked",
+        "executable": false,
         "operations": 7,
         "capabilities": { "native": 0, "transform": 0, "lossy": 0, "unsupported": 0 },
-        "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE", "SOURCE_RUNTIME_REFERENCES_PRESERVED"]
+        "diagnosticCodes": [
+          "INTEGRATION_SETUP_ACTION_UNSUPPORTED",
+          "INTEGRATION_TOOLCHAIN_TARGET_UNSUPPORTED",
+          "NATIVE_IMPORT_UNAVAILABLE",
+          "SOURCE_RUNTIME_REFERENCES_PRESERVED"
+        ]
       }
     },
     {
@@ -38,6 +44,7 @@
       "expect": {
         "source": "bun",
         "status": "planned",
+        "doctorVerdict": "review-required",
         "executable": true,
         "operations": 7,
         "capabilities": { "native": 0, "transform": 0, "lossy": 0, "unsupported": 0 },
@@ -51,6 +58,7 @@
       "expect": {
         "source": "pnpm",
         "status": "blocked",
+        "doctorVerdict": "blocked",
         "executable": false,
         "operations": 7,
         "capabilities": { "native": 1, "transform": 2, "lossy": 0, "unsupported": 4 },
@@ -64,6 +72,7 @@
       "expect": {
         "source": "pnpm",
         "status": "blocked",
+        "doctorVerdict": "blocked",
         "executable": false,
         "operations": 7,
         "capabilities": { "native": 2, "transform": 1, "lossy": 0, "unsupported": 4 },
@@ -77,6 +86,7 @@
       "expect": {
         "source": "vlt",
         "status": "planned",
+        "doctorVerdict": "review-required",
         "executable": true,
         "operations": 7,
         "capabilities": { "native": 5, "transform": 0, "lossy": 0, "unsupported": 0 },
@@ -91,6 +101,7 @@
       "expect": {
         "source": "vlt",
         "status": "planned",
+        "doctorVerdict": "review-required",
         "executable": true,
         "operations": 7,
         "capabilities": { "native": 2, "transform": 1, "lossy": 2, "unsupported": 0 },

@@ -12,6 +12,7 @@ Use pkgshift as the deterministic execution boundary. Prefer the guided `pkgshif
 Map the request to the narrowest operation:
 
 - Assess a repository or identify its package manager: inspect.
+- Assess a selected target without creating a plan: migration-readiness doctor.
 - Preview a specific migration without execution: guided dry-run.
 - Prove importer, installer, and verification behavior without source writes: guided trial.
 - Compare two or more candidate targets without source writes: aggregate comparison preview, exact approval, then independent target trials.
@@ -47,6 +48,20 @@ pkgshift inspect package-manager --json --no-color --non-interactive
 Confirm the repository root, source candidates, confidence, workspace topology, relevant integrations, and diagnostics. Preserve unrelated user changes. Never install dependencies during inspection.
 
 When source detection is ambiguous, present the evidence and request a source selection. Do not choose based on one lockfile when other evidence conflicts.
+
+## Assess Migration Readiness
+
+When the target is known, assess it before requesting the complete plan:
+
+```text
+pkgshift doctor --to <target> --json --no-color --non-interactive
+```
+
+Add repeatable `--verify-script <name>` only for exact root scripts selected by the user. Doctor reports their anticipated target commands but never executes them.
+
+Find the `migration-readiness` artifact and treat `migrationAvailable` as authoritative. Present its verdict, capability counts, diagnostics, integration paths, file writes and deletions, dependency-state cleanup, source-artifact retirement, declared process commands, and verification scripts. `ready` is executable without a reported warning. `review-required` may be executable with warnings or may require explicit lossy acceptance when `availableAfterReview` is true. `blocked` is not executable. `already-selected` requires no migration.
+
+Doctor is read-only: it emits no package-manager plan, `planId`, or `runId`; persists no state; runs no process; and changes no file. Never treat its `doctor_...` report identifier as approval. When a read-only next action is returned, execute its argument array unchanged only after the user explicitly accepts every reported lossy decision. That action creates the complete plan and still does not authorize apply.
 
 ## Preview a Migration
 

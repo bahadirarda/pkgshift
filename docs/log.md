@@ -2,6 +2,7 @@
 
 ## 2026-08-17
 
+* **Migration readiness**: Added deterministic `pkgshift doctor --to <target>` assessment with stable verdicts, capability and integration evidence, projected cleanup and process effects, no plan or persisted state, Agent Skill guidance, and pinned upstream corpus enforcement.
 * **Windows distribution**: Added a checksum-verifying PowerShell installer for the Windows x86-64 release with release-metadata validation, staged binary and Skill replacement, smoke-check rollback, stale-data cleanup, fixture acceptance on `windows-2025`, release assets, and an accessible website platform switcher; upgraded the Unix installer to the same rollback contract.
 * **Native explanation**: Ported diagnostic and persisted-artifact explanation to the Rust primary CLI with complete emitted-code catalog validation, canonical identifier grammar, bounded state scans, plan/run/runtime identity checks, verification digest reconstruction, symbolic-link refusal, and read-only end-to-end fixtures.
 * **Agent Skill lifecycle**: Ported copy, exact-source link, status, doctor, dry-run, and protected uninstall behavior to the Rust primary CLI with project/user confinement, Codex/Claude destinations, content digests, symbolic-link parent refusal, read-only approval previews, and exact machine-actionable next actions.

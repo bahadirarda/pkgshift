@@ -1,4 +1,4 @@
 interface:
   display_name: "pkgshift"
-  short_description: "Shift package managers and runtimes safely"
-  default_prompt: "Use $pkgshift to preview and safely execute a package manager or supported Bun-to-Deno runtime migration in this repository."
+  short_description: "Assess and shift package managers safely"
+  default_prompt: "Use $pkgshift to assess readiness, preview, and safely execute a package manager or supported Bun-to-Deno runtime migration in this repository."
