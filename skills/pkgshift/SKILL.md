@@ -66,7 +66,7 @@ When the target is known, assess it before requesting the complete plan:
 pkgshift doctor --to <target> --json --no-color --non-interactive
 ```
 
-Add repeatable `--verify-script <name>` only for exact root scripts selected by the user. Doctor reports their anticipated target commands but never executes them.
+Add repeatable `--verify-script <name>` only for exact root scripts selected by the user. Doctor reports their anticipated target commands but never executes them. When the user has declared deployment targets or requires dependency-edge parity, also add repeatable `--target-platform OS/CPU[/LIBC]` values and `--edge-equivalence strict`. These policy values must remain identical through planning and approval.
 
 Find the `migration-readiness` artifact and treat `migrationAvailable` as authoritative. Present its verdict, capability counts, diagnostics, integration paths, file writes and deletions, dependency-state cleanup, source-artifact retirement, declared process commands, and verification scripts. `ready` is executable without a reported warning. `review-required` may be executable with warnings or may require explicit lossy acceptance when `availableAfterReview` is true. `blocked` is not executable. `already-selected` requires no migration.
 
@@ -100,10 +100,24 @@ Read the result by fields, not by prose. Check:
 - Package-local dependency-state cleanup is visible as a non-reversible generated-state operation.
 - Verification checks match the repository shape.
 - Source lock graph and native importer artifacts are understood when present.
+- `targetExecutable` declares the exact package-manager pin available for apply.
+- `verificationPolicy` contains the reviewed target matrix and edge policy.
 - `summary.repositoryChanged` is false before approval.
 - The plan is executable before requesting approval.
 
 If lossy decisions exist, explain each one before creating a replacement preview with `--accept-lossy`. Never add that option without explicit user acceptance.
+
+Use a deployment matrix only when the user or repository contract identifies targets:
+
+```text
+pkgshift to <target> \
+  --target-platform darwin/arm64 \
+  --target-platform linux/x64/glibc \
+  --edge-equivalence strict \
+  --json --no-color --non-interactive
+```
+
+Without a matrix, optional-only package absence uses compatible behavior. With a matrix, pkgshift tolerates absence only when lockfile constraints prove incompatibility with every selected target. Strict edge equivalence additionally blocks normalized reachable parent, dependency, or dependency-kind drift. Never infer a deployment target from the machine running the agent.
 
 Load [references/capability-model.md](references/capability-model.md) when capability classifications or target selection require interpretation. Load [references/diagnostics.md](references/diagnostics.md) when presenting or handling a diagnostic.
 
@@ -141,11 +155,11 @@ Keep application runtime conversion separate from package-manager selection. Pre
 pkgshift runtime to deno --deno-permission net --json --no-color --non-interactive
 ```
 
-Repeat `--deno-permission` for `read`, `write`, `net`, `env`, `run`, `sys`, `ffi`, or `hrtime` only when required. Never add `-A`, infer broad access, or treat a package-manager migration to Deno dependency mode as runtime approval. A safe `Bun.serve` recipe requires `net`, and Bun text and JSON reads require `read`. Missing permissions and unsupported Bun APIs produce blocking diagnostics.
+Repeat `--deno-permission` for `read`, `write`, `net`, `env`, `run`, `sys`, `ffi`, or `hrtime` only when required. Never add `-A`, infer broad access, or treat a package-manager migration to Deno dependency mode as runtime approval. A safe `Bun.serve` recipe requires `net`, Bun text and JSON reads require `read`, and the Bun `$` to pinned dax recipe requires both `env` and `run`. Missing permissions and unsupported Bun APIs produce blocking diagnostics.
 
 The first call is read-only. Review recipe identifiers, affected paths, before and after digests, permissions, diagnostics, and `nextActions[0].argv`. Runtime plan artifacts omit source contents intentionally. After exact approval, execute the returned argv unchanged. Require `status: completed`, a `runtime_run_` identifier, and a passing `runtime-verification-report` with both `planned-after-digests` and `bun-runtime-residue` passed.
 
-This command does not change `packageManager`, remove `bun.lock`, install dependencies, or execute project code. `Bun.serve` routes, WebSockets, two-argument handlers, Bun shell behavior, SQLite, macros, advanced APIs, symbolic-link source boundaries, oversized runtime inputs, and `bunfig.toml` remain blocking. Do not fill a missing recipe with model-authored edits inside this workflow.
+This command does not change `packageManager`, remove `bun.lock`, install dependencies, or execute project code. The shared named `bun:sqlite` `Database` subset maps to `node:sqlite` `DatabaseSync`, and one named Bun `$` import maps to dax. `Bun.serve` routes, WebSockets, two-argument handlers, shell imports beyond `$`, Bun-only SQLite members, macros, advanced APIs, symbolic-link source boundaries, oversized runtime inputs, and `bunfig.toml` remain blocking. Do not fill a missing recipe with model-authored edits inside this workflow.
 
 Use the approval-bound rollback action returned by apply, or:
 
@@ -161,15 +175,15 @@ Treat any `nextActions` entry with `requiresApproval: true` as a hard boundary. 
 
 ## Execute the Approved Migration
 
-After approval, execute the exact `nextActions[0].argv` argument array returned by the guided preview. It has this shape:
+After approval, ensure the exact `targetExecutable.packageManagerPin` reported by the plan is active on `PATH`, then execute the exact `nextActions[0].argv` argument array returned by the guided preview. It has this shape:
 
 ```text
 pkgshift to <target> --approve <plan-id> --json --no-color --non-interactive
 ```
 
-Do not reconstruct the command, invent paths, or add flags that were not approved. The CLI re-plans against current repository evidence, requires the identifier to remain exact, persists state under its default location, applies the migration, and verifies the run in one invocation. If preconditions conflict, stop and create a new preview. Preserve the `runId` on success, partial failure, or cancellation.
+Do not reconstruct the command, invent paths, or add flags that were not approved. The CLI re-plans against current repository evidence, requires the identifier to remain exact, resolves the target executable, and rejects a missing or mismatched version before snapshots or repository mutation. It then persists state under its default location, applies the migration, and verifies the run in one invocation. If repository preconditions conflict, stop and create a new preview. If executable preconditions conflict, activate the exact reported pin and retry the unchanged approved action. Preserve the `runId` once a run has started.
 
-Treat the migration as successful only when the approved invocation returns `status: completed` with no blocking verification diagnostic. Require passed `clean-target-install` and `source-artifact-residue` checks for newly created plans. Report passed, failed, and skipped checks separately. When a source lock graph exists, require a passing `lockGraphComparison`; graph comparison is skipped only when no source lockfile existed. Require `representative-scripts: passed` when scripts were explicitly selected; otherwise require the check to be explicitly skipped. A later `verify` reads the journal and never reruns those scripts. Do not claim that skipped checks passed.
+Treat the migration as successful only when the approved invocation returns `status: completed` with no blocking verification diagnostic. Require passed `target-executable-version`, `clean-target-install`, and `source-artifact-residue` checks for newly created plans. Report passed, failed, and skipped checks separately. When a source lock graph exists, require a passing policy-bearing `lockGraphComparison`; graph comparison is skipped only when no source lockfile existed. Require `representative-scripts: passed` when scripts were explicitly selected; otherwise require the check to be explicitly skipped. A later `verify` reads the journal and never reruns those scripts. Do not claim that skipped checks passed.
 
 ## Use Advanced Stages Only When Needed
 

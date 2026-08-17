@@ -5,13 +5,13 @@ Use this reference when parsing a pkgshift result or deciding whether a follow-u
 ## Canonical Commands
 
 ```text
-pkgshift to <target> [--dry-run|--trial] [--verify-script <name>]...
-pkgshift doctor [--to <target>] [--verify-script <name>]...
-pkgshift compare <target> <target>... [--verify-script <name>]...
+pkgshift to <target> [--dry-run|--trial] [--verify-script <name>]... [--target-platform <target>]... [--edge-equivalence <policy>]
+pkgshift doctor [--to <target>] [--verify-script <name>]... [--target-platform <target>]... [--edge-equivalence <policy>]
+pkgshift compare <target> <target>... [--verify-script <name>]... [--target-platform <target>]... [--edge-equivalence <policy>]
 pkgshift runtime to deno [--deno-permission <name>]...
 pkgshift runtime rollback <runtime-run-id> --state-dir <path> --approve <runtime-run-id>
 pkgshift inspect [package-manager]
-pkgshift plan package-manager --to <target>
+pkgshift plan package-manager --to <target> [--target-platform <target>]... [--edge-equivalence <policy>]
 pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
 pkgshift verify <run-id> --state-dir <path>
 pkgshift explain <diagnostic-code-or-artifact-id> [--state-dir <path>]
@@ -20,7 +20,7 @@ pkgshift skill install --scope <project|user> --client <codex|claude> --mode <co
 pkgshift skill status|doctor|uninstall --scope <project|user> --client <codex|claude>
 ```
 
-Add `--json --no-color --non-interactive` for agent operation. Prefer `pkgshift to <target>` for an ordinary migration. Its first call is read-only and returns an approval-bound next action; the approved call persists, applies, and verifies without caller-supplied paths. `--trial` returns a separately approved process-execution action that runs in a disposable copy and never authorizes apply. Add repeatable `--verify-script <name>` values only for exact root scripts selected by the user; the returned next action preserves them. Use `--accept-lossy` only after the user accepts every lossy capability decision.
+Add `--json --no-color --non-interactive` for agent operation. Prefer `pkgshift to <target>` for an ordinary migration. Its first call is read-only and returns an approval-bound next action; the approved call persists, applies, and verifies without caller-supplied paths. `--trial` returns a separately approved process-execution action that runs in a disposable copy and never authorizes apply. Add repeatable `--verify-script <name>` values only for exact root scripts selected by the user. Add repeatable `--target-platform OS/CPU[/LIBC]` values only for declared deployment targets, and select `--edge-equivalence strict` only when normalized dependency-edge parity is required. Returned next actions preserve all normalized values. Use `--accept-lossy` only after the user accepts every lossy capability decision.
 
 `doctor --to <target>` is the target-specific readiness surface. It reuses canonical inspection, Project IR, capability, lock graph, and planning logic but returns a `migration-readiness` projection instead of a package-manager plan. It never persists state, executes a process, emits mutation contents, or changes the repository. Treat `migrationAvailable` as authoritative. A `doctor_...` identifier addresses evidence only and cannot approve another command. Its optional next action is read-only, requires no approval, and creates the complete plan; when `availableAfterReview` is true, obtain explicit lossy acceptance before executing the returned array.
 
@@ -54,7 +54,7 @@ Expect these top-level fields:
 
 Each next action contains an `argv` array. It also declares `requiresApproval` and `sideEffect`. Execute the array directly through the available process tool; do not convert it to a shell string when an array-capable interface is available.
 
-For guided migration, exit code `7` with `status: planned` means the immutable preview is ready for user approval. It must not have changed the repository. The plan declares package-local dependency-state cleanup as a non-reversible generated-state side effect: rollback restores repository files but not the removed source `node_modules`. Explicit representative-script operations also declare process execution and may create outputs outside the rollback snapshot. After exact approval, execute the returned array; a successful apply returns plan and run identifiers together with cleanup journal evidence and verification counts. A successful trial returns a `trial-report`, `repositoryUnchanged: true`, and a null `runId`.
+For guided migration, exit code `7` with `status: planned` means the immutable preview is ready for user approval. It must not have changed the repository. The plan declares `targetExecutable`, `verificationPolicy`, and package-local dependency-state cleanup as a non-reversible generated-state side effect: rollback restores repository files but not the removed source `node_modules`. Explicit representative-script operations also declare process execution and may create outputs outside the rollback snapshot. Before execution, activate the exact package-manager pin. Apply resolves it through a bounded version probe before snapshots and persists the resolved identity. After exact approval, execute the returned array; a successful apply returns plan and run identifiers together with executable, cleanup, and verification evidence. A successful trial returns a `trial-report`, `repositoryUnchanged: true`, and a null `runId`.
 
 For migration-readiness doctor, expect inspection, Project IR, capability analysis, an optional source lock graph, and one `migration-readiness` artifact. Its verdict is `ready`, `review-required`, `blocked`, or `already-selected`. Exit code `0` means migration is available or the target is already selected. Exit code `3` means a hard blocker exists or explicit lossy acceptance is still required. Doctor returns null plan and run identifiers in every case.
 
@@ -67,7 +67,7 @@ Aggregate doctor emits one `migration-readiness-matrix` instead of target-specif
 | `0` | Success for the requested operation. |
 | `2` | Invalid command input. |
 | `3` | Unsupported target or capability. |
-| `4` | Repository or artifact precondition conflict. |
+| `4` | Repository, artifact, or exact target executable precondition conflict. |
 | `5` | Apply or isolated trial execution failure after approval. |
 | `6` | Blocking verification failure, including inside a trial. |
 | `7` | Approval or user input required. |

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::VerificationPolicy;
 use crate::model::{CapabilitySummary, Diagnostic, PackageManagerId, SCHEMA_VERSION, SupportTier};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +48,7 @@ pub struct MigrationReadiness {
     pub migration_available: bool,
     pub available_after_review: bool,
     pub accepted_lossy: bool,
+    pub verification_policy: VerificationPolicy,
     pub source: Option<PackageManagerId>,
     pub target: PackageManagerId,
     pub target_tier: SupportTier,
@@ -114,6 +116,7 @@ pub struct MigrationReadinessMatrix {
     pub matrix_id: String,
     pub read_only: bool,
     pub accepted_lossy: bool,
+    pub verification_policy: VerificationPolicy,
     pub source: Option<PackageManagerId>,
     pub repository_fingerprint: String,
     pub summary: ReadinessMatrixSummary,

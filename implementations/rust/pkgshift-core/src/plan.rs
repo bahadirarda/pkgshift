@@ -1,8 +1,9 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use crate::VerificationPolicy;
 pub use crate::capability::analyze_capabilities;
-use crate::catalog::{get_package_manager, native_import_strategy};
+use crate::catalog::{executable_requirement, get_package_manager, native_import_strategy};
 use crate::cleanup;
 use crate::model::{
     CapabilityAnalysis, Diagnostic, DiagnosticSeverity, LockGraph, MigrationPlan, NativeImportMode,
@@ -53,13 +54,15 @@ pub fn plan_package_manager_migration(
     target: PackageManagerId,
     accepted_lossy: bool,
     verification_scripts: &[String],
+    verification_policy: &VerificationPolicy,
 ) -> Result<Option<MigrationPlan>> {
     let Some(source) = inspection.package_manager.selected else {
         return Ok(None);
     };
     let target_definition = get_package_manager(target);
     let source_definition = get_package_manager(source);
-    let transformation = transform_project(inspection, project_ir, analysis, target)?;
+    let transformation =
+        transform_project(inspection, project_ir, analysis, source_lock_graph, target)?;
     let mut diagnostics = project_ir.diagnostics.clone();
     diagnostics.extend(analysis.diagnostics.clone());
     diagnostics.extend(transformation.diagnostics);
@@ -72,6 +75,7 @@ pub fn plan_package_manager_migration(
         diagnostics.extend(graph.diagnostics.clone());
     }
     let native_import = native_import_strategy(source, target, source_lock_graph.is_some());
+    let target_executable = executable_requirement(target);
     if source != target && source_lock_graph.is_some() && native_import.is_none() {
         diagnostics.push(Diagnostic {
             code: "NATIVE_IMPORT_UNAVAILABLE".to_owned(),
@@ -293,6 +297,8 @@ pub fn plan_package_manager_migration(
             &analysis.summary,
             source_lock_graph.map(|graph| &graph.graph_id),
             &native_import,
+            &target_executable,
+            verification_policy,
             accepted_lossy,
             executable,
             &operations,
@@ -313,10 +319,13 @@ pub fn plan_package_manager_migration(
         capability_summary: analysis.summary.clone(),
         source_lock_graph_id: source_lock_graph.map(|graph| graph.graph_id.clone()),
         native_import,
+        target_executable: Some(target_executable),
+        verification_policy: verification_policy.clone(),
         operations,
         diagnostics,
         verification: vec![
             "planned file digests match".to_owned(),
+            "resolved target executable matches the exact planned version".to_owned(),
             "target package manager is selected".to_owned(),
             "target lockfile exists".to_owned(),
             "source-only artifacts are retired".to_owned(),

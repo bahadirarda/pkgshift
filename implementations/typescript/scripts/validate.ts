@@ -596,6 +596,8 @@ async function validateRustDiagnosticCatalog(): Promise<void> {
     "HOME",
     "LOCALAPPDATA",
     "NPM_TOKEN",
+    "PATH",
+    "PATHEXT",
     "PKGSHIFT_DATA_DIR",
     "USERPROFILE",
     "XDG_DATA_HOME",

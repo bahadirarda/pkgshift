@@ -5,7 +5,7 @@ description: Defines normalized capability dimensions and how planning decisions
 tags: [support, capabilities, adapters, testing]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: package-managers
     resource: /support/package-managers.md
@@ -70,4 +70,4 @@ A capability rule should contain:
 
 Adapters must not infer support from syntax similarity alone. A shared manifest field may have different resolution, peer, lifecycle, or workspace semantics. Capability support in the target does not imply renderer coverage: `TRANSFORMATION_UNIMPLEMENTED` blocks apply when the MVP cannot render an otherwise valid target feature safely.
 
-The production patch boundary converts exact `name@version` entries backed by one project-relative, text-only git unified diff among Yarn Modern, pnpm, and Bun. Range selectors, binary patches, missing files, parent-directory paths, multiple patch sources, and optional or parameterized Yarn locators fail closed.
+The production patch boundary transports one project-relative text unified diff among Yarn Modern, pnpm, and Bun. Yarn Modern and pnpm retain exact, portable semver-range, and name-only semantics. When Yarn is the target, range and name-only declarations expand into exact locators observed in project dependencies or the source lock graph; missing resolution evidence blocks planning instead of producing an ineffective wildcard patch. Bun conversion requires an exact `name@version`. Binary patches, missing files, parent-directory or symbolic-link paths, remote paths, multiple patch sources, and optional or parameterized Yarn locators fail closed.

@@ -248,6 +248,209 @@ fn blocks_bun_routes_without_mutating_the_repository() {
 }
 
 #[test]
+fn migrates_sqlite_and_shell_recipes_through_apply_verify_and_rollback() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "bun-runtime-recipes-fixture",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "scripts": { "tool": "bun run src/tool.ts" }
+}
+"#,
+    );
+    write(
+        &root.join("src/tool.ts"),
+        r#"import { Database } from "bun:sqlite";
+import { $ } from "bun";
+
+const database = new Database(":memory:");
+database.exec("create table checks (value text)");
+await $`echo ready`;
+database.close();
+"#,
+    );
+    let original_source = fs::read_to_string(root.join("src/tool.ts")).expect("source");
+
+    let missing_permission = run(&root, &binaries, &["runtime", "to", "deno"]);
+    assert_eq!(missing_permission.status.code(), Some(3));
+    assert!(
+        json_output(&missing_permission)["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().any(|diagnostic| {
+                diagnostic["code"] == "DENO_PERMISSION_REQUIRED"
+                    && diagnostic["summary"]
+                        .as_str()
+                        .is_some_and(|summary| summary.contains("run"))
+            }))
+    );
+
+    let planned = json_output(&run(
+        &root,
+        &binaries,
+        &[
+            "runtime",
+            "to",
+            "deno",
+            "--deno-permission",
+            "env",
+            "--deno-permission",
+            "run",
+        ],
+    ));
+    let plan_id = planned["planId"].as_str().expect("runtime plan identifier");
+    let plan = artifact_content(&planned, "runtime-migration-plan");
+    assert!(plan.to_string().contains("bun.sqlite-to-node.sqlite"));
+    assert!(plan.to_string().contains("bun.shell-to-dax"));
+
+    let applied = run(
+        &root,
+        &binaries,
+        &[
+            "runtime",
+            "to",
+            "deno",
+            "--deno-permission",
+            "env",
+            "--deno-permission",
+            "run",
+            "--approve",
+            plan_id,
+        ],
+    );
+    assert!(
+        applied.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&applied.stdout),
+        String::from_utf8_lossy(&applied.stderr)
+    );
+    let applied = json_output(&applied);
+    assert_eq!(applied["status"], "completed");
+    assert_eq!(
+        artifact_content(&applied, "runtime-verification-report")["status"],
+        "passed"
+    );
+    let migrated = fs::read_to_string(root.join("src/tool.ts")).expect("migrated source");
+    assert!(migrated.contains("DatabaseSync as Database"));
+    assert!(migrated.contains("from \"node:sqlite\""));
+    assert!(migrated.contains("import $ from \"jsr:@david/dax@0.49.0\""));
+    assert!(!migrated.contains("from \"bun"));
+    assert!(
+        fs::read_to_string(root.join("package.json"))
+            .expect("manifest")
+            .contains("deno run --allow-env --allow-run src/tool.ts")
+    );
+
+    let run_id = applied["runId"].as_str().expect("runtime run identifier");
+    let rolled_back = run(
+        &root,
+        &binaries,
+        &["runtime", "rollback", run_id, "--approve", run_id],
+    );
+    assert!(rolled_back.status.success());
+    assert_eq!(
+        fs::read_to_string(root.join("src/tool.ts")).expect("restored source"),
+        original_source
+    );
+}
+
+#[test]
+#[ignore = "requires registry access and the pinned Deno package"]
+fn migrates_real_sqlite_and_shell_recipes_and_runs_them_with_deno() {
+    let bun_available = Command::new("bun")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success());
+    if !bun_available {
+        return;
+    }
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "real-bun-runtime-recipes-fixture",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "scripts": { "tool": "bun run src/tool.ts" }
+}
+"#,
+    );
+    write(
+        &root.join("src/tool.ts"),
+        r#"import { Database } from "bun:sqlite";
+import { $ } from "bun";
+
+const database = new Database(":memory:");
+const result = database.prepare("select 40 + 2 as value").get() as { value: number };
+if (result.value !== 42) throw new Error("SQLite recipe failed");
+await $`echo pkgshift-runtime-recipes-ok`;
+database.close();
+"#,
+    );
+
+    let planned = json_output(&run(
+        &root,
+        &binaries,
+        &[
+            "runtime",
+            "to",
+            "deno",
+            "--deno-permission",
+            "env",
+            "--deno-permission",
+            "run",
+        ],
+    ));
+    let plan_id = planned["planId"].as_str().expect("runtime plan identifier");
+    let applied = run(
+        &root,
+        &binaries,
+        &[
+            "runtime",
+            "to",
+            "deno",
+            "--deno-permission",
+            "env",
+            "--deno-permission",
+            "run",
+            "--approve",
+            plan_id,
+        ],
+    );
+    assert!(
+        applied.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&applied.stdout),
+        String::from_utf8_lossy(&applied.stderr)
+    );
+
+    let executed = Command::new("bunx")
+        .arg("--bun")
+        .args([
+            "deno@2.9.5",
+            "run",
+            "--allow-env",
+            "--allow-run",
+            "src/tool.ts",
+        ])
+        .current_dir(&root)
+        .output()
+        .expect("pinned Deno command");
+    assert!(
+        executed.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&executed.stdout),
+        String::from_utf8_lossy(&executed.stderr)
+    );
+    assert!(String::from_utf8_lossy(&executed.stdout).contains("pkgshift-runtime-recipes-ok"));
+}
+
+#[test]
 #[ignore = "requires the real Bun executable and pinned Deno package"]
 fn migrates_a_real_hono_bun_project_and_runs_it_with_deno() {
     let bun_available = Command::new("bun")

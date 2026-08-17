@@ -30,6 +30,10 @@ pub enum PkgshiftError {
     InvalidState(String),
     #[error("process execution failed: {0}")]
     Process(String),
+    #[error("target executable is unavailable: {0}")]
+    ExecutableUnavailable(String),
+    #[error("target executable version check failed: {0}")]
+    ExecutableVersion(String),
 }
 
 pub type Result<T> = std::result::Result<T, PkgshiftError>;

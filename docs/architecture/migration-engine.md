@@ -4,7 +4,7 @@ title: Migration Engine
 description: Defines a capability-aware migration engine built around a shared project intermediate representation.
 tags: [architecture, engine, ir, transactions]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -80,12 +80,13 @@ Produce an immutable plan containing:
 
 - Repository fingerprint and selected adapters.
 - Normalized options and policy inputs.
+- Exact target executable requirement and normalized verification policy.
 - Ordered operations with preconditions and postconditions.
 - Exact file actions, before and after digests, safe target content, commands, side effects, and rollback scope.
 - Capability losses and risk annotations.
 - Verification checks and success criteria.
 
-The plan identifier is derived from normalized plan content. A production-target plan is executable only when no blocking diagnostic remains and lossy decisions were explicitly accepted during planning. Apply rejects a plan when relevant repository evidence no longer matches its preconditions.
+The plan identifier is derived from normalized plan content. A production-target plan is executable only when no blocking diagnostic remains and lossy decisions were explicitly accepted during planning. Apply rejects a plan when relevant repository evidence no longer matches its preconditions or the exact target executable cannot be resolved and validated.
 
 When a source lockfile exists, planning also binds its normalized graph identifier and selects a registered target-native importer where official package manager behavior supports one. Dedicated import commands run before target installation. Source artifacts remain available until both import and installation finish.
 
@@ -95,7 +96,7 @@ Render target-native configuration and commands from the Project IR and capabili
 
 ## Executor
 
-Apply operations through a journaled workspace transaction. Require exact plan approval. Before the first mutation, snapshot every planned file and target lockfile with owner-only permissions and content digests. Recheck each mutation digest, use atomic replacement, remove accepted package-local `node_modules` paths without following symbolic links, execute the target installer without a shell or lifecycle scripts, persist cleanup and redacted process evidence, and stop at the first failed required operation.
+Apply operations through a journaled workspace transaction. Require exact plan approval. Resolve the target program from `PATH`, canonicalize it, and require its exact planned version through a bounded shell-free probe before snapshot or mutation. Then snapshot every planned file and target lockfile with owner-only permissions and content digests. Recheck each mutation digest, use atomic replacement, remove accepted package-local `node_modules` paths without following symbolic links, execute the target installer without a shell or lifecycle scripts, persist executable, cleanup, and redacted process evidence, and stop at the first failed required operation.
 
 ## Verifier
 
@@ -107,7 +108,7 @@ The MVP evaluates declared postconditions at these levels:
 4. Workspace membership preservation.
 5. Planned integration file digests.
 
-The Rust verifier independently extracts the target lock graph. It applies `reachable-resolution-set-v2` when both formats expose dependency topology and retains `resolution-set-v1` for formats without that evidence. V2 prunes proven unreachable entries, distinguishes optional-only package-name absence, and fails closed on unresolved required paths. Added or removed reachable `name@version` resolutions and comparable integrity mismatches block completion. Edge changes remain evidence because package managers encode peer placement, hoisting, and deduplication differently. When no source lockfile existed, graph comparison is explicitly skipped. Explicitly selected representative root scripts execute through bounded, shell-free operations and are verified from their journaled results without rerunning repository code.
+The Rust verifier checks the resolved target executable and independently extracts the target lock graph. It applies `reachable-resolution-set-v3` when both formats expose dependency topology and retains `resolution-set-v1` for formats without that evidence. V3 prunes proven unreachable entries, evaluates optional-only package-name absence against an optional plan-bound target matrix, and fails closed on unresolved required paths. Added or removed reachable `name@version` resolutions and comparable integrity mismatches block completion. Compatible edge policy reports normalized edge changes; strict policy makes them blocking. When no source lockfile existed, graph comparison is explicitly skipped. Explicitly selected representative root scripts execute through bounded, shell-free operations and are verified from their journaled results without rerunning repository code.
 
 ## Trial Executor
 

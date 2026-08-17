@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use crate::catalog::{PACKAGE_MANAGERS, normalize_package_manager_id};
+use crate::VerificationPolicy;
+use crate::catalog::{PACKAGE_MANAGERS, executable_requirement, normalize_package_manager_id};
 use crate::inspect::{build_project_ir, inspect_project};
 use crate::lock_graph::extract_lock_graph;
 use crate::model::{
@@ -86,6 +87,7 @@ pub struct CommandOptions {
     pub dry_run: bool,
     pub trial: bool,
     pub verification_scripts: Vec<String>,
+    pub verification_policy: VerificationPolicy,
 }
 
 impl CommandOptions {
@@ -99,6 +101,7 @@ impl CommandOptions {
             dry_run: false,
             trial: false,
             verification_scripts: Vec::new(),
+            verification_policy: VerificationPolicy::default(),
         }
     }
 }
@@ -157,11 +160,17 @@ fn failure(command: &str, error: &PkgshiftError) -> CommandExecution {
     let message = error.to_string();
     let approval_required = message.contains("requires exact approval");
     let precondition_failed = message.contains("changed after planning");
+    let executable_unavailable = matches!(error, PkgshiftError::ExecutableUnavailable(_));
+    let executable_version = matches!(error, PkgshiftError::ExecutableVersion(_));
     let diagnostic = Diagnostic {
         code: if approval_required {
             "APPROVAL_REQUIRED"
         } else if precondition_failed {
             "PLAN_PRECONDITION_FAILED"
+        } else if executable_unavailable {
+            "TARGET_EXECUTABLE_UNAVAILABLE"
+        } else if executable_version {
+            "TARGET_EXECUTABLE_VERSION_MISMATCH"
         } else {
             "PKGSHIFT_INTERNAL_ERROR"
         }
@@ -170,16 +179,23 @@ fn failure(command: &str, error: &PkgshiftError) -> CommandExecution {
         summary: message,
         blocking: true,
         evidence: Vec::new(),
-        remediation: vec![if approval_required {
-            "Retry with --approve followed by the exact plan or run identifier.".to_owned()
-        } else {
-            "Preserve the state directory and inspect the reported diagnostic.".to_owned()
-        }],
+        remediation: vec![
+            if approval_required {
+                "Retry with --approve followed by the exact plan or run identifier."
+            } else if executable_unavailable {
+                "Install the exact target package-manager pin reported by the plan and expose it on PATH."
+            } else if executable_version {
+                "Activate the exact target package-manager pin reported by the plan before retrying."
+            } else {
+                "Preserve the state directory and inspect the reported diagnostic."
+            }
+            .to_owned(),
+        ],
     };
     CommandExecution {
         exit_code: if approval_required {
             7
-        } else if precondition_failed {
+        } else if precondition_failed || executable_unavailable || executable_version {
             4
         } else {
             8
@@ -312,6 +328,7 @@ fn create_plan(
     target: PackageManagerId,
     accept_lossy: bool,
     verification_scripts: &[String],
+    verification_policy: &VerificationPolicy,
 ) -> Result<Option<PlannedMigration>> {
     let inspection = inspect_project(cwd)?;
     let Some(project_ir) = build_project_ir(&inspection)? else {
@@ -333,6 +350,7 @@ fn create_plan(
         target,
         accept_lossy,
         verification_scripts,
+        verification_policy,
     )?
     else {
         return Ok(None);
@@ -434,6 +452,7 @@ fn plan_command(options: &CommandOptions, target_value: &str) -> Result<CommandE
         target,
         options.accept_lossy,
         &options.verification_scripts,
+        &options.verification_policy,
     )?
     else {
         return blocked_plan(&options.cwd, "plan package-manager", target);
@@ -519,6 +538,7 @@ fn plan_command(options: &CommandOptions, target_value: &str) -> Result<CommandE
                 ("artifactStored", json!(artifact_stored)),
                 ("executionAvailable", json!(planned.plan.executable)),
                 ("verificationScripts", json!(options.verification_scripts)),
+                ("verificationPolicy", json!(options.verification_policy)),
             ]),
             planned.plan.diagnostics.clone(),
             artifacts,
@@ -540,6 +560,7 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
         target,
         options.accept_lossy,
         &options.verification_scripts,
+        &options.verification_policy,
     )?
     else {
         return blocked_plan(&options.cwd, &command_name, target);
@@ -572,6 +593,14 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
     for script in &options.verification_scripts {
         approved_argv.push("--verify-script".to_owned());
         approved_argv.push(script.clone());
+    }
+    for platform in &options.verification_policy.target_platforms {
+        approved_argv.push("--target-platform".to_owned());
+        approved_argv.push(platform.to_string());
+    }
+    if options.verification_policy.edge_equivalence != crate::EdgeEquivalencePolicy::Compatible {
+        approved_argv.push("--edge-equivalence".to_owned());
+        approved_argv.push(options.verification_policy.edge_equivalence.to_string());
     }
     if !options.trial
         && let Some(value) = options.state_directory.as_deref()
@@ -779,6 +808,7 @@ fn support_command() -> Result<CommandExecution> {
                 "configurationFiles": definition.configuration_files,
                 "installCommand": definition.install_command,
                 "packageManagerPin": definition.package_manager_pin,
+                "executableRequirement": executable_requirement(definition.id),
             })
         })
         .collect::<Vec<_>>();

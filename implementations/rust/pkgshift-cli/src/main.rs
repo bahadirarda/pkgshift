@@ -6,6 +6,7 @@ use clap::{Args, Parser, Subcommand};
 use pkgshift_core::command::{CommandKind, CommandOptions};
 use pkgshift_core::execute;
 use pkgshift_core::model::{CommandExecution, CommandStatus};
+use pkgshift_core::{EdgeEquivalencePolicy, TargetPlatform, VerificationPolicy};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -53,6 +54,14 @@ struct Cli {
     /// Accepted for stable agent command compatibility; output is currently uncolored.
     #[arg(long, global = true)]
     no_color: bool,
+
+    /// Verify optional dependency selection against an OS/CPU or OS/CPU/LIBC target; repeat for a matrix.
+    #[arg(long, global = true, value_name = "OS/CPU[/LIBC]", action = clap::ArgAction::Append)]
+    target_platform: Vec<TargetPlatform>,
+
+    /// Select compatible resolution proof or blocking strict dependency-edge equivalence.
+    #[arg(long, global = true, default_value = "compatible")]
+    edge_equivalence: EdgeEquivalencePolicy,
 }
 
 #[derive(Debug, Subcommand)]
@@ -404,6 +413,8 @@ fn main() -> ExitCode {
     options.dry_run = cli.dry_run;
     options.trial = cli.trial;
     options.verification_scripts = verification_scripts;
+    options.verification_policy =
+        VerificationPolicy::normalized(cli.target_platform, cli.edge_equivalence);
 
     let mut execution = execute(&options);
     let can_prompt = is_guided

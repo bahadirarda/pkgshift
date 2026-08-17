@@ -5,7 +5,7 @@ description: Defines implemented package manager target tiers and execution boun
 tags: [support, npm, pnpm, yarn, bun, vlt, deno]
 status: draft
 stale_after: 2026-11-15
-generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: npm-install
     resource: https://docs.npmjs.com/cli/install/
@@ -115,9 +115,9 @@ The labels below describe current technical MVP behavior. Production target mean
 | Adapter | MVP tier | Boundary |
 | --- | --- | --- |
 | npm | Production target | Manifests, lockfile, workspaces, overrides, registry configuration, scripts, CI, and containers. |
-| pnpm | Production target | npm-compatible semantics plus workspace files, catalogs, overrides, patches, explicit linker selection, and `allowBuilds` lifecycle policy. |
+| pnpm | Production target | npm-compatible semantics plus workspace files, catalogs, overrides, exact, range, and name-only text patches, explicit linker selection, and `allowBuilds` lifecycle policy. |
 | Yarn Classic | Production target | Classic lockfile, workspace behavior, resolutions, registry configuration, and script commands. |
-| Yarn Modern | Production target | Modern lockfile, workspace tools, protocols, constraints, patches, plugins, portable linker modes, environment-backed registry translation, and lifecycle allow-lists. |
+| Yarn Modern | Production target | Modern lockfile, workspace tools, protocols, constraints, portable exact and range text patches, plugins, portable linker modes, environment-backed registry translation, and lifecycle allow-lists. |
 | Bun | Production target | Bun lockfile, install behavior, workspaces, overrides, catalogs where supported, exact text patches, isolated linking, trusted dependencies, registry configuration, and script commands. |
 | vlt | Production target | Workspaces, workspace protocols, catalogs, graph modifiers, public registry and scope configuration, integration commands, installation, and vlt v1 lock graph proof. |
 | Deno dependency mode | Production target | npm dependency declarations, workspaces, overrides, catalog expansion, isolated linking, npm registry configuration, preserved Deno runtime configuration, integration commands, installation, and Deno v5 lock graph proof. This does not migrate the application runtime. |
@@ -138,7 +138,7 @@ The adapter catalog pins the following researched baselines as of 2026-08-15. Th
 | vlt | `vlt@1.0.2` |
 | Deno dependency mode | `deno@2.9.5` |
 
-Apply invokes the target executable available to the repository environment. The operator must provide a version compatible with the declared baseline; automatic executable acquisition and version enforcement remain post-MVP work.
+Every new plan declares the exact target executable baseline. Apply resolves that program from `PATH`, canonicalizes its path, runs a bounded shell-free `--version` probe, and requires the exact version before snapshots or repository mutation. The resolved identity is stored in the run journal and checked by verification. pkgshift does not acquire package managers automatically; the operator must activate the reported exact pin.
 
 # Detection Evidence
 
@@ -168,18 +168,22 @@ Production targets provide:
 - Redaction tests for registry and environment configuration.
 - Apply failure and rollback tests.
 - Structural verification tied to the plan and apply journal.
-- Normalized source lock graph extraction and blocking reachable-resolution verification in the Rust primary path, with conservative V1 fallback when a format lacks topology.
+- Normalized source lock graph extraction and blocking policy-aware reachable-resolution verification in the Rust primary path, with conservative V1 fallback when a format lacks topology.
 - Registered target-native importer or install-integrated migration selection where official behavior supports it.
 - Approved isolated execution trials through the Rust primary CLI.
 - Bidirectional lifecycle allow-list translation among Bun `trustedDependencies`, pnpm `allowBuilds`, and Yarn Modern `dependenciesMeta` with `enableScripts: false`.
 - Plug and Play or isolated linker translation to pnpm, Yarn Modern, Bun, or an explicitly accepted hoisted layout.
 - Secret-safe `.npmrc` registry translation to Yarn Modern for default and scoped registries, boolean authentication policy, and environment-backed tokens.
 - Shared-schema `packageExtensions` translation among npm, pnpm, and Yarn Modern.
-- Exact-version text patch translation among Yarn Modern `patch:` locators, pnpm `patchedDependencies`, and Bun `patchedDependencies`, including transitive Yarn patch resolutions.
+- Portable text unified-diff translation among Yarn Modern `patch:` locators, pnpm `patchedDependencies`, and Bun `patchedDependencies`, including transitive Yarn patch resolutions. Yarn Modern and pnpm retain exact, range, and name-only selectors; Bun requires exact versions.
 - vlt workspace, catalog, graph modifier, public registry, command integration, installer, and v1 lock graph handling in both engines.
 - Deno workspace, npm override, catalog expansion, isolated linker, preserved runtime configuration, `deno task`, installer, and v5 npm and JSR lock graph handling in both engines.
 
-Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, Yarn build denials outside allow-list mode, range or binary patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, dependency-level lifecycle policy targeting npm or Yarn Classic, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. V2 handles proven-unreachable entries and optional-only package-name absence; configurable target-platform matrices and blocking edge-shape equivalence remain release-hardening extensions.
+Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, Yarn build denials outside allow-list mode, binary, remote, multiple-source, optional, or parameterized patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, dependency-level lifecycle policy targeting npm or Yarn Classic, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. V3 handles proven-unreachable entries, plan-bound target-platform matrices, and compatible or strict normalized edge equivalence.
+
+# Verification Policy
+
+Repeat `--target-platform OS/CPU[/LIBC]` to bind optional dependency selection to one deployment matrix. With a matrix, optional package-name absence is tolerated only when lockfile constraints prove incompatibility with every target. Use `--edge-equivalence strict` when normalized reachable parent, dependency, and dependency-kind parity must also block verification. Both options are sorted, deduplicated, preserved in generated next actions, and included in plan and comparison identities. See [Platform, Edge, and Executable Verification](/architecture/verification-policies.md).
 
 # Native Migration Paths
 

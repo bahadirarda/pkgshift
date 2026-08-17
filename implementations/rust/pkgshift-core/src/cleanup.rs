@@ -430,6 +430,8 @@ mod tests {
                     capability_summary: CapabilitySummary::default(),
                     source_lock_graph_id: None,
                     native_import: None,
+                    target_executable: None,
+                    verification_policy: crate::VerificationPolicy::default(),
                     operations: vec![operation],
                     diagnostics: Vec::new(),
                     verification: Vec::new(),

@@ -92,6 +92,32 @@ pub(super) static ENTRIES: &[DiagnosticExplanation] = &[
         &["Replace the API or retain the current runtime for that test."],
     ),
     DiagnosticExplanation::new(
+        "RUNTIME_BUN_SQLITE_IMPORT_UNSUPPORTED",
+        "Bun SQLite import unsupported",
+        "A bun:sqlite import is outside the deterministic named Database recipe.",
+        &["Use one named Database import with an optional local alias before planning."],
+    ),
+    DiagnosticExplanation::new(
+        "RUNTIME_BUN_SQLITE_API_UNSUPPORTED",
+        "Bun SQLite API unsupported",
+        "The source uses a bun:sqlite export or Database member outside the verified node:sqlite subset.",
+        &[
+            "Limit the code to the shared Database constructor, prepare, exec, and close subset or migrate it explicitly.",
+        ],
+    ),
+    DiagnosticExplanation::new(
+        "RUNTIME_BUN_SHELL_IMPORT_UNSUPPORTED",
+        "Bun shell import unsupported",
+        "A Bun runtime import cannot be parsed as one deterministic named dollar-sign shell template.",
+        &["Use one named $ import with an optional local alias before planning."],
+    ),
+    DiagnosticExplanation::new(
+        "RUNTIME_BUN_SHELL_API_UNSUPPORTED",
+        "Bun shell API unsupported",
+        "The Bun import contains exports beyond the verified dollar-sign to dax recipe.",
+        &["Split the $ import and migrate other Bun exports explicitly."],
+    ),
+    DiagnosticExplanation::new(
         "RUNTIME_BUN_SCRIPT_UNSUPPORTED",
         "Bun script unsupported",
         "A package script uses Bun runtime flags or syntax outside deterministic command rewriting.",

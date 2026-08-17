@@ -4,7 +4,7 @@ title: Bun to Deno Runtime Migration
 description: Defines preview, explicit permission review, exact approval, verification, and rollback for dedicated Bun-to-Deno runtime recipes.
 tags: [workflow, runtime, bun, deno, approval]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-17T11:44:43Z }
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: runtime-recipes
     resource: /architecture/runtime-migration-recipes.md
@@ -24,7 +24,7 @@ pkgshift runtime to deno --deno-permission net --json --no-color --non-interacti
 
 The first invocation changes no repository file and returns exit code `7` when the plan is executable but unapproved. Review the recipe identifiers, affected paths, before and after digests, requested Deno permissions, diagnostics, verification scope, and exact `nextActions[0].argv`. Plan artifacts intentionally omit source content.
 
-Use `--dry-run` when no approval action should be returned. Repeat `--deno-permission` only for access the migrated program requires. Missing permissions inferred from a safe recipe are blocking; pkgshift never grants all access automatically.
+Use `--dry-run` when no approval action should be returned. Repeat `--deno-permission` only for access the migrated program requires. Missing permissions inferred from a safe recipe are blocking; pkgshift never grants all access automatically. Serving requires `net`, file reads require `read`, and the Bun `$` to pinned dax shell recipe requires both `env` and `run`.
 
 # Apply
 
@@ -34,7 +34,7 @@ Successful apply returns `status: completed`, a `runtime_run_` identifier, a red
 
 # Blocked Plans
 
-Do not work around a blocking recipe diagnostic with model-authored source edits inside the pkgshift operation. Review and migrate unsupported Bun routes, WebSockets, shell behavior, macros, test APIs, configuration, or other globals explicitly; then create a new read-only plan. Package-manager migration and runtime migration remain separate approval boundaries.
+Do not work around a blocking recipe diagnostic with model-authored source edits inside the pkgshift operation. Review and migrate unsupported Bun routes, WebSockets, shell behavior beyond the verified `$` template, SQLite APIs beyond the shared `Database` subset, macros, test APIs, configuration, or other globals explicitly; then create a new read-only plan. Package-manager migration and runtime migration remain separate approval boundaries.
 
 # Roll Back
 

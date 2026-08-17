@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::named_import::{imported_name, parse};
 use super::{TransformResult, apply_replacements, blocking};
 use crate::runtime::lex::code_mask;
 
@@ -14,45 +15,8 @@ const NODE_TEST_NAMES: &[&str] = &[
     "afterEach",
 ];
 
-fn import_names(line: &str, specifier: &str) -> Option<(String, Vec<String>, String)> {
-    let trimmed = line.trim_start();
-    let indentation = &line[..line.len() - trimmed.len()];
-    let body = trimmed.strip_prefix("import ")?;
-    let open = body.find('{')?;
-    let close = body.find('}')?;
-    if !body[..open].trim().is_empty() {
-        return None;
-    }
-    let tail = body[close + 1..].trim();
-    let expected_double = format!("from \"{specifier}\";");
-    let expected_single = format!("from '{specifier}';");
-    if tail != expected_double
-        && tail != expected_single
-        && tail != expected_double.trim_end_matches(';')
-        && tail != expected_single.trim_end_matches(';')
-    {
-        return None;
-    }
-    let names = body[open + 1..close]
-        .split(',')
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .map(ToOwned::to_owned)
-        .collect::<Vec<_>>();
-    Some((
-        indentation.to_owned(),
-        names,
-        if tail.ends_with(';') { ";" } else { "" }.to_owned(),
-    ))
-}
-
-fn base_name(name: &str) -> Option<&str> {
-    let base = name.split_whitespace().next()?;
-    (!base.is_empty()).then_some(base)
-}
-
 fn transform_test_import(path: &str, line: &str) -> Result<String, crate::model::Diagnostic> {
-    let Some((indentation, names, semicolon)) = import_names(line, "bun:test") else {
+    let Some(import) = parse(line, "bun:test") else {
         return Err(blocking(
             "RUNTIME_BUN_TEST_IMPORT_UNSUPPORTED",
             path,
@@ -62,8 +26,8 @@ fn transform_test_import(path: &str, line: &str) -> Result<String, crate::model:
     };
     let mut node_names = Vec::new();
     let mut expect_names = Vec::new();
-    for name in names {
-        match base_name(&name) {
+    for name in import.names {
+        match imported_name(&name) {
             Some("expect") => expect_names.push(name),
             Some(base) if NODE_TEST_NAMES.contains(&base) => node_names.push(name),
             _ => {
@@ -79,14 +43,18 @@ fn transform_test_import(path: &str, line: &str) -> Result<String, crate::model:
     let mut imports = Vec::new();
     if !node_names.is_empty() {
         imports.push(format!(
-            "{indentation}import {{ {} }} from \"node:test\"{semicolon}",
-            node_names.join(", ")
+            "{}import {{ {} }} from \"node:test\"{}",
+            import.indentation,
+            node_names.join(", "),
+            import.semicolon
         ));
     }
     if !expect_names.is_empty() {
         imports.push(format!(
-            "{indentation}import {{ {} }} from \"jsr:@std/expect\"{semicolon}",
-            expect_names.join(", ")
+            "{}import {{ {} }} from \"jsr:@std/expect\"{}",
+            import.indentation,
+            expect_names.join(", "),
+            import.semicolon
         ));
     }
     Ok(imports.join("\n"))

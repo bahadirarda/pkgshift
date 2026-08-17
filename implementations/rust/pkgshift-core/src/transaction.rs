@@ -4,8 +4,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::catalog::executable_requirement;
 use crate::catalog::get_package_manager;
 use crate::cleanup;
+use crate::executable;
 use crate::inspect::inspect_project;
 use crate::model::{
     ApplyOutcome, Diagnostic, DiagnosticSeverity, MutationAction, SCHEMA_VERSION, SnapshotEntry,
@@ -481,6 +483,11 @@ pub fn apply_stored_plan(
             "migration-relevant repository evidence changed after planning".to_owned(),
         ));
     }
+    let executable_requirement = plan
+        .target_executable
+        .clone()
+        .unwrap_or_else(|| executable_requirement(plan.target));
+    let resolved_executable = executable::resolve(&root, &executable_requirement)?;
 
     let run_id = short_digest(
         "run_",
@@ -511,6 +518,7 @@ pub fn apply_stored_plan(
         snapshot_directory: format!("runs/{run_id}/snapshots"),
         snapshot_entries,
         dependency_state_cleanups: Vec::new(),
+        target_executable: Some(resolved_executable),
         processes: Vec::new(),
         diagnostics: Vec::new(),
     };
@@ -607,6 +615,7 @@ pub fn apply_stored_plan(
         true,
         &run.dependency_state_cleanups,
         &run.processes,
+        run.target_executable.as_ref(),
     )?;
     run.state = if verification.status == VerificationStatus::Passed {
         "succeeded"
@@ -661,6 +670,7 @@ pub fn verify_stored_run(
         install_succeeded,
         &run.dependency_state_cleanups,
         &run.processes,
+        run.target_executable.as_ref(),
     )?;
     run.state = if report.status == VerificationStatus::Passed {
         "succeeded"

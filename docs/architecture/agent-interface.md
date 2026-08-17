@@ -4,7 +4,7 @@ title: Agent Interface
 description: Defines a simple keyword-based CLI and deterministic output contract for coding agents and humans.
 tags: [architecture, cli, json, agents]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-17T11:00:00Z}
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: agent-first-decision
     resource: /decisions/agent-first-cli.md
@@ -18,6 +18,9 @@ sources:
   - id: runtime-recipes
     resource: /architecture/runtime-migration-recipes.md
     title: Bun to Deno Runtime Recipes
+  - id: verification-policies
+    resource: /architecture/verification-policies.md
+    title: Platform, Edge, and Executable Verification
 ---
 
 # Primary Command
@@ -33,6 +36,8 @@ It performs deterministic inspection, Project IR construction, capability analys
 `pkgshift to <target> --trial` preserves the same plan and approval identifier but changes the authorized side effect to process execution in a disposable repository copy. A trial returns no source run identifier and does not authorize later repository mutation.
 
 `pkgshift to <target> --verify-script <name>` binds one exact root `package.json` script to the plan. The option is repeatable and remains planning-only; staged apply reads the stored operations. pkgshift does not infer script names.
+
+`--target-platform OS/CPU[/LIBC]` is repeatable and binds optional dependency selection to a normalized deployment matrix. `--edge-equivalence compatible|strict` selects whether normalized reachable dependency-edge drift is reported or blocking. These global options participate in package-manager plan, doctor, and comparison identities and are preserved in every generated next action.
 
 Humans do not need to provide repository or state paths when running from the intended repository root.
 
@@ -68,9 +73,9 @@ The staged commands remain available for diagnostics, integration, and recovery:
 
 ```text
 pkgshift inspect [package-manager]
-pkgshift doctor [--to <target>] [--verify-script <name>]...
-pkgshift compare <target> <target>... [--verify-script <name>]...
-pkgshift plan package-manager --to <target>
+pkgshift doctor [--to <target>] [--verify-script <name>]... [--target-platform <target>]... [--edge-equivalence <policy>]
+pkgshift compare <target> <target>... [--verify-script <name>]... [--target-platform <target>]... [--edge-equivalence <policy>]
+pkgshift plan package-manager --to <target> [--target-platform <target>]... [--edge-equivalence <policy>]
 pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
 pkgshift verify <run-id> --state-dir <path>
 pkgshift explain <diagnostic-code-or-artifact-id>
@@ -105,6 +110,8 @@ This shortcut is equivalent to `pkgshift plan package-manager --to bun`. Neither
 - Doctor never creates state, executes declared process commands, or emits mutation content; selected verification scripts appear only as projected effects.
 - Advanced planning persists an artifact only when `--state-dir <path>` is explicitly supplied.
 - `--verify-script <name>` is accepted only by guided or staged planning commands, validates exact root script membership, and adds a bounded shell-free `verification.run-script` operation.
+- `--target-platform <OS/CPU[/LIBC]>` is repeatable on package-manager planning surfaces; normalized values are sorted, deduplicated, and included in the immutable policy.
+- `--edge-equivalence compatible|strict` defaults to `compatible`; strict mode makes normalized reachable dependency-edge drift blocking.
 - `--deno-permission <name>` is repeatable only on the dedicated runtime plan surface; normalized permissions participate in plan identity and render narrow Deno flags instead of `-A`.
 
 # Result Envelope
@@ -147,7 +154,7 @@ The result `status` describes the domain outcome; the process exit code describe
 | `0` | Requested operation completed successfully. |
 | `2` | Command or option input is invalid. |
 | `3` | Requested target or capability is unsupported. |
-| `4` | Artifact preconditions conflict with the current repository. |
+| `4` | Artifact or executable preconditions conflict with the current environment. |
 | `5` | Apply or isolated trial execution failed after approval. |
 | `6` | Verification completed with blocking failures, including inside a trial. |
 | `7` | Explicit approval or additional user input is required. |
@@ -159,9 +166,9 @@ Diagnostics provide the stable, specific reason. Exit codes remain intentionally
 
 Planning emits Project IR, capability analysis, exact file mutations, and plan artifacts through the result envelope. The first guided call does not persist them. Once the exact plan is approved, the command re-plans against current repository evidence, requires the same plan identifier, and stores one integrity-checked bundle in `.pkgshift/state` before apply. Advanced planning stores a bundle only when `--state-dir` is provided. Persistence does not imply approval. A plan is executable only when its target is production, all observed capabilities have implemented safe transformations, every blocking diagnostic is absent, and any lossy decisions were accepted while planning.
 
-Apply persists the run journal, package-local dependency-state cleanup records, recovery snapshot, and redacted process report. Explicitly selected representative scripts record their operation identifier, exact argv, exit code, duration, timeout status, and withheld-output metadata. Verify persists a report tied to the run and plan, including clean-install, source-artifact residue, and representative-script checks; it never reruns repository code. Explain expands every registered Rust diagnostic and loads package-manager or runtime plans, runs, and verification reports without mutation. It accepts only canonical digest identifiers, rejects symbolic-link artifact files, bounds state-directory scans, verifies store envelopes, and reconstructs standalone verification identifiers before returning content.
+Apply first resolves the plan's target program from `PATH` and requires the exact catalog version through a bounded shell-free probe. A missing executable or version mismatch returns exit code `4` before snapshots or repository mutation. Apply then persists the run journal, resolved executable identity, package-local dependency-state cleanup records, recovery snapshot, and redacted process report. Explicitly selected representative scripts record their operation identifier, exact argv, exit code, duration, timeout status, and withheld-output metadata. Verify persists a report tied to the run and plan, including exact executable, clean-install, source-artifact residue, and representative-script checks; it never reruns repository code. Explain expands every registered Rust diagnostic and loads package-manager or runtime plans, runs, and verification reports without mutation. It accepts only canonical digest identifiers, rejects symbolic-link artifact files, bounds state-directory scans, verifies store envelopes, and reconstructs standalone verification identifiers before returning content.
 
-Planning with a source lockfile also emits a redacted `source-lock-graph` artifact. Verification emits `lockGraphComparison` inside its report. Trial emits a `trial-report` containing withheld process records and nested verification.
+Planning with a source lockfile also emits a redacted `source-lock-graph` artifact. Verification emits a policy-bearing `lockGraphComparison` inside its report. Trial emits a `trial-report` containing withheld process records and nested verification.
 
 Doctor emits the ordinary inspection, Project IR, capability analysis, optional source lock graph, and one `migration-readiness` artifact. The readiness projection contains paths and argument arrays for expected effects but no file contents, package-manager plan, `planId`, or `runId`. Its `doctor_...` identity is deterministic for the same repository evidence and options but is never an approval identity.
 

@@ -31,29 +31,40 @@ fn write(path: &Path, content: &str) {
 fn fake_package_managers(directory: &TempDir) -> PathBuf {
     let binary_directory = directory.path().join("bin");
     fs::create_dir_all(&binary_directory).expect("fake binary directory");
-    for (name, script_subcommand, lockfile_command) in [
+    for (name, version, script_subcommand, lockfile_command) in [
+        (
+            "npm",
+            "12.0.2",
+            "run",
+            "printf '%s\\n' '{\"lockfileVersion\":3,\"packages\":{}}' > package-lock.json",
+        ),
         (
             "bun",
+            "1.3.14",
             "run",
             "printf '%s\\n' '{\"lockfileVersion\":1,\"packages\":{}}' > bun.lock",
         ),
         (
             "pnpm",
+            "11.21.0",
             "run",
             "printf '%s\\n' \"lockfileVersion: '9.0'\" 'packages: {}' 'snapshots: {}' > pnpm-lock.yaml",
         ),
         (
             "yarn",
+            "1.22.22 4.18.0",
             "run",
             "printf '%s\\n' '__metadata:' '  version: 8' > yarn.lock",
         ),
         (
             "vlt",
+            "1.0.2",
             "run",
             "printf '%s\\n' '{\"lockfileVersion\":1,\"nodes\":{},\"edges\":{}}' > vlt-lock.json",
         ),
         (
             "deno",
+            "2.9.5",
             "task",
             "printf '%s\\n' '{\"version\":\"5\",\"npm\":{}}' > deno.lock",
         ),
@@ -62,13 +73,145 @@ fn fake_package_managers(directory: &TempDir) -> PathBuf {
         write(
             &path,
             &format!(
-                "#!/bin/sh\nprintf 'fixture-secret-value\\n'\nprintf 'fixture-secret-value\\n' >&2\nif [ \"$1\" = \"{script_subcommand}\" ]; then printf '%s\\n' \"$2\" > .pkgshift-script-ran; if [ \"$2\" = \"fail\" ]; then exit 9; fi; exit 0; fi\n{lockfile_command}\n"
+                "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '%s\\n' '{version}'; exit 0; fi\nprintf 'fixture-secret-value\\n'\nprintf 'fixture-secret-value\\n' >&2\nif [ \"$1\" = \"{script_subcommand}\" ]; then printf '%s\\n' \"$2\" > .pkgshift-script-ran; if [ \"$2\" = \"fail\" ]; then exit 9; fi; exit 0; fi\n{lockfile_command}\n"
             ),
         );
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
             .expect("fake binary permissions");
     }
     binary_directory
+}
+
+#[test]
+fn binds_verification_policy_and_exact_target_executable_to_the_run() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{"name":"policy-fixture","private":true,"packageManager":"pnpm@11.21.0"}
+"#,
+    );
+    write(&root.join("pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+    let default_plan = json_output(&run(&root, &binaries, &["to", "bun"]));
+    let planned = json_output(&run(
+        &root,
+        &binaries,
+        &[
+            "to",
+            "bun",
+            "--target-platform",
+            "linux/x64/glibc",
+            "--target-platform",
+            "darwin/arm64",
+            "--edge-equivalence",
+            "strict",
+        ],
+    ));
+    let plan_id = planned["planId"].as_str().expect("plan identifier");
+    assert_ne!(default_plan["planId"], planned["planId"]);
+    let plan = artifact_content(&planned, "package-manager-plan");
+    assert_eq!(
+        plan["verificationPolicy"],
+        serde_json::json!({
+            "targetPlatforms": [
+                { "os": "darwin", "cpu": "arm64" },
+                { "os": "linux", "cpu": "x64", "libc": "glibc" }
+            ],
+            "edgeEquivalence": "strict"
+        })
+    );
+    assert_eq!(plan["targetExecutable"]["requiredVersion"], "1.3.14");
+    assert_eq!(plan["targetExecutable"]["packageManagerPin"], "bun@1.3.14");
+    let approved_argv = planned["nextActions"][0]["argv"]
+        .as_array()
+        .expect("approval argv");
+    assert!(
+        approved_argv
+            .windows(2)
+            .any(|values| { values == ["--target-platform", "darwin/arm64"] })
+    );
+    assert!(
+        approved_argv
+            .windows(2)
+            .any(|values| { values == ["--target-platform", "linux/x64/glibc"] })
+    );
+    assert!(
+        approved_argv
+            .windows(2)
+            .any(|values| { values == ["--edge-equivalence", "strict"] })
+    );
+
+    let bun = binaries.join("bun");
+    write(
+        &bun,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '%s\\n' '9.9.9'; exit 0; fi\nexit 99\n",
+    );
+    fs::set_permissions(&bun, fs::Permissions::from_mode(0o755)).expect("fake binary permissions");
+    let rejected = run(
+        &root,
+        &binaries,
+        &[
+            "to",
+            "bun",
+            "--target-platform",
+            "linux/x64/glibc",
+            "--target-platform",
+            "darwin/arm64",
+            "--edge-equivalence",
+            "strict",
+            "--approve",
+            plan_id,
+        ],
+    );
+    assert_eq!(rejected.status.code(), Some(4));
+    assert!(
+        json_output(&rejected)["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic["code"] == "TARGET_EXECUTABLE_VERSION_MISMATCH" }))
+    );
+    assert!(!root.join("bun.lock").exists());
+    assert!(!root.join(".pkgshift/state/runs").exists());
+
+    fake_package_managers(&directory);
+    let applied = run(
+        &root,
+        &binaries,
+        &[
+            "to",
+            "bun",
+            "--target-platform",
+            "linux/x64/glibc",
+            "--target-platform",
+            "darwin/arm64",
+            "--edge-equivalence",
+            "strict",
+            "--approve",
+            plan_id,
+        ],
+    );
+    assert!(
+        applied.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&applied.stdout),
+        String::from_utf8_lossy(&applied.stderr)
+    );
+    let applied = json_output(&applied);
+    let run = artifact_content(&applied, "run-journal");
+    assert_eq!(run["targetExecutable"]["program"], "bun");
+    assert_eq!(run["targetExecutable"]["version"], "1.3.14");
+    assert_eq!(run["targetExecutable"]["packageManagerPin"], "bun@1.3.14");
+    let verification = artifact_content(&applied, "verification-report");
+    assert!(
+        verification["checks"]
+            .as_array()
+            .is_some_and(|checks| checks.iter().any(|check| {
+                check["id"] == "target-executable-version" && check["status"] == "passed"
+            }))
+    );
 }
 
 #[test]
@@ -1055,6 +1198,53 @@ fn applies_a_migrated_yarn_patch_with_real_bun() {
 }
 
 #[test]
+#[ignore = "requires registry access and the pinned Yarn package"]
+fn applies_a_pnpm_name_only_patch_after_real_yarn_migration() {
+    let bun_available = Command::new("bun")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success());
+    if !bun_available {
+        return;
+    }
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = bunx_package_manager(&directory, "yarn", "@yarnpkg/cli-dist@4.18.0");
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "live-pnpm-name-patch-fixture",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "dependencies": { "left-pad": "1.3.0" }
+}
+"#,
+    );
+    write(
+        &root.join("pnpm-workspace.yaml"),
+        "patchedDependencies:\n  'left-pad': 'patches/left-pad.patch'\n",
+    );
+    write(
+        &root.join("patches/left-pad.patch"),
+        "--- a/index.js\n+++ b/index.js\n@@ -4,6 +4,7 @@\n      * To Public License, Version 2, as published by Sam Hocevar. See\n      * http://www.wtfpl.net/ for more details. */\n 'use strict';\n+// pkgshift live name-only patch fixture\n module.exports = leftPad;\n \n var cache = [\n",
+    );
+
+    let applied = plan_and_apply(&root, &binaries, "yarn-modern");
+    assert_eq!(applied["status"], "completed");
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("package.json")).expect("target manifest"),
+    )
+    .expect("target manifest JSON");
+    assert_eq!(
+        manifest["resolutions"]["left-pad@npm:1.3.0"],
+        "patch:left-pad@npm%3A1.3.0#~/patches/left-pad.patch"
+    );
+    let installed =
+        fs::read_to_string(root.join("node_modules/left-pad/index.js")).expect("patched package");
+    assert!(installed.contains("pkgshift live name-only patch fixture"));
+}
+
+#[test]
 fn trials_a_migration_without_changing_the_source_repository() {
     let directory = tempfile::tempdir().expect("fixture directory");
     let binaries = fake_package_managers(&directory);
@@ -1244,7 +1434,7 @@ fn keeps_a_failed_install_recoverable() {
     let plan_id = planned["planId"].as_str().expect("plan identifier");
     write(
         &binaries.join("bun"),
-        "#!/bin/sh\nprintf 'partial lock\\n' > bun.lock\nexit 42\n",
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '1.3.14\\n'; exit 0; fi\nprintf 'partial lock\\n' > bun.lock\nexit 42\n",
     );
     fs::set_permissions(binaries.join("bun"), fs::Permissions::from_mode(0o755))
         .expect("failing binary permissions");

@@ -47,6 +47,10 @@ The implementation may add codes while preserving the following baseline familie
 | `RUNTIME_SOURCE_FILE_TOO_LARGE` | A runtime input exceeds the bounded deterministic inspection limit. |
 | `RUNTIME_SOURCE_SYMLINK_UNSUPPORTED` | A runtime source or source directory crosses a symbolic-link boundary. |
 | `RUNTIME_BUN_MODULE_UNSUPPORTED` | A Bun-specific module import remains outside the registered runtime recipe set. |
+| `RUNTIME_BUN_SQLITE_IMPORT_UNSUPPORTED` | A `bun:sqlite` import does not match the named `Database` recipe. |
+| `RUNTIME_BUN_SQLITE_API_UNSUPPORTED` | A `bun:sqlite` export or member is outside the verified `node:sqlite` subset. |
+| `RUNTIME_BUN_SHELL_IMPORT_UNSUPPORTED` | A Bun import does not match the single named `$` shell recipe. |
+| `RUNTIME_BUN_SHELL_API_UNSUPPORTED` | A Bun import contains APIs beyond the verified `$` to dax mapping. |
 | `RUNTIME_BUN_GLOBAL_UNSUPPORTED` | A Bun global API remains after safe recipes are evaluated. |
 | `RUNTIME_BUN_SCRIPT_UNSUPPORTED` | A Bun package script contains flags or shell semantics outside direct Deno command translation. |
 | `RUNTIME_BUN_RESIDUE_REMAINS` | Verification detected Bun application runtime evidence after approved mutation. |
@@ -65,6 +69,9 @@ The implementation may add codes while preserving the following baseline familie
 | `LOCK_GRAPH_PARSE_FAILED` | A source or target lockfile could not produce a trustworthy normalized graph. |
 | `LOCK_GRAPH_FORMAT_UNSUPPORTED` | The lockfile format, including binary `bun.lockb`, cannot be proven safely. |
 | `PLAN_PRECONDITION_FAILED` | Repository evidence changed after planning. |
+| `TARGET_EXECUTABLE_UNAVAILABLE` | The exact planned target program could not be resolved to an executable on `PATH`. |
+| `TARGET_EXECUTABLE_VERSION_MISMATCH` | The bounded version probe failed or the resolved target program did not report the exact planned version. |
+| `PATCH_RESOLUTION_EVIDENCE_MISSING` | A non-exact patch selector cannot be bound to the exact package locator required by Yarn. |
 | `REPOSITORY_TRANSACTION_BUSY` | Another agent or run owns the repository transaction lock. |
 | `APPROVAL_REQUIRED` | A mutating command lacks the exact artifact-bound approval token. |
 | `SKILL_SOURCE_NOT_FOUND` | The portable Agent Skill source is unavailable from the distribution or source checkout. |

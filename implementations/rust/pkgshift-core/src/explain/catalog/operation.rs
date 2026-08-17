@@ -62,6 +62,22 @@ pub(super) static ENTRIES: &[DiagnosticExplanation] = &[
         &["Inspect the current repository and create a new plan."],
     ),
     DiagnosticExplanation::new(
+        "TARGET_EXECUTABLE_UNAVAILABLE",
+        "Target executable unavailable",
+        "The exact target program declared by the plan could not be resolved to an executable file.",
+        &[
+            "Install or activate the plan's package-manager pin on PATH, then retry the unchanged approved command.",
+        ],
+    ),
+    DiagnosticExplanation::new(
+        "TARGET_EXECUTABLE_VERSION_MISMATCH",
+        "Target executable version mismatch",
+        "The bounded version probe failed or the resolved target program did not report the exact planned version.",
+        &[
+            "Activate the exact package-manager pin declared by targetExecutable, then retry before changing the plan.",
+        ],
+    ),
+    DiagnosticExplanation::new(
         "REPOSITORY_TRANSACTION_BUSY",
         "Repository transaction active",
         "Another apply, verify, or rollback transaction owns the repository lock.",

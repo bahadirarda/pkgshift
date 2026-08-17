@@ -1,12 +1,13 @@
 use std::path::Path;
 
-use crate::catalog::get_package_manager;
+use crate::catalog::{executable_requirement, get_package_manager};
 use crate::cleanup;
 use crate::inspect::{build_project_ir, inspect_project};
-use crate::lock_graph::{compare_lock_graphs_for_project, extract_lock_graph};
+use crate::lock_graph::{compare_lock_graphs_for_project_with_policy, extract_lock_graph};
 use crate::model::{
     DependencyStateCleanupRecord, Diagnostic, DiagnosticSeverity, LockGraph, MigrationPlan,
-    ProjectIr, SCHEMA_VERSION, VerificationCheck, VerificationReport, VerificationStatus,
+    ProjectIr, ResolvedExecutable, SCHEMA_VERSION, VerificationCheck, VerificationReport,
+    VerificationStatus,
 };
 use crate::util::{Result, file_digest, safe_join, short_digest};
 
@@ -33,6 +34,7 @@ pub(crate) fn verify(
     install_succeeded: bool,
     dependency_state_cleanups: &[DependencyStateCleanupRecord],
     processes: &[crate::model::ProcessExecutionRecord],
+    resolved_executable: Option<&ResolvedExecutable>,
 ) -> Result<VerificationReport> {
     let mut checks = Vec::new();
     let mut mismatches = Vec::new();
@@ -181,13 +183,50 @@ pub(crate) fn verify(
         evidence: vec![format!("success:{install_succeeded}")],
     });
 
+    let planned_executable = plan
+        .target_executable
+        .clone()
+        .unwrap_or_else(|| executable_requirement(plan.target));
+    let executable_matches = resolved_executable.is_some_and(|resolved| {
+        resolved.program == planned_executable.program
+            && resolved.version == planned_executable.required_version
+            && resolved.package_manager_pin == planned_executable.package_manager_pin
+    });
+    checks.push(VerificationCheck {
+        id: "target-executable-version".to_owned(),
+        status: if executable_matches {
+            VerificationStatus::Passed
+        } else {
+            VerificationStatus::Failed
+        },
+        summary: if executable_matches {
+            "The resolved target executable matches the exact planned version.".to_owned()
+        } else {
+            "The resolved target executable does not match the exact planned version.".to_owned()
+        },
+        evidence: resolved_executable.map_or_else(
+            || vec!["resolvedExecutable:none".to_owned()],
+            |resolved| {
+                vec![
+                    format!("program:{}", resolved.program),
+                    format!("version:{}", resolved.version),
+                    format!("path:{}", resolved.path),
+                ]
+            },
+        ),
+    });
+
     checks.push(scripts::verification_check(plan, processes));
 
     let lock_graph_comparison = if let Some(source_graph) = source_lock_graph {
         match extract_lock_graph(root, plan.target)? {
             Some(target_graph) => {
-                let comparison =
-                    compare_lock_graphs_for_project(source_graph, &target_graph, project_ir)?;
+                let comparison = compare_lock_graphs_for_project_with_policy(
+                    source_graph,
+                    &target_graph,
+                    project_ir,
+                    &plan.verification_policy,
+                )?;
                 let passed = comparison.status == VerificationStatus::Passed;
                 let mut evidence = vec![
                     format!("policy:{}", comparison.policy),
@@ -253,8 +292,12 @@ pub(crate) fn verify(
                         edges: Vec::new(),
                         diagnostics: Vec::new(),
                     };
-                    let mut comparison =
-                        compare_lock_graphs_for_project(source_graph, &absent_target, project_ir)?;
+                    let mut comparison = compare_lock_graphs_for_project_with_policy(
+                        source_graph,
+                        &absent_target,
+                        project_ir,
+                        &plan.verification_policy,
+                    )?;
                     comparison.target_graph_id = None;
                     checks.push(VerificationCheck {
                         id: "dependency-graph-drift".to_owned(),
