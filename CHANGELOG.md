@@ -7,6 +7,19 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 
 ## [Unreleased]
 
+## [0.20260817.6] - 2026-08-17
+
+### Changed
+
+- Add a dedicated, permission-aware Bun-to-Deno runtime migration with deterministic source, script, import, and type-cleanup recipes; content-redacted plans; exact approval; residue verification; private snapshots; runtime rollback; and real Hono acceptance coverage.
+- Add deterministic multi-target comparison with one aggregate approval, independent isolated trials, nested candidate evidence, capability-blocked candidates, source-preservation proof, and explicit no-ranking semantics.
+- Split lock graph extraction and comparison into focused modules and enforce a production Rust module-size boundary during repository validation.
+- Add deterministic repository integration migration for package scripts, registered CI setup and command fields, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins, with fail-closed diagnostics for ambiguous or unsupported target semantics.
+- Add explicit representative root-script verification with immutable target commands, bounded shell-free execution, operation-bound process journals, withheld output, and verification reports that never rerun repository code.
+- Port managed Agent Skill copy, link, status, doctor, dry-run, exact approval, project and user confinement, content-digest health checks, and protected uninstall behavior to the Rust primary CLI.
+- Port diagnostic and integrity-checked stored-artifact explanation to the primary Rust CLI.
+- Add a verified Windows installer and transactional cross-platform release installation parity.
+
 ## [0.20260817.5] - 2026-08-17
 
 ### Changed
@@ -82,7 +95,8 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 - Added cross-platform GitHub Release archives, SHA-256 checksums, and build provenance attestations.
 - Added crates.io-ready package metadata and an explicitly approved publication workflow.
 
-[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.5...HEAD
+[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.6...HEAD
+[0.20260817.6]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.5...v0.20260817.6
 [0.20260817.5]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.4...v0.20260817.5
 [0.20260817.4]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.3...v0.20260817.4
 [0.20260817.3]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.2...v0.20260817.3
