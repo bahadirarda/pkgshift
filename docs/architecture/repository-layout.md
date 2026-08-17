@@ -50,6 +50,8 @@ The root is an orchestration boundary, not a third implementation. Shared produc
 
 The primary runtime is Rust 1.97.1. `pkgshift-core` owns detection, Project IR, capability decisions, immutable planning, integrity-checked state, repository locking, execution, verification, and recovery. These responsibilities are separated into focused modules: planning composes operations, transformation modules render target semantics, cleanup owns generated dependency-state retirement, verification owns post-apply proof, and transaction owns orchestration only. `pkgshift-cli` owns the keyword command grammar and presentation boundary. Target processes run directly without a shell, lifecycle scripts are disabled, and process output is withheld from persistent Rust artifacts.
 
+Production Rust modules are limited to 1,000 physical lines by repository validation. Test-only modules are excluded from that mechanical limit and remain colocated under their owning module directory. A file below the limit must still represent one cohesive responsibility; the limit is a regression gate rather than a design target.
+
 The TypeScript engine remains under `implementations/typescript` as an executable reference implementation. It has no third-party runtime dependencies and uses Bun 1.3.14 for runtime, YAML parsing, building, and tests. It remains the behavior oracle for capability renderers and ancillary commands that have not crossed the Rust parity gate.
 
 A Rust distribution compiles to one standalone CLI, but apply still requires the selected target package manager executable.

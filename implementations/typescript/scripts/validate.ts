@@ -542,6 +542,23 @@ async function validateEnglishOnly(): Promise<void> {
   }
 }
 
+async function validateRustModuleBoundaries(): Promise<number> {
+  const maximumProductionLines = 1000;
+  const paths = await filesMatching("implementations/rust/**/src/**/*.rs");
+  const productionPaths = paths.filter((path) =>
+    !/(?:^|\/)tests(?:\/|\.rs$)/.test(path)
+  );
+  for (const path of productionPaths) {
+    const lineCount = (await Bun.file(path).text()).split("\n").length;
+    if (lineCount > maximumProductionLines) {
+      errors.push(
+        `${path}: production Rust modules must remain at or below ${maximumProductionLines} lines; found ${lineCount}`,
+      );
+    }
+  }
+  return productionPaths.length;
+}
+
 const conceptCount = await validateOkf();
 await validateSkill();
 const changesetCount = await validateChangesets();
@@ -549,10 +566,11 @@ await validateReleaseMetadata();
 await validateWebsite();
 await validateLinks("README.md", await Bun.file("README.md").text(), null);
 await validateEnglishOnly();
+const rustModuleCount = await validateRustModuleBoundaries();
 
 if (errors.length > 0) {
   console.error(errors.join("\n"));
   process.exit(1);
 }
 
-console.log(`Validated ${conceptCount} OKF Markdown files, ${changesetCount} pending Changeset(s), release metadata, the product website, the portable Agent Skill, internal links, and English-only content.`);
+console.log(`Validated ${conceptCount} OKF Markdown files, ${changesetCount} pending Changeset(s), ${rustModuleCount} bounded production Rust modules, release metadata, the product website, the portable Agent Skill, internal links, and English-only content.`);

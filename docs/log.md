@@ -2,6 +2,7 @@
 
 ## 2026-08-17
 
+* **Module Boundaries**: Split lock graph extraction, comparison, and inspection tests into focused modules and added a blocking production Rust module-size validation gate.
 * **Clean migration state**: Added deterministic package-local `node_modules` retirement before target installation, journaled removed and already-absent paths, made both clean-install evidence and source-only artifact absence blocking verification checks, and surfaced bounded Bun runtime-reference warnings without deleting application semantics.
 * **Modular Rust core**: Split capability analysis, cleanup, verification, registry translation, project transformation composition, and planner tests out of the former planner and transaction god files.
 * **Reachable graph proof**: Added `reachable-resolution-set-v2` with manifest-root traversal, exact Bun and Deno edge targets, proven-unreachable pruning, optional-only platform absence handling, and fail-closed required-path diagnostics while preserving `resolution-set-v1` for topology-limited formats.
