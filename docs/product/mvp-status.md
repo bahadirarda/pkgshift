@@ -5,7 +5,7 @@ description: Records the completed technical MVP, its validation evidence, and e
 tags: [product, mvp, status, delivery]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
+generated: { by: bahadirarda, at: 2026-08-17T07:24:55Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -27,7 +27,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Explicit ambiguity and conflicting-evidence diagnostics.
 - Repository fingerprints over migration-relevant evidence.
 - Normalized source lock graphs bound to immutable plans and independently extracted target graphs.
-- Blocking `resolution-set-v1` verification for added, removed, or comparably integrity-mismatched resolutions.
+- Blocking `reachable-resolution-set-v2` verification with proven-unreachable pruning, optional-only platform absence handling, and explicit `resolution-set-v1` fallback for topology-limited formats.
 - Target-native importer selection for verified pnpm, Bun, Yarn Classic, Yarn Modern, and npm migration paths.
 - Versioned Project IR across workspace packages, dependency protocols, policy shapes, linker settings, and integrations.
 - Source-to-target capability analysis backed by explicit rules and authoritative documentation.
@@ -67,7 +67,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - A real-installer Rust acceptance run for a multi-package pnpm workspace migrated to Bun and rolled back to its original fingerprint.
 - Real Bun 1.3.14 acceptance runs for dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback.
 - Real vlt 1.0.2 and Deno 2.9.5 acceptance runs for dependency-bearing multi-package Bun workspaces, workspace protocols, target installation, and graph proof.
-- A pinned upstream corpus covering executable Bun-to-vlt and Bun-to-Deno plans, vlt-to-pnpm and accepted-lossy vlt-to-Deno plans, Vite capability blockers, external vlt installer failure, and strict Deno post-install graph rejection without source writes.
+- A machine-readable pinned upstream corpus covering executable Bun-to-vlt and Bun-to-Deno plans, vlt-to-pnpm and accepted-lossy vlt-to-Deno plans, Vite capability blockers, clean-checkout enforcement, weekly CI, external vlt installer failure, and strict Deno post-install graph rejection without source writes.
 - Sibling Rust and TypeScript engines under `implementations/`, with shared root orchestration for both implementations.
 
 # Delivery Gates
@@ -78,7 +78,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Inspection and planning | MVP complete | Production targets render common manifest, workspace, catalog, override, linker, registry-reference, and integration semantics or fail closed. |
 | Plan artifact persistence | MVP complete | Persistence is explicit, atomic, immutable, digest-checked, and repository-bound. |
 | Transaction executor | MVP complete | Recovery snapshots, precondition rechecks, atomic writes, journal transitions, and partial-failure fixtures pass. |
-| Verification | MVP complete | Planned digests, target selection, lockfile behavior, workspace membership, install completion, and normalized resolution-set parity are checked. |
+| Verification | MVP complete | Planned digests, target selection, lockfile behavior, workspace membership, install completion, and reachable resolution-set parity are checked. |
 | Isolated trial | MVP complete | Exact approval executes the accepted plan in a disposable copy and reports repository preservation plus nested verification. |
 | Rollback | MVP complete | Successful, failed, and partially applied runs restore repository files and verify the baseline fingerprint. |
 | Skill installer | MVP complete | Codex and Claude Code project destinations pass copy, link, conflict, status, and protected-uninstall fixtures. |
@@ -96,7 +96,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Dependency lifecycle scripts remain disabled during target installation.
 - Rollback does not restore `node_modules`, global stores, downloads, or package-manager caches.
 - Binary `bun.lockb` graph extraction fails closed until the repository converts it to the current text `bun.lock` format.
-- Resolution-set proof does not yet make dependency edges blocking because peer, optional, hoisting, and deduplication representations differ between managers.
+- Reachable-resolution proof does not yet make dependency edge shape blocking because peer placement, hoisting, and deduplication representations differ between managers.
 - Representative project scripts are not selected or executed automatically.
 - The Rust CLI does not yet own TypeScript reference commands for managed Agent Skill lifecycle or artifact explanation.
 - Unsupported and manual-only transformations emit blocking diagnostics instead of delegating edits to a model.
@@ -109,4 +109,4 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 
 # Post-MVP Work
 
-Expand patch conversion beyond the exact text-only subset, add configurable platform-aware and edge-aware graph policies, explicit representative-script selection, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.
+Expand patch conversion beyond the exact text-only subset, add configurable target-platform matrices and edge-equivalence policies, explicit representative-script selection, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.

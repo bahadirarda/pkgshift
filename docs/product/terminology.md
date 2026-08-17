@@ -4,7 +4,7 @@ title: Product Terminology
 description: Defines the stable terms used across pkgshift commands, artifacts, and documentation.
 tags: [product, glossary, cli]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-17T07:24:55Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -29,6 +29,7 @@ sources:
 | Native importer | A target package manager's documented command or install path for translating source dependency state. |
 | Plan | An immutable, reviewable set of proposed operations with preconditions, expected effects, risks, and verification requirements. |
 | Project IR | The normalized project intermediate representation shared by all adapters. |
+| Reachable resolution set | The lockfile resolutions connected to external manifest roots through normalized dependency topology. |
 | Rollback | A compensating operation derived from a run journal that attempts to restore the pre-apply state. |
 | Run | One apply attempt against one plan and repository fingerprint. |
 | Side effect | Any operation that changes repository files, dependency state, caches, processes, or external systems. |

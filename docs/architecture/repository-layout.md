@@ -77,4 +77,4 @@ Tests create isolated temporary repositories and remove only generated fixtures.
 
 # Post-MVP Extensions
 
-The next architecture slice closes advanced renderer parity, adds platform-aware and edge-aware graph policies, explicit representative-script checks, target executable version resolution, and a final ancillary-command ownership decision. These extensions must preserve [Migration Engine](/architecture/migration-engine.md), [Agent Interface](/architecture/agent-interface.md), and [Rust-Primary Polyglot Monorepo](/decisions/rust-primary-polyglot-monorepo.md).
+The next architecture slice closes advanced renderer parity, adds configurable target-platform matrices and edge-equivalence graph policies, explicit representative-script checks, target executable version resolution, and a final ancillary-command ownership decision. These extensions must preserve [Migration Engine](/architecture/migration-engine.md), [Agent Interface](/architecture/agent-interface.md), and [Rust-Primary Polyglot Monorepo](/decisions/rust-primary-polyglot-monorepo.md).

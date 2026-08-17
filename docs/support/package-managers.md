@@ -168,7 +168,7 @@ Production targets provide:
 - Redaction tests for registry and environment configuration.
 - Apply failure and rollback tests.
 - Structural verification tied to the plan and apply journal.
-- Normalized source lock graph extraction and blocking target resolution-set verification in the Rust primary path.
+- Normalized source lock graph extraction and blocking reachable-resolution verification in the Rust primary path, with conservative V1 fallback when a format lacks topology.
 - Registered target-native importer or install-integrated migration selection where official behavior supports it.
 - Approved isolated execution trials through the Rust primary CLI.
 - Bidirectional lifecycle allow-list translation among Bun `trustedDependencies`, pnpm `allowBuilds`, and Yarn Modern `dependenciesMeta` with `enableScripts: false`.
@@ -179,7 +179,7 @@ Production targets provide:
 - vlt workspace, catalog, graph modifier, public registry, command integration, installer, and v1 lock graph handling in both engines.
 - Deno workspace, npm override, catalog expansion, isolated linker, preserved runtime configuration, `deno task`, installer, and v5 npm and JSR lock graph handling in both engines.
 
-Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, Yarn build denials outside allow-list mode, range or binary patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, dependency-level lifecycle policy targeting npm or Yarn Classic, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. Edge-level and platform-aware graph policies remain release-hardening extensions beyond the blocking `resolution-set-v1` policy.
+Advanced source features such as arbitrary pnpm hooks, Yarn JavaScript constraints, Yarn build denials outside allow-list mode, range or binary patch conversions, workspace glob or protocol syntax outside the deterministic subset, unrecognized npm configuration, unsafe literal registry credentials, dependency-level lifecycle policy targeting npm or Yarn Classic, or selectors outside the implemented subset block execution. Binary `bun.lockb` graph proof also blocks until the lockfile is converted to text. V2 handles proven-unreachable entries and optional-only package-name absence; configurable target-platform matrices and blocking edge-shape equivalence remain release-hardening extensions.
 
 # Native Migration Paths
 

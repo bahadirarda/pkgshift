@@ -54,7 +54,7 @@ The MVP covers:
 - Structured diagnostics, explanations, and rollback.
 - Project and user installation of a portable Agent Skill.
 
-Representative project-script execution remains a post-MVP extension because it requires an explicit selection and trust policy. Platform-aware optional resolution and strict edge-equivalence policies extend the MVP's blocking `resolution-set-v1` proof.
+Representative project-script execution remains a post-MVP extension because it requires an explicit selection and trust policy. Configurable target-platform matrices and strict edge-equivalence policies extend the MVP's blocking reachable-resolution proof.
 
 # Non-goals
 

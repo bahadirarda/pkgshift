@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::catalog::get_package_manager;
 use crate::inspect::{build_project_ir, inspect_project};
-use crate::lock_graph::{compare_lock_graphs, extract_lock_graph};
+use crate::lock_graph::{compare_lock_graphs_for_project, extract_lock_graph};
 use crate::model::{
     ApplyOutcome, Diagnostic, DiagnosticSeverity, LockGraph, MigrationPlan, MutationAction,
-    ProcessExecutionRecord, SCHEMA_VERSION, SnapshotEntry, StoredPlan, StoredRun, TrialReport,
-    VerificationCheck, VerificationReport, VerificationStatus,
+    ProcessExecutionRecord, ProjectIr, SCHEMA_VERSION, SnapshotEntry, StoredPlan, StoredRun,
+    TrialReport, VerificationCheck, VerificationReport, VerificationStatus,
 };
 use crate::util::{
     PkgshiftError, Result, atomic_write, create_new_lock, digest_json, file_digest, read_json,
@@ -467,7 +467,7 @@ fn verify_plan(
     root: &Path,
     plan: &MigrationPlan,
     source_lock_graph: Option<&LockGraph>,
-    expected_packages: &[String],
+    project_ir: &ProjectIr,
     run_id: &str,
     install_succeeded: bool,
 ) -> Result<VerificationReport> {
@@ -572,6 +572,11 @@ fn verify_plan(
                 .collect()
         })
         .unwrap_or_default();
+    let expected_packages = project_ir
+        .packages
+        .iter()
+        .map(|package| package.path.clone())
+        .collect::<Vec<_>>();
     let workspace_matches = current_packages == expected_packages;
     checks.push(VerificationCheck {
         id: "workspace-membership".to_owned(),
@@ -609,7 +614,8 @@ fn verify_plan(
     let lock_graph_comparison = if let Some(source_graph) = source_lock_graph {
         match extract_lock_graph(root, plan.target)? {
             Some(target_graph) => {
-                let comparison = compare_lock_graphs(source_graph, &target_graph)?;
+                let comparison =
+                    compare_lock_graphs_for_project(source_graph, &target_graph, project_ir)?;
                 let passed = comparison.status == VerificationStatus::Passed;
                 let mut evidence = vec![
                     format!("policy:{}", comparison.policy),
@@ -622,6 +628,22 @@ fn verify_plan(
                         comparison.integrity_mismatches.len()
                     ),
                     format!("edgeChanges:{}", comparison.edge_changes.len()),
+                    format!(
+                        "prunedSource:{}",
+                        comparison.pruned_source_resolutions.len()
+                    ),
+                    format!(
+                        "prunedTarget:{}",
+                        comparison.pruned_target_resolutions.len()
+                    ),
+                    format!(
+                        "optionalPlatformDifferences:{}",
+                        comparison.optional_platform_differences.len()
+                    ),
+                    format!(
+                        "reachabilityIssues:{}",
+                        comparison.reachability_issues.len()
+                    ),
                 ];
                 evidence.extend(
                     target_graph
@@ -633,7 +655,10 @@ fn verify_plan(
                     id: "dependency-graph-drift".to_owned(),
                     status: comparison.status,
                     summary: if passed {
-                        "Source and target resolved package sets match.".to_owned()
+                        format!(
+                            "Source and target resolved package sets match under {}.",
+                            comparison.policy
+                        )
                     } else {
                         "Target dependency state drifted from the accepted source lock graph."
                             .to_owned()
@@ -656,7 +681,8 @@ fn verify_plan(
                         edges: Vec::new(),
                         diagnostics: Vec::new(),
                     };
-                    let mut comparison = compare_lock_graphs(source_graph, &absent_target)?;
+                    let mut comparison =
+                        compare_lock_graphs_for_project(source_graph, &absent_target, project_ir)?;
                     comparison.target_graph_id = None;
                     checks.push(VerificationCheck {
                         id: "dependency-graph-drift".to_owned(),
@@ -844,17 +870,11 @@ pub fn apply_stored_plan(
 
     run.state = "verifying".to_owned();
     save_run(&state_directory, &run)?;
-    let expected_packages = stored_plan
-        .project_ir
-        .packages
-        .iter()
-        .map(|package| package.path.clone())
-        .collect::<Vec<_>>();
     let verification = verify_plan(
         &root,
         plan,
         stored_plan.source_lock_graph.as_ref(),
-        &expected_packages,
+        &stored_plan.project_ir,
         &run_id,
         true,
     )?;
@@ -893,12 +913,6 @@ pub fn verify_stored_run(
     let _lock = RepositoryLock::acquire(&state_directory, &root, "verify")?;
     let mut run = load_run(&state_directory, run_id)?;
     let stored_plan = load_plan(&state_directory, &run.plan.plan_id)?;
-    let expected_packages = stored_plan
-        .project_ir
-        .packages
-        .iter()
-        .map(|package| package.path.clone())
-        .collect::<Vec<_>>();
     let install_command = get_package_manager(run.plan.target)
         .install_command
         .iter()
@@ -912,7 +926,7 @@ pub fn verify_stored_run(
         &root,
         &run.plan,
         stored_plan.source_lock_graph.as_ref(),
-        &expected_packages,
+        &stored_plan.project_ir,
         run_id,
         install_succeeded,
     )?;

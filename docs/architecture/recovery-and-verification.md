@@ -54,7 +54,7 @@ Verify reads the plan, journal, and repository. It records these MVP checks:
 
 A failed check moves the verification operation and run to `failed`. A successful report moves both to `succeeded`. Reports carry their own identity and integrity digest.
 
-The source graph is extracted before planning and persisted with the accepted plan. The target graph is extracted after installation. `resolution-set-v1` blocks version-set and comparable integrity drift while recording edge differences as non-blocking evidence. A dependency-free target may omit its lockfile only when the accepted source graph proves an empty resolved set. See [Lock Graph Proof](/architecture/lock-graph-proof.md).
+The source graph is extracted before planning and persisted with the accepted plan. The target graph is extracted after installation. `reachable-resolution-set-v2` prunes topology-proven unreachable entries and tolerates package-name absence only on optional-only paths; reachable version and comparable integrity drift remain blocking. Formats without sufficient topology report and apply `resolution-set-v1`. Edge-shape differences remain non-blocking evidence. A dependency-free target may omit its lockfile only when the accepted source graph proves an empty resolved set. See [Lock Graph Proof](/architecture/lock-graph-proof.md).
 
 # Isolated Trial
 

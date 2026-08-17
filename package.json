@@ -41,6 +41,7 @@
     "cli:typescript": "bun run --cwd implementations/typescript cli",
     "changeset": "changeset",
     "changeset:status": "changeset status --verbose",
+    "corpus:real-world": "bun scripts/run-real-world-corpus.mjs",
     "test": "bun run test:typescript && cargo test --workspace --locked",
     "test:typescript": "bun run --cwd implementations/typescript test",
     "typecheck": "bun run --cwd implementations/typescript typecheck",
