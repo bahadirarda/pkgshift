@@ -7,6 +7,12 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 
 ## [Unreleased]
 
+## [0.20260817.8] - 2026-08-17
+
+### Changed
+
+- Complete the accepted post-MVP roadmap. Expand portable text-patch selectors for Yarn Modern and pnpm, add verified Bun SQLite and dax shell runtime recipes, bind configurable target-platform matrices and compatible or strict dependency-edge equivalence to plans, and require the exact target executable version before mutation with persisted verification evidence.
+
 ## [0.20260817.7] - 2026-08-17
 
 ### Changed
@@ -102,7 +108,8 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 - Added cross-platform GitHub Release archives, SHA-256 checksums, and build provenance attestations.
 - Added crates.io-ready package metadata and an explicitly approved publication workflow.
 
-[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.7...HEAD
+[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.8...HEAD
+[0.20260817.8]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.7...v0.20260817.8
 [0.20260817.7]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.6...v0.20260817.7
 [0.20260817.6]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.5...v0.20260817.6
 [0.20260817.5]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.4...v0.20260817.5

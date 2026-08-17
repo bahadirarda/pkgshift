@@ -21,7 +21,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
-pkgshift-core = { version = "0.20260817.7", path = "../pkgshift-core" }
+pkgshift-core = { version = "0.20260817.8", path = "../pkgshift-core" }
 serde_json.workspace = true
 
 [dev-dependencies]
