@@ -1,5 +1,7 @@
 # @bahadirarda/pkgshift-typescript
 
+## 0.20260817.4
+
 ## 0.20260817.3
 
 ### Minor Changes

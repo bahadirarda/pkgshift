@@ -7,6 +7,12 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 
 ## [Unreleased]
 
+## [0.20260817.4] - 2026-08-17
+
+### Changed
+
+- Add reachable lock graph verification with proven-unreachable pruning, exact Bun and Deno edge targets, optional-only platform absence handling, and fail-closed required-path diagnostics. Automate the pinned six-case real-world planning corpus in scheduled CI.
+
 ## [0.20260817.3] - 2026-08-17
 
 ### Changed
@@ -70,7 +76,8 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 - Added cross-platform GitHub Release archives, SHA-256 checksums, and build provenance attestations.
 - Added crates.io-ready package metadata and an explicitly approved publication workflow.
 
-[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.3...HEAD
+[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.4...HEAD
+[0.20260817.4]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.3...v0.20260817.4
 [0.20260817.3]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.2...v0.20260817.3
 [0.20260817.2]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.1...v0.20260817.2
 [0.20260817.1]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.0...v0.20260817.1

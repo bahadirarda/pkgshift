@@ -1,5 +1,11 @@
 # pkgshift
 
+## 0.20260817.4
+
+### Minor Changes
+
+- cc658b8: Add reachable lock graph verification with proven-unreachable pruning, exact Bun and Deno edge targets, optional-only platform absence handling, and fail-closed required-path diagnostics. Automate the pinned six-case real-world planning corpus in scheduled CI.
+
 ## 0.20260817.3
 
 ### Minor Changes
