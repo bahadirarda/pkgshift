@@ -48,8 +48,8 @@ The results below were produced on 2026-08-17 with the pinned pkgshift source re
 
 | Case | Planning result | Execution or verification evidence |
 | --- | --- | --- |
-| Hono, Bun to vlt | Executable production plan, six operations, no capability blocker, and one `NATIVE_IMPORT_UNAVAILABLE` warning. | Isolated trial preserved the source. vlt failed while resolving a transitive npm package as a malformed SSH git URL, so pkgshift reported installer failure and did not claim verification success. |
-| Hono, Bun to Deno | Executable production plan, six operations, no capability blocker, and one `NATIVE_IMPORT_UNAVAILABLE` warning. | Deno installation succeeded. `reachable-resolution-set-v2` tolerated three optional-only package-name absences but rejected 48 reachable source-only versions. No source resolution was topology-proven stale, so the isolated trial correctly remained failed and reported `repositoryUnchanged: true`. |
+| Hono, Bun to vlt | Executable production plan, seven operations including clean target installation, no capability blocker, one `NATIVE_IMPORT_UNAVAILABLE` warning, and bounded `SOURCE_RUNTIME_REFERENCES_PRESERVED` evidence. | Isolated trial preserved the source. vlt failed while resolving a transitive npm package as a malformed SSH git URL, so pkgshift reported installer failure and did not claim verification success. |
+| Hono, Bun to Deno | Executable production plan, seven operations including clean target installation, no capability blocker, one `NATIVE_IMPORT_UNAVAILABLE` warning, and bounded `SOURCE_RUNTIME_REFERENCES_PRESERVED` evidence. | Deno installation succeeded. `reachable-resolution-set-v2` tolerated three optional-only package-name absences but rejected 48 reachable source-only versions. No source resolution was topology-proven stale, so the isolated trial correctly remained failed and reported `repositoryUnchanged: true`. |
 | Vite, pnpm to vlt | Blocked production plan with one native decision, two transforms, and four unsupported capabilities. | Link protocol, lifecycle allow-list, patched dependency, and package-extension semantics remain blocking. The source lock graph parses after excluding local pnpm package locators from the registry graph. |
 | Vite, pnpm to Deno | Blocked production plan with two native decisions, one transform, four unsupported capabilities, and 153 unsupported local dependency specifiers. | The UTF-8 BOM fixture is parsed correctly; unsupported local fixture dependencies fail closed before execution. |
 | vlt, vlt to pnpm | Executable production plan with five native capability decisions. | Source vlt configuration and the vlt v1 lock graph are accepted; no target-native importer is claimed. |
@@ -57,7 +57,7 @@ The results below were produced on 2026-08-17 with the pinned pkgshift source re
 
 # Controlled Real-Installer Baseline
 
-The Rust acceptance suite creates a two-package Bun workspace with a `workspace:*` edge and a registry dependency. It migrates the same source independently to vlt 1.0.2 and Deno 2.9.5, invokes each real target installer, extracts the generated target lockfile, and requires normalized graph equivalence. Both migrations pass. This separates adapter correctness from upstream repository or installer limitations recorded in the corpus.
+The Rust acceptance suite creates a two-package Bun workspace with a `workspace:*` edge and a registry dependency. It migrates the same source independently to vlt 1.0.2 and Deno 2.9.5, proves that Bun-owned package-local dependency state was removed before the real target installer, extracts the generated target lockfile, and requires normalized graph equivalence. Both migrations pass. This separates adapter correctness from upstream repository or installer limitations recorded in the corpus.
 
 # Automated Planning Gate
 

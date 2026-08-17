@@ -137,7 +137,7 @@ Diagnostics provide the stable, specific reason. Exit codes remain intentionally
 
 Planning emits Project IR, capability analysis, exact file mutations, and plan artifacts through the result envelope. The first guided call does not persist them. Once the exact plan is approved, the command re-plans against current repository evidence, requires the same plan identifier, and stores one integrity-checked bundle in `.pkgshift/state` before apply. Advanced planning stores a bundle only when `--state-dir` is provided. Persistence does not imply approval. A plan is executable only when its target is production, all observed capabilities have implemented safe transformations, every blocking diagnostic is absent, and any lossy decisions were accepted while planning.
 
-Apply persists the run journal, recovery snapshot, and redacted process report. Verify persists a report tied to the run and plan. Explain can load diagnostic codes, plan bundles, run journals, process reports, and verification reports without mutation.
+Apply persists the run journal, package-local dependency-state cleanup records, recovery snapshot, and redacted process report. Verify persists a report tied to the run and plan, including clean-install and source-artifact residue checks. Explain can load diagnostic codes, plan bundles, run journals, process reports, and verification reports without mutation.
 
 Planning with a source lockfile also emits a redacted `source-lock-graph` artifact. Verification emits `lockGraphComparison` inside its report. Trial emits a `trial-report` containing withheld process records and nested verification.
 
@@ -145,4 +145,4 @@ Planning with a source lockfile also emits a redacted `source-lock-graph` artifa
 
 An agent may run a guided preview, inspect, plan, explain, status, and doctor operations without migration approval. It must present the plan summary, warnings, and side effects before executing an approval-bound next action. Guided execution and advanced apply require `--approve <plan-id>`; rollback requires `--approve <run-id>`. Skill install and uninstall require the exact `skill:pkgshift:<scope>:<client>` approval token.
 
-Apply and trial run declared native import and target installation commands without lifecycle scripts. Verify is filesystem- and artifact-read-only and therefore does not need a second approval.
+Apply and trial remove accepted package-local source dependency state before running declared native import and target installation commands without lifecycle scripts. Verify is filesystem- and artifact-read-only and therefore does not need a second approval. Rollback does not recreate the removed source `node_modules` state.

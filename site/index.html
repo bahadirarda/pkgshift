@@ -6,7 +6,7 @@
     <title>pkgshift — Transactional package manager migrations</title>
     <meta
       name="description"
-      content="Migrate JavaScript repositories between npm, pnpm, Yarn, Bun, vlt, and Deno with isolated trials, deterministic planning, lock graph proof, exact approval, and rollback."
+      content="Migrate JavaScript repositories between npm, pnpm, Yarn, Bun, vlt, and Deno with clean installs, isolated trials, deterministic planning, lock graph proof, exact approval, and rollback."
    >
     <meta
       name="keywords"
@@ -236,12 +236,12 @@
             </li>
             <li data-reveal>
               <span class="workflow-number">04</span>
-              <div><h3>Apply</h3><p>Recheck preconditions, snapshot affected files, and execute the approved operations transactionally.</p></div>
+              <div><h3>Apply</h3><p>Recheck preconditions, snapshot affected files, remove source dependency state, and install the target from a clean local boundary.</p></div>
               <span class="mode-badge mode-badge-active">write</span>
             </li>
             <li data-reveal>
               <span class="workflow-number">05</span>
-              <div><h3>Verify</h3><p>Compare reachable lock resolutions, distinguish optional platform absence, and confirm target selection, workspace membership, file digests, and installer completion.</p></div>
+              <div><h3>Verify</h3><p>Prove clean-install evidence and zero source-only artifacts, then compare reachable lock resolutions, target selection, workspace membership, file digests, and installer completion.</p></div>
               <span class="mode-badge">read-only</span>
             </li>
           </ol>

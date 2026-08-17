@@ -13,7 +13,7 @@ sources:
     resource: /architecture/agent-interface.md
     title: Agent Interface
   - id: repository-source
-    resource: "repository source tree at 2026-08-16"
+    resource: "repository source tree at 2026-08-17"
     title: Repository source tree
 ---
 
@@ -23,6 +23,17 @@ sources:
 implementations/
   rust/
     pkgshift-core/         deterministic domain engine and stable JSON models
+      src/
+        capability.rs      feature classification rules
+        cleanup.rs         clean-install planning, execution, and residue proof
+        plan.rs            immutable plan orchestration
+        plan/tests.rs      planner regression suite
+        transaction.rs     apply, trial, verify, and rollback orchestration
+        transformation.rs  shared deterministic renderer policies
+        transformation/
+          project.rs       project mutation composition
+          registry.rs      registry configuration translation
+        verification.rs    structural and lock-graph verification
     pkgshift-cli/          Rust command grammar, terminal reporter, and E2E fixtures
   typescript/              executable compatibility and parity-reference implementation
 Cargo.toml                 root Rust workspace orchestration and shared lint contract
@@ -37,7 +48,7 @@ The root is an orchestration boundary, not a third implementation. Shared produc
 
 # Runtime Boundary
 
-The primary runtime is Rust 1.97.1. `pkgshift-core` owns detection, Project IR, capability decisions, immutable planning, integrity-checked state, repository locking, execution, verification, and recovery. `pkgshift-cli` owns the keyword command grammar and presentation boundary. Target processes run directly without a shell, lifecycle scripts are disabled, and process output is withheld from persistent Rust artifacts.
+The primary runtime is Rust 1.97.1. `pkgshift-core` owns detection, Project IR, capability decisions, immutable planning, integrity-checked state, repository locking, execution, verification, and recovery. These responsibilities are separated into focused modules: planning composes operations, transformation modules render target semantics, cleanup owns generated dependency-state retirement, verification owns post-apply proof, and transaction owns orchestration only. `pkgshift-cli` owns the keyword command grammar and presentation boundary. Target processes run directly without a shell, lifecycle scripts are disabled, and process output is withheld from persistent Rust artifacts.
 
 The TypeScript engine remains under `implementations/typescript` as an executable reference implementation. It has no third-party runtime dependencies and uses Bun 1.3.14 for runtime, YAML parsing, building, and tests. It remains the behavior oracle for capability renderers and ancillary commands that have not crossed the Rust parity gate.
 
@@ -47,9 +58,9 @@ A Rust distribution compiles to one standalone CLI, but apply still requires the
 
 `implementations/rust/pkgshift-cli/src/main.rs` delegates domain work to `pkgshift-core`. Inspection collects weighted evidence and creates a redacted repository fingerprint. Project IR extracts workspace, dependency, policy, linker, registry-reference, and integration semantics. Capability analysis classifies every observed feature for the selected target. Planning renders deterministic target content and binds exact file mutations to before and after digests.
 
-The guided `to` command keeps its first plan read-only, requests approval, then uses `.pkgshift/state` to persist and execute the exact plan before invoking verification. `to --trial` instead copies the repository into a disposable boundary, executes importer, installer, and verifier there, and returns without source state. The advanced staged interface persists a plan only when `--state-dir` is explicit. Rust stored plans and runs use digest-verified envelopes. Apply validates exact approval and the baseline fingerprint, creates recovery snapshots, atomically writes planned content, and executes target-native import plus installation operations. Repository locks recover a dead Linux writer and serialize mutation per repository.
+The guided `to` command keeps its first plan read-only, requests approval, then uses `.pkgshift/state` to persist and execute the exact plan before invoking verification. `to --trial` instead copies the repository into a disposable boundary, executes cleanup, importer, installer, and verifier there, and returns without source state. The advanced staged interface persists a plan only when `--state-dir` is explicit. Rust stored plans and runs use digest-verified envelopes. Apply validates exact approval and the baseline fingerprint, creates recovery snapshots, atomically writes planned content, removes pre-migration package-local dependency state, and executes target-native import plus installation operations. Repository locks recover a dead Linux writer and serialize mutation per repository.
 
-Verify checks planned digests, package-manager selection, lockfile behavior, workspace membership, installer completion, and normalized source-to-target resolution parity. Rollback validates every backup digest, restores snapshot entries, and requires the repository fingerprint to match the plan baseline. The TypeScript reference retains managed Agent Skill lifecycle commands until that ancillary interface is ported or replaced by distribution tooling.
+Verify checks planned digests, clean-install records, source-artifact residue, package-manager selection, lockfile behavior, workspace membership, installer completion, and normalized source-to-target resolution parity. Rollback validates every backup digest, restores snapshot entries, and requires the repository fingerprint to match the plan baseline. The TypeScript reference retains managed Agent Skill lifecycle commands until that ancillary interface is ported or replaced by distribution tooling.
 
 # Test Boundary
 
@@ -64,12 +75,13 @@ Tests create isolated temporary repositories and remove only generated fixtures.
 - Artifact, snapshot, execution report, and journal integrity.
 - Journal revision conflicts and orphan-lock recovery.
 - Successful and failed target installation paths.
+- Package-local dependency-state cleanup, symbolic-link refusal, cleanup journaling, and source-artifact residue proof.
 - Mid-run precondition conflicts and partial-failure rollback.
 - Rust subprocess migrations for pnpm-to-Bun with rollback and npm-to-pnpm with nested override rendering.
 - Rust subprocess trial with no source writes, native importer ordering, intentional target graph drift, and fail-closed lock format fixtures.
 - Rust planning coverage for all 42 basic production-adapter directions.
 - Live Rust runs with Bun 1.3.14 covering dependency-bearing npm-to-Bun trial, native migration, install, graph proof, apply, and rollback.
-- Live Rust runs with vlt 1.0.2 and Deno 2.9.5 covering dependency-bearing workspaces, target installation, and graph proof.
+- Live Rust runs with vlt 1.0.2 and Deno 2.9.5 covering dependency-bearing workspaces, clean target installation, source-state retirement, and graph proof.
 - Pinned upstream corpus runs covering executable plans, capability blockers, installer failures, post-install graph rejection, and source preservation.
 - TypeScript end-to-end guided and staged CLI plan, approval, apply, verify, and rollback.
 - Codex and Claude Code skill copy, link, conflict, and protected uninstall behavior.

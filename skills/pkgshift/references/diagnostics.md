@@ -37,6 +37,7 @@ The implementation may add codes while preserving the following baseline familie
 | `CAPABILITY_UNKNOWN` | Target behavior lacks enough authoritative evidence for a safe decision. |
 | `LOSSY_ACCEPTANCE_REQUIRED` | Lossy decisions were not accepted while creating the immutable plan. |
 | `NATIVE_IMPORT_UNAVAILABLE` | No verified target-native importer exists for the selected direction; target graph proof remains required. |
+| `SOURCE_RUNTIME_REFERENCES_PRESERVED` | Bun runtime dependencies, scripts, globals, or module imports remain outside package-manager cleanup and require intentional retention or a separate runtime migration. |
 | `LOCK_GRAPH_PARSE_FAILED` | A source or target lockfile could not produce a trustworthy normalized graph. |
 | `LOCK_GRAPH_FORMAT_UNSUPPORTED` | The lockfile format, including binary `bun.lockb`, cannot be proven safely. |
 | `PLAN_PRECONDITION_FAILED` | Repository evidence changed after planning. |

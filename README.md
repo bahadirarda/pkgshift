@@ -96,8 +96,8 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Semantic planning | Builds a versioned Project IR and evaluates every observed capability against the target adapter. |
 | Policy translation | Converts supported linker, registry, override, resolution, package-extension, exact text-patch, and lifecycle allow-list semantics into deterministic target configuration. |
 | Approval boundary | Produces an immutable plan identifier and requires approval for that exact plan before mutation. |
-| Transactional execution | Rechecks preconditions, snapshots affected files, journals operations, and stops at the first unsafe transition. |
-| Verification | Compares reachable source and target lock resolutions, prunes only topology-proven stale entries, distinguishes optional-only platform absence, blocks version or comparable integrity drift, and checks planned digests, target selection, workspace membership, and installer completion. |
+| Transactional execution | Rechecks preconditions, snapshots affected files, removes pre-migration package-local dependency state, journals cleanup and process operations, and stops at the first unsafe transition. |
+| Verification | Proves a clean target install and zero source-only repository artifacts, compares reachable source and target lock resolutions, prunes only topology-proven stale entries, distinguishes optional-only platform absence, blocks version or comparable integrity drift, and checks planned digests, target selection, workspace membership, and installer completion. |
 | Isolated trial | Runs the exact accepted plan in a disposable repository copy and proves the source remained unchanged. |
 | Recovery | Restores repository files from integrity-checked snapshots and verifies the original fingerprint. |
 
@@ -116,7 +116,7 @@ flowchart LR
     G -->|failure| H[rollback]
 ```
 
-The normal command orchestrates this pipeline without exposing repository or state paths. Target-native importers run before installation when available; source-only lockfiles remain until both complete. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The TypeScript reference also retains diagnostic explanation and managed Agent Skill lifecycle commands during the port transition.
+The normal command orchestrates this pipeline without exposing repository or state paths. Before target import or installation, pkgshift removes every package-local `node_modules` directory recorded by the accepted Project IR and journals whether each path was removed or already absent. Target-native importers then run when available; source-only lockfiles remain until import and installation complete. Verification requires the cleanup record and rejects any remaining source-only lockfile or configuration artifact. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The TypeScript reference also retains diagnostic explanation and managed Agent Skill lifecycle commands during the port transition.
 
 ## Monorepo layout
 
@@ -223,8 +223,9 @@ The TypeScript reference still exposes managed copy, symlink, status, doctor, an
 - Yarn registry migration accepts authentication only through environment references and never persists literal `.npmrc` tokens.
 - Symbolic-link traversal outside the selected repository root is rejected.
 - Concurrent apply, verify, and rollback operations are serialized per repository.
+- Cleanup accepts only package-local paths ending in `node_modules`, rejects symbolic links and non-directory targets, and executes before the target installer.
 
-Rollback restores repository files. It does not claim to restore `node_modules`, global stores, downloads, or package-manager caches.
+Rollback restores repository files. It does not restore the removed pre-migration `node_modules` state, global stores, downloads, or package-manager caches; reinstall the source dependency state after rollback when local dependency parity is required. Successful migration never deletes global package-manager state.
 
 ## Development
 
@@ -260,4 +261,4 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 
 ## Current boundaries
 
-Automatic representative project-script execution is not part of the MVP. `reachable-resolution-set-v2` makes reachable version and comparable integrity drift blocking, prunes proven-unreachable entries, and tolerates only package-name absence on optional-only paths. Dependency edge-shape differences remain evidence, and topology-limited formats retain explicit `resolution-set-v1` behavior. Binary `bun.lockb` graph extraction fails closed until converted to text. vlt and Deno are production targets only for their documented deterministic subsets; unsupported repository semantics still block apply, and lossy decisions require explicit acceptance when the plan is created. The TypeScript reference remains the renderer parity oracle for future capability expansion.
+Automatic representative project-script execution is not part of the MVP. `reachable-resolution-set-v2` makes reachable version and comparable integrity drift blocking, prunes proven-unreachable entries, and tolerates only package-name absence on optional-only paths. Dependency edge-shape differences remain evidence, and topology-limited formats retain explicit `resolution-set-v1` behavior. Binary `bun.lockb` graph extraction fails closed until converted to text. vlt and Deno are production targets only for their documented deterministic subsets; unsupported repository semantics still block apply, and lossy decisions require explicit acceptance when the plan is created. Clean installation retires package-manager-generated dependency state and known source artifacts. Application runtime conversion remains outside the package-manager boundary: Bun-source plans deterministically report `@types/bun`, `bun-types`, Bun script commands, `Bun.*`, and `bun:*` references through `SOURCE_RUNTIME_REFERENCES_PRESERVED` and never delete them silently. The TypeScript reference remains the renderer parity oracle for future capability expansion.

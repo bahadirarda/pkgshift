@@ -68,6 +68,7 @@ Read the result by fields, not by prose. Check:
 - `planId` is present.
 - Capability losses and blocking diagnostics are understood.
 - Operations, commands, side effects, and rollback limits are visible.
+- Package-local dependency-state cleanup is visible as a non-reversible generated-state operation.
 - Verification checks match the repository shape.
 - Source lock graph and native importer artifacts are understood when present.
 - `summary.repositoryChanged` is false before approval.
@@ -105,7 +106,7 @@ pkgshift to <target> --approve <plan-id> --json --no-color --non-interactive
 
 Do not reconstruct the command, invent paths, or add flags that were not approved. The CLI re-plans against current repository evidence, requires the identifier to remain exact, persists state under its default location, applies the migration, and verifies the run in one invocation. If preconditions conflict, stop and create a new preview. Preserve the `runId` on success, partial failure, or cancellation.
 
-Treat the migration as successful only when the approved invocation returns `status: completed` with no blocking verification diagnostic. Report passed, failed, and skipped checks separately. When a source lock graph exists, require a passing `lockGraphComparison`; graph comparison is skipped only when no source lockfile existed. The engine does not automatically run representative project scripts. Do not claim that skipped checks passed.
+Treat the migration as successful only when the approved invocation returns `status: completed` with no blocking verification diagnostic. Require passed `clean-target-install` and `source-artifact-residue` checks for newly created plans. Report passed, failed, and skipped checks separately. When a source lock graph exists, require a passing `lockGraphComparison`; graph comparison is skipped only when no source lockfile existed. The engine does not automatically run representative project scripts. Do not claim that skipped checks passed.
 
 ## Use Advanced Stages Only When Needed
 

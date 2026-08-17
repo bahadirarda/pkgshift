@@ -157,6 +157,10 @@ fn migrates_a_pnpm_workspace_to_bun_and_rolls_it_back() {
     );
     write(&root.join("pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
     write(
+        &root.join("node_modules/.pnpm/source-marker"),
+        "source dependency state\n",
+    );
+    write(
         &root.join(".github/workflows/ci.yml"),
         "steps:\n  - run: pnpm install --frozen-lockfile\n  - run: pnpm test\n",
     );
@@ -359,6 +363,66 @@ fn migrates_a_pnpm_workspace_to_deno_dependency_mode() {
 }
 
 #[test]
+fn migrates_bun_to_deno_after_removing_source_dependency_state() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "bun-cleanup-fixture",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "workspaces": ["packages/*"]
+}
+"#,
+    );
+    write(
+        &root.join("packages/app/package.json"),
+        r#"{"name":"app","version":"1.0.0"}
+"#,
+    );
+    write(
+        &root.join("bun.lock"),
+        "{\"lockfileVersion\":1,\"packages\":{}}\n",
+    );
+    write(
+        &root.join("bunfig.toml"),
+        "[install]\nlinker = \"isolated\"\n",
+    );
+    write(&root.join("node_modules/.bun/source-marker"), "bun\n");
+    write(
+        &root.join("packages/app/node_modules/.bun/source-marker"),
+        "bun\n",
+    );
+
+    let applied = plan_and_apply(&root, &binaries, "deno");
+    assert_eq!(applied["status"], "completed");
+    assert_eq!(applied["summary"]["runStatus"], "succeeded");
+    assert!(!root.join("node_modules").exists());
+    assert!(!root.join("packages/app/node_modules").exists());
+    assert!(!root.join("bun.lock").exists());
+    assert!(!root.join("bunfig.toml").exists());
+    assert!(root.join("deno.lock").is_file());
+
+    let journal = artifact_content(&applied, "run-journal");
+    assert_eq!(
+        journal["dependencyStateCleanups"][0]["removedPaths"],
+        serde_json::json!(["node_modules", "packages/app/node_modules"])
+    );
+    let verification = artifact_content(&applied, "verification-report");
+    for check_id in ["clean-target-install", "source-artifact-residue"] {
+        let check = verification["checks"]
+            .as_array()
+            .expect("verification checks")
+            .iter()
+            .find(|check| check["id"] == check_id)
+            .unwrap_or_else(|| panic!("missing {check_id} check"));
+        assert_eq!(check["status"], "passed");
+    }
+}
+
+#[test]
 #[ignore = "requires registry access and the pinned vlt package"]
 fn migrates_a_dependency_with_real_vlt() {
     let directory = tempfile::tempdir().expect("fixture directory");
@@ -470,12 +534,26 @@ fn migrates_a_dependency_with_real_deno() {
         "{}",
         String::from_utf8_lossy(&installed.stderr)
     );
+    assert!(root.join("node_modules/.bun").is_dir());
 
     let applied = plan_and_apply(&root, &binaries, "deno");
     assert_eq!(applied["status"], "completed");
     assert_eq!(applied["summary"]["runStatus"], "succeeded");
     assert!(root.join("deno.lock").is_file());
     assert!(!root.join("bun.lock").exists());
+    assert!(!root.join("node_modules/.bun").exists());
+    let journal = artifact_content(&applied, "run-journal");
+    assert!(
+        journal["dependencyStateCleanups"][0]["removedPaths"]
+            .as_array()
+            .is_some_and(|paths| paths.iter().any(|path| path == "node_modules"))
+    );
+    let verification = artifact_content(&applied, "verification-report");
+    assert!(verification["checks"].as_array().is_some_and(|checks| {
+        checks
+            .iter()
+            .any(|check| check["id"] == "clean-target-install" && check["status"] == "passed")
+    }));
     let configuration: Value = serde_json::from_str(
         &fs::read_to_string(root.join("deno.json")).expect("Deno workspace configuration"),
     )
@@ -924,6 +1002,10 @@ fn keeps_a_failed_install_recoverable() {
 "#,
     );
     write(&root.join("pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    write(
+        &root.join("node_modules/.pnpm/source-marker"),
+        "source dependency state\n",
+    );
 
     let planned = run(&root, &binaries, &["to", "bun"]);
     assert_eq!(planned.status.code(), Some(7));
@@ -943,12 +1025,19 @@ fn keeps_a_failed_install_recoverable() {
     assert_eq!(applied["summary"]["runStatus"], "failed");
     let run_id = applied["runId"].as_str().expect("failed run identifier");
     assert!(root.join("bun.lock").is_file());
+    assert!(!root.join("node_modules").exists());
 
     let rolled_back = run(&root, &binaries, &["rollback", run_id, "--approve", run_id]);
     assert!(rolled_back.status.success());
-    assert_eq!(json_output(&rolled_back)["status"], "rolled-back");
+    let rolled_back = json_output(&rolled_back);
+    assert_eq!(rolled_back["status"], "rolled-back");
+    assert_eq!(
+        rolled_back["diagnostics"][0]["code"],
+        "ROLLBACK_EXTERNAL_EFFECTS_REMAIN"
+    );
     assert!(root.join("pnpm-lock.yaml").is_file());
     assert!(!root.join("bun.lock").exists());
+    assert!(!root.join("node_modules").exists());
     assert!(
         fs::read_to_string(root.join("package.json"))
             .expect("restored manifest")

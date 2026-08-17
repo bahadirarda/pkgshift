@@ -2,6 +2,8 @@
 
 ## 2026-08-17
 
+* **Clean migration state**: Added deterministic package-local `node_modules` retirement before target installation, journaled removed and already-absent paths, made both clean-install evidence and source-only artifact absence blocking verification checks, and surfaced bounded Bun runtime-reference warnings without deleting application semantics.
+* **Modular Rust core**: Split capability analysis, cleanup, verification, registry translation, project transformation composition, and planner tests out of the former planner and transaction god files.
 * **Reachable graph proof**: Added `reachable-resolution-set-v2` with manifest-root traversal, exact Bun and Deno edge targets, proven-unreachable pruning, optional-only platform absence handling, and fail-closed required-path diagnostics while preserving `resolution-set-v1` for topology-limited formats.
 * **Corpus automation**: Converted the six pinned Hono, Vite, and vltpkg planning cases into a machine-readable contract with clean-checkout enforcement, bounded JSON summaries, and a weekly or manually dispatched GitHub Actions gate.
 * **Corpus correction**: Re-ran Hono Bun-to-Deno through a real isolated Deno 2.9.5 trial; V2 tolerated three optional-only absences but proved that the remaining 48 source-only versions were reachable drift rather than stale lockfile debris.
