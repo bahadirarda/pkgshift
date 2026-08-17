@@ -67,6 +67,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - An OKF v0.2 knowledge bundle and a portable Agent Skill source.
 - A pinned Rust 1.97.1 workspace with separate core and CLI crates.
 - Digest-verified Rust plan and run envelopes, repository-scoped locking, byte-level snapshots, atomic mutations, installer output withholding, structural verification, and restored-fingerprint rollback.
+- Checksum-verifying Linux, macOS, and Windows release installers with metadata validation, staged binary and portable-Skill replacement, smoke checks, and previous-version restoration on failure.
 - Rust subprocess fixtures for pnpm-to-Bun-to-rollback, npm-to-pnpm, npm-to-Yarn Modern registry and lifecycle conversion, npm-to-vlt, and pnpm-to-Deno, plus 42-direction basic planning coverage.
 - Rust subprocess fixtures for isolated trial, native importer ordering, successful graph proof, intentional graph drift, and source repository preservation.
 - Deterministic package-local dependency-state cleanup before target installation, with fail-closed path validation, cleanup journal evidence, and explicit source-artifact residue verification.
@@ -93,6 +94,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Bun-to-Deno runtime recipes | Initial production subset complete | Explicit permissions, exact approval, source-content redaction, digest-bound apply, residue verification, rollback, and a real Hono Deno run pass. |
 | Rollback | MVP complete | Successful, failed, and partially applied runs restore repository files and verify the baseline fingerprint. |
 | Skill installer | MVP complete | Codex and Claude Code project destinations pass copy, link, conflict, status, and protected-uninstall fixtures. |
+| Native distribution | MVP complete | Unix fixture archives pass install, stale-data cleanup, and smoke-failure rollback; Windows fixtures additionally prove checksum rejection on `windows-2025`. |
 | Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode produce executable plans when every observed feature has a safe implemented path. |
 | Rust primary path | MVP complete | Inspect, plan, exact approval, apply, verify, and rollback pass subprocess and real-installer acceptance coverage. |
 | Polyglot workspace | MVP complete | Cargo crates and the TypeScript reference run from isolated workspace boundaries under one CI contract. |

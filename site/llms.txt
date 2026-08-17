@@ -25,6 +25,7 @@ pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno depen
 
 ## Distribution
 
-- [Verified shell installer](https://bahadirarda.github.io/pkgshift/install.sh): Linux and macOS installer that verifies the native release archive against SHA256SUMS.
+- [Verified shell installer](https://bahadirarda.github.io/pkgshift/install.sh): Linux and macOS installer that verifies and transactionally activates the native release archive.
+- [Verified PowerShell installer](https://bahadirarda.github.io/pkgshift/install.ps1): Windows x86-64 installer with the same checksum, metadata, Skill-data, smoke-check, and rollback contract.
 - [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases): Native binaries, checksums, release metadata, and build provenance.
 - [Source repository](https://github.com/bahadirarda/pkgshift): Rust primary implementation, TypeScript reference, documentation, and release workflows.
