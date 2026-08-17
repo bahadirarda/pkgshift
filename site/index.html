@@ -6,7 +6,7 @@
     <title>pkgshift — Transactional JavaScript migrations</title>
     <meta
       name="description"
-      content="Migrate and compare JavaScript repositories across npm, pnpm, Yarn, Bun, vlt, and Deno, or move supported Bun runtime APIs to Deno, with deterministic planning, exact approval, verification, and rollback."
+      content="Assess, migrate, and compare JavaScript repositories across npm, pnpm, Yarn, Bun, vlt, and Deno, or move supported Bun runtime APIs to Deno, with deterministic readiness, exact approval, verification, and rollback."
    >
     <meta
       name="keywords"
@@ -36,7 +36,7 @@
     <meta name="twitter:title" content="pkgshift — Transactional JavaScript migrations">
     <meta
       name="twitter:description"
-      content="Inspect, approve, apply, verify, and roll back package manager or supported Bun-to-Deno runtime migrations from one deterministic CLI."
+      content="Assess readiness, approve exact plans, apply, verify, and roll back package manager or supported Bun-to-Deno runtime migrations from one deterministic CLI."
    >
     <meta name="twitter:image" content="https://bahadirarda.github.io/pkgshift/assets/pkgshift-social-card.png">
 
@@ -58,7 +58,7 @@
             "name": "pkgshift",
             "applicationCategory": "DeveloperApplication",
             "operatingSystem": "Linux, macOS, Windows",
-            "description": "A deterministic CLI for transactional package manager migrations and permission-aware Bun-to-Deno runtime recipes.",
+            "description": "A deterministic CLI for package-manager readiness, transactional migrations, and permission-aware Bun-to-Deno runtime recipes.",
             "url": "https://bahadirarda.github.io/pkgshift/",
             "downloadUrl": "https://github.com/bahadirarda/pkgshift/releases/latest",
             "installUrl": "https://bahadirarda.github.io/pkgshift/install.sh",
@@ -110,7 +110,7 @@
             <h1>Change package managers.<br><em>Keep control.</em></h1>
             <p class="hero-lede">
               Transactional migrations for JavaScript repositories. pkgshift understands the project,
-              creates an immutable plan, compares package-manager targets, moves supported Bun runtime APIs to Deno, waits for exact approval, and verifies every applied plan.
+              reports target readiness, creates an immutable plan, compares package-manager targets, moves supported Bun runtime APIs to Deno, waits for exact approval, and verifies every applied plan.
             </p>
 
             <div class="hero-actions">
@@ -257,6 +257,7 @@
               pkgshift is built for coding agents and humans from the same deterministic core. JSON output,
               stable exit codes, and exact next actions make the approval contract machine-readable.
             </p>
+            <p><code>pkgshift doctor --to bun</code> projects capability, integration, cleanup, retirement, process, and verification effects without creating a plan or changing the repository.</p>
             <p><code>pkgshift compare bun deno</code> binds both plans to one approval, runs each executable target in its own disposable copy, and reports evidence without inventing a winner.</p>
             <p><code>pkgshift runtime to deno --deno-permission net</code> applies reviewed Bun API recipes under a separate source-content-redacted plan and rollback boundary.</p>
             <p><code>pkgshift skill install --scope project --client codex</code> previews a digest-verified portable-skill installation and returns its exact approval action.</p>
@@ -340,7 +341,7 @@
             </p>
             <div class="first-run">
               <span>Then, from a project root:</span>
-              <code>pkgshift to bun --dry-run</code>
+              <code>pkgshift doctor --to bun</code>
             </div>
           </div>
         </div>

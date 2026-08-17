@@ -80,6 +80,16 @@ enum CliCommand {
         subject: InspectSubject,
     },
 
+    /// Assess migration readiness without writing repository or state files.
+    Doctor {
+        /// Package manager target to assess.
+        #[arg(long)]
+        to: String,
+        /// Validate a root package script selection; repeat to select multiple scripts.
+        #[arg(long, value_name = "NAME", action = clap::ArgAction::Append)]
+        verify_script: Vec<String>,
+    },
+
     /// Create a deterministic, read-only migration plan.
     Plan {
         #[command(subcommand)]
@@ -219,6 +229,9 @@ fn command_kind(command: CliCommand) -> (CommandKind, Vec<String>) {
         CliCommand::Inspect {
             subject: InspectSubject::PackageManager,
         } => (CommandKind::Inspect, Vec::new()),
+        CliCommand::Doctor { to, verify_script } => {
+            (CommandKind::Doctor { target: to }, verify_script)
+        }
         CliCommand::Plan {
             subject: PlanSubject::PackageManager(arguments),
         } => (

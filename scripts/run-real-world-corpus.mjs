@@ -42,6 +42,75 @@ function diagnosticCounts(diagnostics) {
   return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
 }
 
+function executeJson(argv, cwd) {
+  const execution = run(argv, { cwd });
+  try {
+    return { execution, result: JSON.parse(execution.stdout), errors: [] };
+  } catch (error) {
+    return {
+      execution,
+      result: undefined,
+      errors: [`pkgshift did not emit JSON: ${error.message}`, execution.stderr.trim()].filter(Boolean),
+    };
+  }
+}
+
+function doctorCase(testCase, repository) {
+  const argv = [
+    binary,
+    "doctor",
+    "--to",
+    testCase.target,
+    "--cwd",
+    repository,
+    "--json",
+    "--no-color",
+    "--non-interactive",
+  ];
+  if (testCase.acceptLossy) {
+    argv.push("--accept-lossy");
+  }
+  const { execution, result, errors } = executeJson(argv, repository);
+  if (!result) {
+    return { errors };
+  }
+  const report = result.artifacts?.find(
+    (artifact) => artifact.type === "migration-readiness",
+  )?.content;
+  requireEqual(errors, "doctor exit code", execution.exitCode, testCase.expect.executable ? 0 : 3);
+  requireEqual(
+    errors,
+    "doctor status",
+    result.status,
+    testCase.expect.executable ? "completed" : "blocked",
+  );
+  requireEqual(errors, "doctor source", report?.source, testCase.expect.source);
+  requireEqual(errors, "doctor target", report?.target, testCase.target);
+  requireEqual(errors, "doctor verdict", report?.verdict, testCase.expect.doctorVerdict);
+  requireEqual(errors, "doctor read-only", report?.readOnly, true);
+  requireEqual(errors, "doctor migration available", report?.migrationAvailable, testCase.expect.executable);
+  requireEqual(errors, "doctor plan identifier", result.planId, null);
+  requireEqual(errors, "doctor run identifier", result.runId, null);
+  if (result.artifacts?.some((artifact) => artifact.type === "package-manager-plan")) {
+    errors.push("doctor exposed a package-manager plan artifact");
+  }
+  for (const [classification, expected] of Object.entries(testCase.expect.capabilities)) {
+    requireEqual(
+      errors,
+      `doctor capabilities.${classification}`,
+      report?.capabilities?.[classification],
+      expected,
+    );
+  }
+  const counts = diagnosticCounts(result.diagnostics);
+  for (const code of testCase.expect.diagnosticCodes) {
+    if (!counts[code]) {
+      errors.push(`doctor diagnostic code ${code} was not reported`);
+    }
+  }
+  return { report, counts, errors };
+}
+
 async function checkoutRepository(workspace, repository) {
   const destination = join(workspace, repository.id);
   const initialized = run(["git", "init", "--quiet", destination]);
@@ -84,20 +153,18 @@ function executeCase(testCase, repository) {
   if (testCase.acceptLossy) {
     argv.push("--accept-lossy");
   }
-  const execution = run(argv);
-  let result;
-  try {
-    result = JSON.parse(execution.stdout);
-  } catch (error) {
+  const doctor = doctorCase(testCase, repository);
+  const { execution, result, errors } = executeJson(argv, repository);
+  errors.push(...doctor.errors);
+  if (!result) {
     return {
       id: testCase.id,
       passed: false,
-      errors: [`pkgshift did not emit JSON: ${error.message}`, execution.stderr.trim()].filter(Boolean),
+      errors,
     };
   }
 
   const plan = result.artifacts?.find((artifact) => artifact.type === "package-manager-plan")?.content;
-  const errors = [];
   requireEqual(errors, "exit code", execution.exitCode, testCase.expect.status === "blocked" ? 3 : 0);
   requireEqual(errors, "status", result.status, testCase.expect.status);
   requireEqual(errors, "source", result.summary?.source, testCase.expect.source);
@@ -139,6 +206,9 @@ function executeCase(testCase, repository) {
     operations: plan?.operations?.length,
     capabilities: plan?.capabilitySummary,
     diagnosticCounts: counts,
+    doctorVerdict: doctor.report?.verdict,
+    doctorReportId: doctor.report?.reportId,
+    doctorDiagnosticCounts: doctor.counts,
     errors,
   };
 }
@@ -173,7 +243,7 @@ try {
       });
       continue;
     }
-    process.stderr.write(`Planning ${testCase.id}\n`);
+    process.stderr.write(`Assessing and planning ${testCase.id}\n`);
     outcomes.push(
       executeCase(
         { ...testCase, revision: repositoryDefinition.revision },

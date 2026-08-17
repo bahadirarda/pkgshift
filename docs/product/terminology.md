@@ -21,6 +21,7 @@ sources:
 | Capability | A behavior a package manager or integration can represent, such as workspaces, catalogs, overrides, patches, or registry configuration. |
 | Clean target install | Target installation performed only after every package-local pre-migration dependency-state directory has been removed or proven absent. |
 | Diagnostic | A structured observation with a stable code, severity, evidence, explanation, and possible remediation. |
+| Doctor | The read-only `pkgshift doctor --to <target>` operation that projects migration readiness without emitting or persisting a plan. |
 | Evidence | A repository fact captured during inspection, including its location and relevant fingerprint. |
 | Explain | A read-only operation that expands a diagnostic code or artifact decision into human-readable reasoning. |
 | Guided migration | The `pkgshift to <target>` orchestration that plans, requests exact approval, persists state, applies, and verifies without exposing staged command paths in normal use. |
@@ -28,6 +29,7 @@ sources:
 | Integration | Repository behavior outside package manager manifests, such as CI, containers, toolchain managers, or documentation commands. |
 | Lock graph | A redacted normalized set of resolved packages, comparable integrity evidence, and logical dependency edges extracted from one lockfile. |
 | Native importer | A target package manager's documented command or install path for translating source dependency state. |
+| Migration readiness | A deterministic target assessment containing verdict, capability, integration, cleanup, retirement, process, and verification evidence. |
 | Plan | An immutable, reviewable set of proposed operations with preconditions, expected effects, risks, and verification requirements. |
 | Project IR | The normalized project intermediate representation shared by all adapters. |
 | Reachable resolution set | The lockfile resolutions connected to external manifest roots through normalized dependency topology. |
@@ -49,6 +51,7 @@ Commands use established migration terms instead of conversational synonyms:
 ```text
 pkgshift to bun
 pkgshift to bun --trial
+pkgshift doctor --to bun
 pkgshift inspect
 pkgshift plan package-manager --to bun
 pkgshift apply <plan-id>
@@ -61,7 +64,7 @@ pkgshift skill install --scope project --client codex --mode copy
 pkgshift skill doctor --scope project --client codex
 ```
 
-The primary `pkgshift to bun` command is guided and crosses into mutation only after exact approval. The `pkgshift pm to bun` shortcut resolves only to a read-only package manager plan.
+The primary `pkgshift to bun` command is guided and crosses into mutation only after exact approval. `pkgshift doctor --to bun` returns readiness evidence without a package-manager plan, while `pkgshift skill doctor` inspects a managed Skill installation. The `pkgshift pm to bun` shortcut resolves only to a read-only package manager plan.
 
 # Naming Rules
 

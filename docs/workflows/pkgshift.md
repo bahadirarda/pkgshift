@@ -16,6 +16,14 @@ sources:
 
 # Default Human Workflow
 
+Assess a known target without creating a complete plan:
+
+```text
+pkgshift doctor --to bun
+```
+
+Doctor reports whether migration is ready, reviewable after explicit lossy acceptance, or blocked. It projects integrations, cleanup, artifact retirement, process commands, and verification effects without writing state or exposing mutation content. See [Migration Readiness](/workflows/migration-readiness.md).
+
 From the repository root, run:
 
 ```text
@@ -40,6 +48,14 @@ Trial has its own exact approval boundary. It executes in a disposable copy, ret
 
 # Default Agent Workflow
 
+For an unfamiliar or integration-heavy repository, run the structured doctor command before requesting a complete plan:
+
+```text
+pkgshift doctor --to bun --json --no-color --non-interactive
+```
+
+Treat `migrationAvailable` as authoritative. Present the readiness verdict, diagnostics, integration paths, and projected effects. If doctor returns a read-only next action, execute its `argv` unchanged only after any reported lossy behavior has been explicitly accepted. A `doctor_...` report identifier is evidence, not an approval token.
+
 Run:
 
 ```text
@@ -61,6 +77,7 @@ When the target is undecided, run `pkgshift compare <target> <target>...` instea
 - Run from the intended repository root.
 - Preserve unrelated user changes and report their presence.
 - Know the target package manager, or inspect first and present supported candidates.
+- Use doctor to assess the selected target before full planning when repository impact is not already understood.
 - Use noninteractive structured output when a coding agent is the caller.
 
 # Advanced Staged Procedure

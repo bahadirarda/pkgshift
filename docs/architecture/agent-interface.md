@@ -38,9 +38,17 @@ Humans do not need to provide repository or state paths when running from the in
 
 # Implementation Availability
 
-The Rust CLI is the primary interface and implements `to`, isolated `to --trial`, isolated multi-target `compare`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, `rollback`, `explain`, dedicated `runtime to deno`, `runtime rollback`, and managed `skill install|status|doctor|uninstall`. The TypeScript implementation remains an executable compatibility and parity reference for the established package-manager contract. Isolated trial, multi-target comparison, blocking lock-graph comparison, Bun-to-Deno runtime recipes, Agent Skill lifecycle ownership, and persisted runtime-artifact explanation are Rust-primary trust features.
+The Rust CLI is the primary interface and implements `to`, migration-readiness `doctor`, isolated `to --trial`, isolated multi-target `compare`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, `rollback`, `explain`, dedicated `runtime to deno`, `runtime rollback`, and managed `skill install|status|doctor|uninstall`. The TypeScript implementation remains an executable compatibility and parity reference for the established package-manager contract. Migration readiness, isolated trial, multi-target comparison, blocking lock-graph comparison, Bun-to-Deno runtime recipes, Agent Skill lifecycle ownership, and persisted runtime-artifact explanation are Rust-primary trust features.
 
 # Agent Flow
+
+Agents may assess a selected target before requesting its complete plan:
+
+```text
+pkgshift doctor --to bun --json --no-color --non-interactive
+```
+
+Doctor returns a deterministic `migration-readiness` artifact with one of `ready`, `review-required`, `blocked`, or `already-selected`. `migrationAvailable` is the authoritative planning signal. The command reuses the engine's inspection, Project IR, capability, lock graph, and planning logic, but emits no package-manager plan, persists no state, runs no process, and performs no repository write. Its optional next action is read-only and does not require approval. A `doctor_...` report identifier never authorizes another command.
 
 Agents disable prompts and request the same plan as structured data:
 
@@ -58,6 +66,7 @@ The staged commands remain available for diagnostics, integration, and recovery:
 
 ```text
 pkgshift inspect [package-manager]
+pkgshift doctor --to <target> [--verify-script <name>]...
 pkgshift compare <target> <target>... [--verify-script <name>]...
 pkgshift plan package-manager --to <target>
 pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
@@ -91,6 +100,7 @@ This shortcut is equivalent to `pkgshift plan package-manager --to bun`. Neither
 - Authentication values and matching environment variables are redacted before rendering or persistence.
 - The guided command uses `.pkgshift/state` only after approval; `--state-dir <path>` can override it.
 - Trial uses private state inside its temporary copy and never creates the default state directory in the source repository.
+- Doctor never creates state, executes declared process commands, or emits mutation content; selected verification scripts appear only as projected effects.
 - Advanced planning persists an artifact only when `--state-dir <path>` is explicitly supplied.
 - `--verify-script <name>` is accepted only by guided or staged planning commands, validates exact root script membership, and adds a bounded shell-free `verification.run-script` operation.
 - `--deno-permission <name>` is repeatable only on the dedicated runtime plan surface; normalized permissions participate in plan identity and render narrow Deno flags instead of `-A`.
@@ -151,12 +161,14 @@ Apply persists the run journal, package-local dependency-state cleanup records, 
 
 Planning with a source lockfile also emits a redacted `source-lock-graph` artifact. Verification emits `lockGraphComparison` inside its report. Trial emits a `trial-report` containing withheld process records and nested verification.
 
+Doctor emits the ordinary inspection, Project IR, capability analysis, optional source lock graph, and one `migration-readiness` artifact. The readiness projection contains paths and argument arrays for expected effects but no file contents, package-manager plan, `planId`, or `runId`. Its `doctor_...` identity is deterministic for the same repository evidence and options but is never an approval identity.
+
 Multi-target comparison emits one `target-comparison-plan` before approval and one `target-comparison-report` afterward. Its aggregate plan identifier binds every normalized candidate plan. Each executable candidate owns an independent nested trial report; blocked candidates retain their plan diagnostics without process execution. Candidate failures are comparison data, so top-level completion means the report is trustworthy and the source stayed unchanged, not that every target passed.
 
 Runtime planning emits a content-redacted `runtime-migration-plan`; source mutation content is persisted only in an owner-readable envelope after exact approval. Apply emits a redacted `runtime-run-journal` and a `runtime-verification-report` that proves after-digests and Bun runtime residue. Runtime identifiers use `runtime_plan_`, `runtime_run_`, and `runtime_verification_` prefixes so agents cannot confuse package-manager and runtime approval domains. `pkgshift explain` finds runtime plan and verification identifiers only through their integrity-checked owning run.
 
 # Approval Contract
 
-An agent may run a guided preview, inspect, plan, explain, status, and doctor operations without migration approval. It must present the plan summary, warnings, and side effects before executing an approval-bound next action. Guided execution and advanced apply require `--approve <plan-id>`; rollback requires `--approve <run-id>`. Skill install and uninstall first emit a read-only status artifact and require the exact returned `skill_plan_...` identifier. That identity binds the operation, scope, client, mode, source and installed digests, ownership state, and exact paths. `--dry-run` suppresses skill mutation even when that identifier is present.
+An agent may run migration-readiness doctor, guided preview, inspect, plan, explain, status, and Skill doctor operations without migration approval. It must present the plan summary, warnings, and side effects before executing an approval-bound next action. Guided execution and advanced apply require `--approve <plan-id>`; rollback requires `--approve <run-id>`. Skill install and uninstall first emit a read-only status artifact and require the exact returned `skill_plan_...` identifier. That identity binds the operation, scope, client, mode, source and installed digests, ownership state, and exact paths. `--dry-run` suppresses skill mutation even when that identifier is present.
 
 Apply and trial remove accepted package-local source dependency state before running declared native import and target installation commands without lifecycle scripts. Explicit representative scripts run repository-defined code after installation and may create output outside the rollback snapshot; agents should prefer a trial before normal apply. Verify is filesystem- and artifact-read-only and therefore does not need a second approval. Rollback does not recreate the removed source `node_modules` state or remove unplanned script output.

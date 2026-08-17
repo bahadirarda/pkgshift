@@ -17,6 +17,7 @@ use crate::transaction::{apply_stored_plan, save_plan, trial_stored_plan};
 use crate::util::{PkgshiftError, Result, resolve_root};
 
 mod comparison;
+mod doctor;
 mod lifecycle;
 
 use lifecycle::{apply_command, rollback_command, verify_command};
@@ -24,6 +25,9 @@ use lifecycle::{apply_command, rollback_command, verify_command};
 #[derive(Debug, Clone)]
 pub enum CommandKind {
     Inspect,
+    Doctor {
+        target: String,
+    },
     Compare {
         targets: Vec<String>,
     },
@@ -827,6 +831,7 @@ fn support_command() -> Result<CommandExecution> {
 pub fn execute(options: &CommandOptions) -> CommandExecution {
     let command_name = match &options.command {
         CommandKind::Inspect => "inspect package-manager".to_owned(),
+        CommandKind::Doctor { .. } => "doctor".to_owned(),
         CommandKind::Compare { .. } => "compare".to_owned(),
         CommandKind::Plan { .. } => "plan package-manager".to_owned(),
         CommandKind::To { target } => format!("to {target}"),
@@ -844,6 +849,7 @@ pub fn execute(options: &CommandOptions) -> CommandExecution {
     };
     let execution = match &options.command {
         CommandKind::Inspect => inspect_command(&options.cwd),
+        CommandKind::Doctor { target } => doctor::doctor_command(options, target),
         CommandKind::Compare { targets } => comparison::comparison_command(options, targets),
         CommandKind::Plan { target } => plan_command(options, target),
         CommandKind::To { target } => guided_command(options, target),

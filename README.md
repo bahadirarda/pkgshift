@@ -78,6 +78,14 @@ runStatus: succeeded
 
 pkgshift detects the current package manager and repository shape automatically. Before approval, it does not persist state or modify the project. After approval, it stores private recovery data under `.pkgshift/state`, applies the exact plan, runs the target installer without lifecycle scripts, and verifies the result.
 
+Check whether a target is ready before requesting its complete plan:
+
+```bash
+pkgshift doctor --to bun
+```
+
+Doctor reuses the deterministic migration engine and reports `ready`, `review-required`, `blocked`, or `already-selected` with capability, integration, cleanup, source-artifact retirement, process, and verification evidence. It creates no plan, persists no state, executes no process, and changes no repository file.
+
 ```bash
 # Read-only human preview
 pkgshift to pnpm --dry-run
@@ -125,6 +133,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Capability | pkgshift behavior |
 | --- | --- |
 | Repository understanding | Combines manifest, lockfile, workspace, configuration, and integration evidence instead of guessing from one file. |
+| Migration readiness | Projects whether one target is available, reviewable, or blocked, including affected paths and declared effects, without creating a plan or writing state. |
 | Semantic planning | Builds a versioned Project IR and evaluates every observed capability against the target adapter. |
 | Policy translation | Converts supported linker, registry, override, resolution, package-extension, exact text-patch, and lifecycle allow-list semantics into deterministic target configuration. |
 | Approval boundary | Produces an immutable plan identifier and requires approval for that exact plan before mutation. |
@@ -152,7 +161,7 @@ flowchart LR
     G -->|failure| H[rollback]
 ```
 
-The normal command orchestrates this pipeline without exposing repository or state paths. Before target import or installation, pkgshift removes every package-local `node_modules` directory recorded by the accepted Project IR and journals whether each path was removed or already absent. Target-native importers then run when available; source-only lockfiles remain until import and installation complete. Context-aware integration adapters update registered package scripts, CI commands and setup actions, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins without rewriting ordinary prose or runtime commands. Verification requires the cleanup record, rejects any remaining source-only lockfile or configuration artifact, and runs only representative root scripts that were explicitly bound into the approved plan. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, `explain`, and `rollback` commands remain available for integrations that need stage-level control. The Rust primary CLI also owns managed Agent Skill installation, health inspection, and protected uninstall.
+The normal command orchestrates this pipeline without exposing repository or state paths. `pkgshift doctor --to <target>` projects the same engine's readiness evidence before a plan is requested. Before target import or installation, pkgshift removes every package-local `node_modules` directory recorded by the accepted Project IR and journals whether each path was removed or already absent. Target-native importers then run when available; source-only lockfiles remain until import and installation complete. Context-aware integration adapters update registered package scripts, CI commands and setup actions, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins without rewriting ordinary prose or runtime commands. Verification requires the cleanup record, rejects any remaining source-only lockfile or configuration artifact, and runs only representative root scripts that were explicitly bound into the approved plan. `--trial` executes the same plan and verifier in a disposable copy. Advanced `doctor`, `inspect`, `plan`, `apply`, `verify`, `explain`, and `rollback` commands remain available for integrations that need stage-level control. The Rust primary CLI also owns managed Agent Skill installation, health inspection, and protected uninstall.
 
 ## Monorepo layout
 
@@ -184,15 +193,19 @@ Rust and TypeScript share product terminology, adapter baselines, approval seman
 
 pkgshift is designed for Codex, Claude Code, and other coding agents, but the engine remains deterministic and model-independent.
 
-1. The agent runs a read-only structured preview.
-2. pkgshift returns exit code `7`, a complete plan, and one exact `nextActions[].argv`.
-3. The agent presents the risks and waits for approval.
-4. After approval, the agent executes the returned argument array unchanged.
-5. pkgshift persists, applies, and verifies the approved plan in one invocation.
+1. The agent runs read-only doctor for the selected target and presents its readiness evidence.
+2. The agent requests a complete read-only structured preview only when migration is available or reviewed lossy behavior is accepted.
+3. pkgshift returns exit code `7`, a complete plan, and one exact `nextActions[].argv`.
+4. The agent presents the risks and waits for approval.
+5. After approval, the agent executes the returned argument array unchanged.
+6. pkgshift persists, applies, and verifies the approved plan in one invocation.
 
 ```bash
+pkgshift doctor --to bun --json --no-color --non-interactive
 pkgshift to bun --json --no-color --non-interactive
 ```
+
+The `migration-readiness` artifact's `migrationAvailable` field is authoritative. A `doctor_...` report identifier is evidence only and cannot authorize planning or mutation.
 
 For target selection, agents can use `pkgshift compare bun deno --json --no-color --non-interactive`, present the aggregate plan, obtain one process-execution approval, and compare the returned candidate reports. A failed or blocked candidate is evidence, not an internal command failure, when the comparison report itself completes and `repositoryUnchanged` is true.
 
@@ -237,6 +250,7 @@ Then run it from the repository you want to migrate:
 
 ```bash
 cd /path/to/project
+pkgshift doctor --to bun
 pkgshift to bun --dry-run
 ```
 
@@ -309,6 +323,7 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 - [Bun-to-Deno runtime recipes](docs/architecture/runtime-migration-recipes.md)
 - [Real-world validation corpus](docs/support/real-world-corpus.md)
 - [Package manager workflow](docs/workflows/pkgshift.md)
+- [Migration readiness](docs/workflows/migration-readiness.md)
 - [Isolated migration trial](docs/workflows/isolated-trial.md)
 - [Bun-to-Deno runtime workflow](docs/workflows/runtime-migration.md)
 - [Release system](docs/governance/release-system.md)
