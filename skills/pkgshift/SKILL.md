@@ -151,6 +151,10 @@ Treat the migration as successful only when the approved invocation returns `sta
 
 Use [references/cli-contract.md](references/cli-contract.md) for the explicit `plan`, `apply`, and `verify` commands when an integration requires separate persisted stage artifacts or when diagnosing an interrupted run. The ordinary migration path must not expose or request repository and state-directory paths when the command is already running from the intended repository root.
 
+## Manage the Portable Skill Safely
+
+Use `pkgshift skill status|doctor --scope <project|user> --client <codex|claude>` for read-only installation evidence. For install or uninstall, run the unapproved command first, present its `skill-status` artifact, and execute only the returned argument array after approval. Do not copy, replace, or delete a skill directory manually when the managed lifecycle is available. A modified managed copy is user-owned state and must remain protected.
+
 ## Explain and Roll Back
 
 Explain unknown diagnostics or failed artifacts before proposing recovery:

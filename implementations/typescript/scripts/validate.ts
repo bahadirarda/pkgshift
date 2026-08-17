@@ -504,7 +504,7 @@ async function validateWebsite(): Promise<void> {
   if ((installerMode & 0o111) === 0) {
     errors.push(`${installerPath}: installer must be executable`);
   }
-  for (const required of ["SHA256SUMS", "sha256sum", "shasum", "--proto '=https'", "--tlsv1.2"]) {
+  for (const required of ["SHA256SUMS", "sha256sum", "shasum", "--proto '=https'", "--tlsv1.2", "PKGSHIFT_DATA_DIR", "skills/pkgshift"]) {
     if (!installer.includes(required)) {
       errors.push(`${installerPath}: missing installer safety contract ${required}`);
     }

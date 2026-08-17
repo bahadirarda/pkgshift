@@ -347,6 +347,7 @@ pub struct CapabilityAnalysis {
 pub enum SideEffect {
     None,
     RepositoryWrite,
+    FilesystemWrite,
     DependencyState,
     ProcessExecution,
 }

@@ -109,6 +109,12 @@ enum CliCommand {
         #[command(subcommand)]
         command: RuntimeCommand,
     },
+
+    /// Install, inspect, diagnose, or remove the portable Agent Skill.
+    Skill {
+        #[command(subcommand)]
+        command: SkillCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -142,6 +148,43 @@ enum RuntimeCommand {
     },
     /// Restore files from a runtime migration snapshot.
     Rollback { run_id: String },
+}
+
+#[derive(Debug, Subcommand)]
+enum SkillCommand {
+    /// Install the portable Agent Skill after exact approval.
+    Install {
+        #[command(flatten)]
+        destination: SkillDestination,
+        /// Installation ownership mode.
+        #[arg(long, default_value = "copy")]
+        mode: String,
+    },
+    /// Inspect the selected Agent Skill destination.
+    Status {
+        #[command(flatten)]
+        destination: SkillDestination,
+    },
+    /// Diagnose source, destination, ownership, and modification state.
+    Doctor {
+        #[command(flatten)]
+        destination: SkillDestination,
+    },
+    /// Remove an unmodified managed Agent Skill after exact approval.
+    Uninstall {
+        #[command(flatten)]
+        destination: SkillDestination,
+    },
+}
+
+#[derive(Debug, Args)]
+struct SkillDestination {
+    /// Installation scope.
+    #[arg(long, default_value = "project")]
+    scope: String,
+    /// Agent client destination.
+    #[arg(long, default_value = "codex")]
+    client: String,
 }
 
 #[derive(Debug, Args)]
@@ -201,6 +244,43 @@ fn command_kind(command: CliCommand) -> (CommandKind, Vec<String>) {
         CliCommand::Runtime {
             command: RuntimeCommand::Rollback { run_id },
         } => (CommandKind::RuntimeRollback { run_id }, Vec::new()),
+        CliCommand::Skill {
+            command: SkillCommand::Install { destination, mode },
+        } => (
+            CommandKind::SkillInstall {
+                scope: destination.scope,
+                client: destination.client,
+                mode,
+            },
+            Vec::new(),
+        ),
+        CliCommand::Skill {
+            command: SkillCommand::Status { destination },
+        } => (
+            CommandKind::SkillStatus {
+                scope: destination.scope,
+                client: destination.client,
+            },
+            Vec::new(),
+        ),
+        CliCommand::Skill {
+            command: SkillCommand::Doctor { destination },
+        } => (
+            CommandKind::SkillDoctor {
+                scope: destination.scope,
+                client: destination.client,
+            },
+            Vec::new(),
+        ),
+        CliCommand::Skill {
+            command: SkillCommand::Uninstall { destination },
+        } => (
+            CommandKind::SkillUninstall {
+                scope: destination.scope,
+                client: destination.client,
+            },
+            Vec::new(),
+        ),
     }
 }
 

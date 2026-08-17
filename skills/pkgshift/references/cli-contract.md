@@ -15,7 +15,8 @@ pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
 pkgshift verify <run-id> --state-dir <path>
 pkgshift explain <diagnostic-code-or-artifact-id>
 pkgshift rollback <run-id> --state-dir <path> --approve <run-id>
-pkgshift skill install|status|doctor|uninstall --scope <project|user> --client <codex|claude>
+pkgshift skill install --scope <project|user> --client <codex|claude> --mode <copy|link>
+pkgshift skill status|doctor|uninstall --scope <project|user> --client <codex|claude>
 ```
 
 Add `--json --no-color --non-interactive` for agent operation. Prefer `pkgshift to <target>` for an ordinary migration. Its first call is read-only and returns an approval-bound next action; the approved call persists, applies, and verifies without caller-supplied paths. `--trial` returns a separately approved process-execution action that runs in a disposable copy and never authorizes apply. Add repeatable `--verify-script <name>` values only for exact root scripts selected by the user; the returned next action preserves them. Use `--accept-lossy` only after the user accepts every lossy capability decision.
@@ -25,6 +26,8 @@ The explicit `plan`, `apply`, and `verify` commands are the advanced staged inte
 Multi-target `compare` is an aggregate trial interface. Its preview binds every normalized candidate plan to one `plan_compare_...` identifier and process-execution approval. The approved command reports each candidate as passed, failed, or capability-blocked from an independent disposable copy. Top-level success means evidence collection completed and the source repository remained unchanged; it does not mean every candidate passed or select a winner.
 
 `runtime to deno` is a separate Bun application-runtime interface. Its first call is read-only and binds deterministic recipes, file digests, and sorted explicit Deno permissions to `runtime_plan_...`. The approved call writes only reviewed source, script, and type mutations; it does not select a package manager, install dependencies, or execute project code. Runtime results redact mutation content, use `runtime_run_...`, verify after-digests and Bun runtime residue, and return a separately approved `runtime rollback` action.
+
+`skill install` and `skill uninstall` are separately scoped filesystem workflows. Their first call inspects the bundled portable source and exact client destination, emits a `skill-status` artifact, and returns one `filesystem-write` next action bound to a `skill_plan_...` identifier. That identifier covers the operation, scope, client, mode, source and installed digests, ownership state, and exact paths. Status and doctor are read-only. Managed-copy uninstall refuses local modifications, exact-source links are removed without following their target, and `--dry-run` never mutates even with approval.
 
 ## Result Envelope
 

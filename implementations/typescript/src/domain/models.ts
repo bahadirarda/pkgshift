@@ -80,6 +80,7 @@ export interface ProjectInspection {
 export type SideEffect =
   | "none"
   | "repository-write"
+  | "filesystem-write"
   | "dependency-state"
   | "process-execution";
 

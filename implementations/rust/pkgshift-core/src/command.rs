@@ -49,6 +49,23 @@ pub enum CommandKind {
     RuntimeRollback {
         run_id: String,
     },
+    SkillInstall {
+        scope: String,
+        client: String,
+        mode: String,
+    },
+    SkillStatus {
+        scope: String,
+        client: String,
+    },
+    SkillDoctor {
+        scope: String,
+        client: String,
+    },
+    SkillUninstall {
+        scope: String,
+        client: String,
+    },
     Support,
 }
 
@@ -815,6 +832,10 @@ pub fn execute(options: &CommandOptions) -> CommandExecution {
         CommandKind::Rollback { .. } => "rollback".to_owned(),
         CommandKind::RuntimeTo { target, .. } => format!("runtime to {target}"),
         CommandKind::RuntimeRollback { .. } => "runtime rollback".to_owned(),
+        CommandKind::SkillInstall { .. } => "skill install".to_owned(),
+        CommandKind::SkillStatus { .. } => "skill status".to_owned(),
+        CommandKind::SkillDoctor { .. } => "skill doctor".to_owned(),
+        CommandKind::SkillUninstall { .. } => "skill uninstall".to_owned(),
         CommandKind::Support => "support".to_owned(),
     };
     let execution = match &options.command {
@@ -832,6 +853,38 @@ pub fn execute(options: &CommandOptions) -> CommandExecution {
         CommandKind::RuntimeRollback { run_id } => {
             crate::runtime::rollback_command(options, run_id)
         }
+        CommandKind::SkillInstall {
+            scope,
+            client,
+            mode,
+        } => crate::skill::skill_command(
+            options,
+            crate::skill::SkillOperation::Install,
+            scope,
+            client,
+            mode,
+        ),
+        CommandKind::SkillStatus { scope, client } => crate::skill::skill_command(
+            options,
+            crate::skill::SkillOperation::Status,
+            scope,
+            client,
+            "copy",
+        ),
+        CommandKind::SkillDoctor { scope, client } => crate::skill::skill_command(
+            options,
+            crate::skill::SkillOperation::Doctor,
+            scope,
+            client,
+            "copy",
+        ),
+        CommandKind::SkillUninstall { scope, client } => crate::skill::skill_command(
+            options,
+            crate::skill::SkillOperation::Uninstall,
+            scope,
+            client,
+            "copy",
+        ),
         CommandKind::Support => support_command(),
     };
     execution.unwrap_or_else(|error| failure(&command_name, &error))
