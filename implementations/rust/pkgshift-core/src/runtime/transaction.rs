@@ -14,8 +14,9 @@ use crate::model::{
     VerificationStatus,
 };
 use crate::util::{
-    PkgshiftError, Result, atomic_write, create_new_lock, digest_json, file_digest, read_json,
-    resolve_root, safe_join, short_digest, unix_timestamp_millis, write_private_json,
+    PkgshiftError, Result, atomic_write, create_new_lock, digest_json, file_digest,
+    is_short_digest_id, read_json, resolve_root, safe_join, short_digest, unix_timestamp_millis,
+    write_private_json,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -115,6 +116,16 @@ fn read_envelope<T>(path: &Path) -> Result<T>
 where
     T: Serialize + serde::de::DeserializeOwned,
 {
+    let metadata = fs::symlink_metadata(path).map_err(|source| PkgshiftError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(PkgshiftError::InvalidState(format!(
+            "stored runtime artifact is not a regular file: {}",
+            path.display()
+        )));
+    }
     let envelope: StoreEnvelope<T> = read_json(path)?;
     if envelope.store_schema_version != SCHEMA_VERSION
         || digest_json(&envelope.content)? != envelope.digest
@@ -138,10 +149,10 @@ fn save_run(state_directory: &Path, run: &StoredRuntimeRun) -> Result<()> {
     write_envelope(&run_path(state_directory, &run.run_id), run)
 }
 
-fn load_run(state_directory: &Path, run_id: &str) -> Result<StoredRuntimeRun> {
-    if !run_id.starts_with("runtime_run_") {
+pub(crate) fn load_run(state_directory: &Path, run_id: &str) -> Result<StoredRuntimeRun> {
+    if !is_short_digest_id(run_id, "runtime_run_") {
         return Err(PkgshiftError::InvalidState(
-            "runtime run identifiers must start with runtime_run_".to_owned(),
+            "runtime run identifier is not a canonical runtime_run_ digest".to_owned(),
         ));
     }
     let run: StoredRuntimeRun = read_envelope(&run_path(state_directory, run_id))?;

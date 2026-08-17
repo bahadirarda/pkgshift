@@ -207,6 +207,15 @@ pub fn short_digest<T: Serialize>(prefix: &str, value: &T) -> Result<String> {
     ))
 }
 
+pub fn is_short_digest_id(value: &str, prefix: &str) -> bool {
+    value.strip_prefix(prefix).is_some_and(|suffix| {
+        suffix.len() == 24
+            && suffix
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    })
+}
+
 fn canonicalize_json(value: Value) -> Value {
     match value {
         Value::Array(values) => Value::Array(values.into_iter().map(canonicalize_json).collect()),

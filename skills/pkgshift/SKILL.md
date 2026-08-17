@@ -163,6 +163,8 @@ Explain unknown diagnostics or failed artifacts before proposing recovery:
 pkgshift explain <diagnostic-code-or-artifact-id> --state-dir .pkgshift/state --json --no-color --non-interactive
 ```
 
+The command is read-only and returns no next action. Omit `--state-dir` for a diagnostic code or when the artifact lives under the repository default. Treat `ARTIFACT_INVALID` as a trust failure; do not summarize the stored content or infer recovery steps from it. Treat `ARTIFACT_NOT_FOUND` as a state-root or identity mismatch and ask for the original state location when it cannot be discovered safely.
+
 Request explicit rollback approval tied to the run. Then execute the returned rollback action or:
 
 ```text

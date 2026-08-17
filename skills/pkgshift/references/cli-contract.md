@@ -13,7 +13,7 @@ pkgshift inspect [package-manager]
 pkgshift plan package-manager --to <target>
 pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
 pkgshift verify <run-id> --state-dir <path>
-pkgshift explain <diagnostic-code-or-artifact-id>
+pkgshift explain <diagnostic-code-or-artifact-id> [--state-dir <path>]
 pkgshift rollback <run-id> --state-dir <path> --approve <run-id>
 pkgshift skill install --scope <project|user> --client <codex|claude> --mode <copy|link>
 pkgshift skill status|doctor|uninstall --scope <project|user> --client <codex|claude>
@@ -28,6 +28,8 @@ Multi-target `compare` is an aggregate trial interface. Its preview binds every 
 `runtime to deno` is a separate Bun application-runtime interface. Its first call is read-only and binds deterministic recipes, file digests, and sorted explicit Deno permissions to `runtime_plan_...`. The approved call writes only reviewed source, script, and type mutations; it does not select a package manager, install dependencies, or execute project code. Runtime results redact mutation content, use `runtime_run_...`, verify after-digests and Bun runtime residue, and return a separately approved `runtime rollback` action.
 
 `skill install` and `skill uninstall` are separately scoped filesystem workflows. Their first call inspects the bundled portable source and exact client destination, emits a `skill-status` artifact, and returns one `filesystem-write` next action bound to a `skill_plan_...` identifier. That identifier covers the operation, scope, client, mode, source and installed digests, ownership state, and exact paths. Status and doctor are read-only. Managed-copy uninstall refuses local modifications, exact-source links are removed without following their target, and `--dry-run` never mutates even with approval.
+
+`explain` is always read-only. Diagnostic codes resolve from the Rust-owned stable catalog. Package-manager and runtime plan, run, and verification identifiers resolve from the default `.pkgshift/state` directory or an explicit `--state-dir`. Canonical digest grammar, integrity envelopes, verification identities, regular-file boundaries, and bounded run scans are validated before content is returned. `ARTIFACT_NOT_FOUND` means the selected state root has no matching identity; `ARTIFACT_INVALID` means present state cannot be trusted.
 
 ## Result Envelope
 

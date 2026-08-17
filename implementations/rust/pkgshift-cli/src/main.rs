@@ -98,6 +98,9 @@ enum CliCommand {
     /// Report package manager adapters and target tiers.
     Support,
 
+    /// Explain a diagnostic code or integrity-checked stored artifact.
+    Explain { identifier: String },
+
     /// Keyword-compatible package manager planning commands.
     Pm {
         #[command(subcommand)]
@@ -228,6 +231,7 @@ fn command_kind(command: CliCommand) -> (CommandKind, Vec<String>) {
         CliCommand::Verify { run_id } => (CommandKind::Verify { run_id }, Vec::new()),
         CliCommand::Rollback { run_id } => (CommandKind::Rollback { run_id }, Vec::new()),
         CliCommand::Support => (CommandKind::Support, Vec::new()),
+        CliCommand::Explain { identifier } => (CommandKind::Explain { identifier }, Vec::new()),
         CliCommand::Runtime {
             command:
                 RuntimeCommand::To {

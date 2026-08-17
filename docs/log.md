@@ -2,6 +2,7 @@
 
 ## 2026-08-17
 
+* **Native explanation**: Ported diagnostic and persisted-artifact explanation to the Rust primary CLI with complete emitted-code catalog validation, canonical identifier grammar, bounded state scans, plan/run/runtime identity checks, verification digest reconstruction, symbolic-link refusal, and read-only end-to-end fixtures.
 * **Agent Skill lifecycle**: Ported copy, exact-source link, status, doctor, dry-run, and protected uninstall behavior to the Rust primary CLI with project/user confinement, Codex/Claude destinations, content digests, symbolic-link parent refusal, read-only approval previews, and exact machine-actionable next actions.
 * **Runtime migration**: Added dedicated `pkgshift runtime to deno` planning and execution with reviewed Hono `Bun.serve`, `bun:test`, Bun file, script, and type-cleanup recipes; explicit Deno permissions; content-redacted artifacts; owner-only recovery state; residue verification; rollback; and a passing real Hono run on Deno 2.9.5. SQLite remains fail-closed because similarly named APIs do not prove behavioral compatibility.
 * **Target comparison**: Added deterministic `pkgshift compare` planning, one aggregate process-execution approval, independent candidate sandboxes, nested trial evidence, capability-blocked candidates, explicit no-ranking semantics, and a passing real Bun 1.3.14 plus Deno 2.9.5 comparison run.

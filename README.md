@@ -128,6 +128,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Target comparison | Binds two or more target plans to one approval, trials every executable candidate in a separate disposable copy, and reports evidence without ranking by guesswork. |
 | Runtime recipes | Applies a dedicated, permission-aware Bun-to-Deno source plan, blocks unsupported API shapes, verifies zero supported Bun residue, and retains an integrity-checked rollback. |
 | Agent Skill lifecycle | Previews and manages project or user Codex and Claude Code destinations through copy or exact-source link ownership, content digests, and protected uninstall. |
+| Artifact explanation | Expands every registered diagnostic and loads integrity-checked package-manager or runtime plans, runs, and verification reports without mutation. |
 | Recovery | Restores repository files from integrity-checked snapshots and verifies the original fingerprint. |
 
 Unsupported, unknown, unsafe, or unimplemented semantics block execution. pkgshift does not hide uncertainty behind a successful exit code.
@@ -145,7 +146,7 @@ flowchart LR
     G -->|failure| H[rollback]
 ```
 
-The normal command orchestrates this pipeline without exposing repository or state paths. Before target import or installation, pkgshift removes every package-local `node_modules` directory recorded by the accepted Project IR and journals whether each path was removed or already absent. Target-native importers then run when available; source-only lockfiles remain until import and installation complete. Context-aware integration adapters update registered package scripts, CI commands and setup actions, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins without rewriting ordinary prose or runtime commands. Verification requires the cleanup record, rejects any remaining source-only lockfile or configuration artifact, and runs only representative root scripts that were explicitly bound into the approved plan. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The Rust primary CLI also owns managed Agent Skill installation, health inspection, and protected uninstall; the TypeScript reference retains diagnostic explanation during the remaining port transition.
+The normal command orchestrates this pipeline without exposing repository or state paths. Before target import or installation, pkgshift removes every package-local `node_modules` directory recorded by the accepted Project IR and journals whether each path was removed or already absent. Target-native importers then run when available; source-only lockfiles remain until import and installation complete. Context-aware integration adapters update registered package scripts, CI commands and setup actions, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins without rewriting ordinary prose or runtime commands. Verification requires the cleanup record, rejects any remaining source-only lockfile or configuration artifact, and runs only representative root scripts that were explicitly bound into the approved plan. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, `explain`, and `rollback` commands remain available for integrations that need stage-level control. The Rust primary CLI also owns managed Agent Skill installation, health inspection, and protected uninstall.
 
 ## Monorepo layout
 
@@ -192,6 +193,8 @@ For target selection, agents can use `pkgshift compare bun deno --json --no-colo
 When a user asks for proof before mutation, the agent previews with `--trial`, obtains separate approval for its `process-execution` action, and reports the `trial-report`. A trial never authorizes the later repository-write action.
 
 For Bun-to-Deno application conversion, agents use `pkgshift runtime to deno --deno-permission <name>` and follow the same exact-next-action boundary. Runtime and package-manager plans are separate approvals.
+
+Agents can run `pkgshift explain <diagnostic-code-or-artifact-id>` at any point. The Rust CLI resolves the default `.pkgshift/state` directory or an explicit `--state-dir`, validates stored identities and content digests, and returns no mutation action.
 
 The model does not author migration edits. Detection, capability analysis, recipe selection, transformation, execution, and verification are implemented by pkgshift.
 
@@ -242,6 +245,15 @@ pkgshift skill install --scope project --client codex --mode copy \
 ```
 
 The Rust CLI supports managed copy and exact-source link modes, read-only `status` and `doctor`, project and user scopes, Codex at `.agents/skills/pkgshift`, Claude Code at `.claude/skills/pkgshift`, and protected uninstall that refuses locally modified copies. Released distributions place the portable source beside the executable's shared data path; source checkouts resolve the repository-owned `skills/pkgshift` directory.
+
+Diagnostic and artifact inspection is also native to the Rust CLI:
+
+```bash
+pkgshift explain PM_SOURCE_AMBIGUOUS --json --non-interactive
+pkgshift explain run_... --state-dir .pkgshift/state --json --non-interactive
+```
+
+Stored plan, run, verification, runtime plan, runtime run, and runtime verification identifiers are loaded through bounded, integrity-checked read-only paths. Invalid, missing, or non-canonical identifiers never become filesystem paths.
 
 ## Safety contract
 

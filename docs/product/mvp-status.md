@@ -109,7 +109,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Binary `bun.lockb` graph extraction fails closed until the repository converts it to the current text `bun.lock` format.
 - Reachable-resolution proof does not yet make dependency edge shape blocking because peer placement, hoisting, and deduplication representations differ between managers.
 - Representative project scripts are not selected automatically; only exact root script names supplied with `--verify-script` are executed, and their repository side effects remain outside rollback snapshots.
-- The Rust CLI does not yet own the TypeScript reference command for diagnostic and stored-artifact explanation.
+- Artifact explanation is read-only and covers registered diagnostics plus persisted package-manager and runtime plans, runs, and verification reports; ephemeral trial and comparison reports remain available only in their originating command result.
 - Unsupported and manual-only transformations emit blocking diagnostics instead of delegating edits to a model.
 - Runtime migration is a separate Rust-only command and currently targets Deno from Bun; package-manager selection, lockfiles, installation, advanced Bun APIs, `bunfig.toml`, shell behavior, macros, routes, and WebSockets remain outside its deterministic recipe subset.
 - Registry tokens must use `${NAME}` references for Yarn Modern translation; literal credentials and unrecognized `.npmrc` settings fail closed without entering plan artifacts.
@@ -121,4 +121,4 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 
 # Post-MVP Work
 
-Port diagnostic and stored-artifact explanation to Rust, expand patch conversion beyond the exact text-only subset, grow runtime recipes beyond Bun-to-Deno safe shapes, add configurable target-platform matrices and edge-equivalence policies, and add target executable version resolution.
+Expand patch conversion beyond the exact text-only subset, grow runtime recipes beyond Bun-to-Deno safe shapes, add configurable target-platform matrices and edge-equivalence policies, and add target executable version resolution.

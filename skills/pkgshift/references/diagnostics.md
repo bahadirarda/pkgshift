@@ -30,6 +30,9 @@ The implementation may add codes while preserving the following baseline familie
 | Code | Meaning |
 | --- | --- |
 | `PKGSHIFT_CLI_NOT_FOUND` | No trusted pkgshift executable is available. |
+| `DIAGNOSTIC_CODE_UNKNOWN` | The requested explanation code is not registered by this CLI schema. |
+| `ARTIFACT_NOT_FOUND` | The selected state directory has no stored artifact with the requested canonical identifier. |
+| `ARTIFACT_INVALID` | Stored state failed schema, identity, path, or content-integrity validation and must not be trusted. |
 | `PM_SOURCE_AMBIGUOUS` | Repository evidence supports multiple source package managers. |
 | `PM_TARGET_UNSUPPORTED` | The requested target is outside the supported adapter boundary. |
 | `CAPABILITY_LOSSY` | A source capability requires a semantic compromise. |
