@@ -389,6 +389,7 @@ async function validateWebsite(): Promise<void> {
     "site/index.html",
     "site/404.html",
     "site/favicon.svg",
+    "site/install.ps1",
     "site/install.sh",
     "site/llms.txt",
     "site/robots.txt",
@@ -512,6 +513,25 @@ async function validateWebsite(): Promise<void> {
   if (/\b(?:sudo|eval)\b/.test(installer)) {
     errors.push(`${installerPath}: installer must not elevate privileges or evaluate downloaded code`);
   }
+
+  const windowsInstallerPath = "site/install.ps1";
+  const windowsInstaller = await Bun.file(windowsInstallerPath).text();
+  for (const required of [
+    "SHA256SUMS",
+    "Get-FileHash",
+    "Expand-Archive",
+    "x86_64-pc-windows-msvc",
+    "PKGSHIFT_DATA_DIR",
+    "skills\\pkgshift",
+    "release.json",
+  ]) {
+    if (!windowsInstaller.includes(required)) {
+      errors.push(`${windowsInstallerPath}: missing installer safety contract ${required}`);
+    }
+  }
+  if (/\b(?:Start-Process\s+[^\n]*-Verb\s+RunAs|Invoke-Expression)\b/i.test(windowsInstaller)) {
+    errors.push(`${windowsInstallerPath}: installer must not elevate privileges or evaluate downloaded code`);
+  }
 }
 
 async function validateEnglishOnly(): Promise<void> {
@@ -527,7 +547,8 @@ async function validateEnglishOnly(): Promise<void> {
     "implementations/typescript/src/**/*.ts",
     "implementations/typescript/tests/**/*.ts",
     ".github/workflows/*.{yaml,yml}",
-    "site/**/*.{css,html,js,json,sh,svg,txt,xml}",
+    "site/**/*.{css,html,js,json,ps1,sh,svg,txt,xml}",
+    "scripts/**/*.ps1",
     "*.json",
     "*.toml",
   ];

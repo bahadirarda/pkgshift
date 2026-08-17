@@ -7,6 +7,14 @@ requested_version="${PKGSHIFT_VERSION:-latest}"
 install_dir="${PKGSHIFT_INSTALL_DIR:-${XDG_BIN_HOME:-}}"
 temporary_dir=""
 skill_temporary=""
+skill_backup=""
+skill_destination=""
+skill_activated=0
+binary_temporary=""
+binary_backup=""
+destination=""
+binary_activated=0
+completed=0
 
 say() {
   printf '%s\n' "pkgshift: $*"
@@ -39,11 +47,26 @@ EOF
 }
 
 cleanup() {
+  if [ "$completed" -ne 1 ] && [ "$binary_activated" -eq 1 ]; then
+    rm -f -- "$destination"
+    if [ -n "$binary_backup" ] && [ -f "$binary_backup" ]; then
+      mv "$binary_backup" "$destination" || say "recovery binary remains at $binary_backup"
+    fi
+  fi
+  if [ "$completed" -ne 1 ] && [ "$skill_activated" -eq 1 ]; then
+    rm -rf -- "$skill_destination"
+    if [ -n "$skill_backup" ] && [ -d "$skill_backup" ]; then
+      mv "$skill_backup" "$skill_destination" || say "recovery Skill data remains at $skill_backup"
+    fi
+  fi
   if [ -n "$temporary_dir" ] && [ -d "$temporary_dir" ]; then
     rm -rf -- "$temporary_dir"
   fi
   if [ -n "$skill_temporary" ] && [ -d "$skill_temporary" ]; then
     rm -rf -- "$skill_temporary"
+  fi
+  if [ -n "$binary_temporary" ] && [ -f "$binary_temporary" ]; then
+    rm -f -- "$binary_temporary"
   fi
 }
 
@@ -155,8 +178,16 @@ fi
 tar -xzf "$temporary_dir/$archive" -C "$temporary_dir"
 source_binary="$temporary_dir/pkgshift-$release_tag-$target/pkgshift"
 source_skill="$temporary_dir/pkgshift-$release_tag-$target/skills/pkgshift"
+source_metadata="$temporary_dir/pkgshift-$release_tag-$target/release.json"
 [ -f "$source_binary" ] || fail "release archive does not contain the pkgshift executable"
 [ -f "$source_skill/SKILL.md" ] || fail "release archive does not contain the portable Agent Skill"
+[ -f "$source_metadata" ] || fail "release archive does not contain release.json"
+release_version="${release_tag#v}"
+grep -Fq "\"name\": \"pkgshift\"" "$source_metadata" \
+  && grep -Fq "\"version\": \"$release_version\"" "$source_metadata" \
+  && grep -Fq "\"tag\": \"$release_tag\"" "$source_metadata" \
+  && grep -Fq "\"target\": \"$target\"" "$source_metadata" \
+  || fail "release metadata does not match the requested artifact"
 
 if [ -n "${PKGSHIFT_DATA_DIR:-}" ]; then
   data_dir="$PKGSHIFT_DATA_DIR"
@@ -189,27 +220,48 @@ if [ -d "$skill_destination" ]; then
     fail "cannot install the portable Agent Skill"
   fi
   skill_temporary=""
-  rm -rf -- "$skill_backup"
 else
   mv "$skill_temporary" "$skill_destination" \
     || fail "cannot install the portable Agent Skill"
   skill_temporary=""
 fi
+skill_activated=1
 
 mkdir -p "$install_dir" || fail "cannot create install directory: $install_dir"
 destination="$install_dir/pkgshift"
-if command -v install >/dev/null 2>&1; then
-  install -m 0755 "$source_binary" "$destination" \
-    || fail "cannot install pkgshift to $destination"
-else
-  cp "$source_binary" "$destination" || fail "cannot copy pkgshift to $destination"
-  chmod 0755 "$destination" || fail "cannot mark pkgshift as executable"
+[ ! -L "$destination" ] || fail "executable destination must not be a symbolic link"
+if [ -e "$destination" ] && [ ! -f "$destination" ]; then
+  fail "executable destination is not a regular file: $destination"
 fi
+binary_temporary="$install_dir/.pkgshift.$$.tmp"
+binary_backup="$install_dir/.pkgshift.$$.backup"
+[ ! -e "$binary_temporary" ] || fail "temporary executable path already exists"
+[ ! -e "$binary_backup" ] || fail "backup executable path already exists"
+if command -v install >/dev/null 2>&1; then
+  install -m 0755 "$source_binary" "$binary_temporary" \
+    || fail "cannot stage pkgshift in $install_dir"
+else
+  cp "$source_binary" "$binary_temporary" || fail "cannot stage pkgshift in $install_dir"
+  chmod 0755 "$binary_temporary" || fail "cannot mark staged pkgshift as executable"
+fi
+if [ -f "$destination" ]; then
+  mv "$destination" "$binary_backup" \
+    || fail "cannot prepare the existing executable for replacement"
+fi
+binary_activated=1
+mv "$binary_temporary" "$destination" || fail "cannot activate pkgshift at $destination"
+binary_temporary=""
 
 "$destination" --version >/dev/null 2>&1 || fail "installed executable failed its version check"
 PKGSHIFT_DATA_DIR="$data_dir" "$destination" skill status \
   --scope project --client codex --cwd "$temporary_dir" --json --non-interactive \
   >/dev/null 2>&1 || fail "installed executable could not resolve its portable Agent Skill"
+
+completed=1
+rm -f -- "$binary_backup" || say "obsolete binary backup remains at $binary_backup"
+binary_backup=""
+rm -rf -- "$skill_backup" || say "obsolete Skill backup remains at $skill_backup"
+skill_backup=""
 
 say "installed $release_tag to $destination"
 say "installed portable Agent Skill data to $skill_destination"

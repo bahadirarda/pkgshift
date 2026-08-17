@@ -311,23 +311,32 @@
             <p class="section-index">05 / Install</p>
             <h2>Start with one command.</h2>
             <p>
-              The installer detects Linux or macOS, downloads the matching native archive, verifies its
-              SHA-256 checksum, and installs into your user bin directory by default.
+              The native installers select the matching release, verify its SHA-256 checksum, and install
+              the executable plus portable Agent Skill data into user-owned directories.
             </p>
           </div>
 
           <div class="install-panel" data-reveal>
-            <div class="install-tabs" role="group" aria-label="Installation method">
-              <span class="active">Shell</span>
+            <div class="install-tabs" role="tablist" aria-label="Installation method">
+              <button class="active" type="button" role="tab" aria-selected="true" data-install-tab="shell">Linux / macOS</button>
+              <button type="button" role="tab" aria-selected="false" data-install-tab="powershell">Windows</button>
               <a href="https://github.com/bahadirarda/pkgshift/releases/latest">Manual download</a>
             </div>
-            <div class="command-box">
+            <div class="command-box" data-install-panel="shell">
               <code id="install-command">curl --proto '=https' --tlsv1.2 -LsSf https://bahadirarda.github.io/pkgshift/install.sh | sh</code>
               <button class="copy-button" type="button" data-copy-target="install-command" aria-label="Copy install command">Copy</button>
             </div>
-            <p class="install-note">
+            <div class="command-box" data-install-panel="powershell" hidden>
+              <code id="windows-install-command">irm https://bahadirarda.github.io/pkgshift/install.ps1 | iex</code>
+              <button class="copy-button" type="button" data-copy-target="windows-install-command" aria-label="Copy Windows install command">Copy</button>
+            </div>
+            <p class="install-note" data-install-panel="shell">
               Pin a release with <code>PKGSHIFT_VERSION=v0.20260816.0</code>. Review the
               <a href="install.sh">installer source</a> before running it.
+            </p>
+            <p class="install-note" data-install-panel="powershell" hidden>
+              Pin a release with <code>$env:PKGSHIFT_VERSION='v0.20260816.0'</code>. Review the
+              <a href="install.ps1">PowerShell source</a> before running it.
             </p>
             <div class="first-run">
               <span>Then, from a project root:</span>

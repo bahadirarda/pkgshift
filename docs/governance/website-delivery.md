@@ -1,7 +1,7 @@
 ---
 type: governance
 title: Website Delivery
-description: Defines the product website, search metadata, verified shell installer, and GitHub Pages deployment boundary.
+description: Defines the product website, search metadata, verified native installers, and GitHub Pages deployment boundary.
 tags: [governance, website, seo, installer, github-pages]
 status: draft
 stale_after: 2027-02-16
@@ -39,17 +39,19 @@ The root `llms.txt` follows the community proposal for a concise Markdown projec
 
 ## Installer contract
 
-`site/install.sh` is the canonical shell installer for Linux and macOS. It:
+`site/install.sh` for Linux and macOS and `site/install.ps1` for Windows x86-64 implement the same native installer contract. They:
 
 1. Detects the operating system and architecture.
 2. Resolves either the latest stable release or an explicitly pinned stable version.
 3. Downloads the matching native archive and `SHA256SUMS` from the same GitHub Release.
 4. Verifies the archive checksum before extraction.
-5. Installs the canonical portable Agent Skill into `PKGSHIFT_DATA_DIR`, `XDG_DATA_HOME/pkgshift`, or `$HOME/.local/share/pkgshift` through an atomic directory replacement.
-6. Installs the executable into an explicit destination, `XDG_BIN_HOME`, or `$HOME/.local/bin`.
-7. Executes the installed binary's version check and confirms that the Rust Skill lifecycle resolves the installed portable source before reporting success.
+5. Validate the archive's `release.json` name, version, tag, and target before staging installation.
+6. Stage and replace the canonical portable Agent Skill under the selected shared data root without retaining stale release files.
+7. Stage and replace the executable under an explicit or platform user-owned destination.
+8. Execute the installed binary's version check and confirm that the Rust Skill lifecycle resolves the installed portable source before reporting success.
+9. Restore the previous binary and Skill data when an activated replacement fails either smoke check.
 
-The script does not require elevated privileges, edit shell profiles, run the migrated project, or install dependencies. Windows users install from the signed GitHub Release archive until a separate PowerShell installer receives an equivalent verification contract.
+Neither script requires elevated privileges, edits a shell profile, runs the migrated project, or installs dependencies. Unix defaults are `XDG_BIN_HOME` or `$HOME/.local/bin` for the executable and `PKGSHIFT_DATA_DIR`, `XDG_DATA_HOME/pkgshift`, or `$HOME/.local/share/pkgshift` for shared data. Windows defaults are `%LOCALAPPDATA%\pkgshift\bin` and `%LOCALAPPDATA%\pkgshift`; explicit `PKGSHIFT_INSTALL_DIR` and `PKGSHIFT_DATA_DIR` values override them. Continuous integration runs real fixture archives through both installers, verifies stale Skill cleanup, and proves that checksum or smoke-check failure preserves the installed version.
 
 ## Deployment
 

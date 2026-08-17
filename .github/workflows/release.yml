@@ -151,6 +151,11 @@ jobs:
           } | ConvertTo-Json | Set-Content "$Staging/release.json"
           Compress-Archive -Path $Staging -DestinationPath "dist/$Staging.zip"
 
+      - name: Validate Windows installer
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: ./scripts/test-windows-installer.ps1
+
       - name: Upload release archive
         uses: actions/upload-artifact@v7
         with:
@@ -181,8 +186,9 @@ jobs:
       - name: Create and verify checksum manifest
         shell: bash
         run: |
+          cp site/install.sh site/install.ps1 dist/
           cd dist
-          sha256sum pkgshift-v* > SHA256SUMS
+          sha256sum pkgshift-v* install.sh install.ps1 > SHA256SUMS
           sha256sum --check SHA256SUMS
 
       - name: Attest release artifacts

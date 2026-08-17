@@ -100,6 +100,17 @@ jobs:
       - name: Build Rust release binary
         run: cargo build --workspace --release --locked
 
+  windows-installer:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Exercise verified PowerShell installation and refresh
+        shell: pwsh
+        run: ./scripts/test-windows-installer.ps1
+
   adapter-acceptance:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

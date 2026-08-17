@@ -58,6 +58,8 @@ Project, Codex, and managed-copy are the CLI defaults. User scope changes only t
 
 The primary Rust CLI resolves the portable source from a release shared-data directory or a complete source checkout. A missing or invalid source blocks installation. Release archives and installers therefore ship `skills/pkgshift` with the executable instead of duplicating an independently maintained skill.
 
+The verified Unix and Windows release installers replace this canonical shared-data copy transactionally with the executable. They retain the previous pair until the new binary passes both `--version` and `skill status`, then remove backup state. A failed smoke check restores the previous executable and portable source instead of leaving a mixed release.
+
 # Safety Invariants
 
 - Require an exact digest- and destination-bound `skill_plan_...` approval identifier for install and uninstall.

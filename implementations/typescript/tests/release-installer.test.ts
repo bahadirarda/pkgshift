@@ -62,6 +62,18 @@ describe("verified release installer", () => {
       join(staging, "skills/pkgshift/SKILL.md"),
       "---\nname: pkgshift\ndescription: Safe migrations.\n---\n",
     );
+    await writeFile(
+      join(staging, "release.json"),
+      `${JSON.stringify({
+        name: "pkgshift",
+        version: version.slice(1),
+        buildId: `${version.slice(1)}+sha.000000000000`,
+        tag: version,
+        commit: "0000000000000000000000000000000000000000",
+        commitDate: "2026-08-17",
+        target,
+      }, null, 2)}\n`,
+    );
     const archive = join(releaseDirectory, `${stagingName}.tar.gz`);
     const archived = await run(["tar", "-czf", archive, "-C", root, stagingName]);
     expect(archived.exitCode).toBe(0);
@@ -107,5 +119,37 @@ describe("verified release installer", () => {
     expect(refreshed.exitCode).toBe(0);
     expect(await Bun.file(join(dataDirectory, "skills/pkgshift/stale.md")).exists()).toBeFalse();
     expect(refreshed.stdout).toContain("installed portable Agent Skill data");
+
+    const installedBinaryHash = new Bun.CryptoHasher("sha256")
+      .update(await Bun.file(join(installDirectory, "pkgshift")).arrayBuffer())
+      .digest("hex");
+    const installedSkill = await Bun.file(
+      join(dataDirectory, "skills/pkgshift/SKILL.md"),
+    ).text();
+    await writeFile(join(staging, "pkgshift"), "#!/bin/sh\nexit 9\n");
+    await chmod(join(staging, "pkgshift"), 0o755);
+    await writeFile(
+      join(staging, "skills/pkgshift/SKILL.md"),
+      "---\nname: pkgshift\ndescription: Broken replacement.\n---\n",
+    );
+    await rm(archive);
+    const brokenArchived = await run(["tar", "-czf", archive, "-C", root, stagingName]);
+    expect(brokenArchived.exitCode).toBe(0);
+    const brokenHash = new Bun.CryptoHasher("sha256")
+      .update(await Bun.file(archive).arrayBuffer())
+      .digest("hex");
+    await writeFile(join(releaseDirectory, "SHA256SUMS"), `${brokenHash}  ${basename(archive)}\n`);
+
+    const rejected = await run(command, { cwd: repositoryRoot, env: environment });
+    expect(rejected.exitCode).toBe(1);
+    expect(rejected.stderr).toContain("installed executable failed its version check");
+    expect(
+      new Bun.CryptoHasher("sha256")
+        .update(await Bun.file(join(installDirectory, "pkgshift")).arrayBuffer())
+        .digest("hex"),
+    ).toBe(installedBinaryHash);
+    expect(await Bun.file(join(dataDirectory, "skills/pkgshift/SKILL.md")).text()).toBe(
+      installedSkill,
+    );
   });
 });

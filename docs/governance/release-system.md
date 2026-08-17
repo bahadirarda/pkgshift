@@ -85,11 +85,13 @@ An annotated tag named `v<version>` triggers native release builds. The tag must
 | `pkgshift-v<version>-x86_64-apple-darwin.tar.gz` | macOS Intel |
 | `pkgshift-v<version>-aarch64-apple-darwin.tar.gz` | macOS Apple silicon |
 | `pkgshift-v<version>-x86_64-pc-windows-msvc.zip` | Windows x86-64 |
-| `SHA256SUMS` | SHA-256 manifest for every archive |
+| `install.sh` | Verified Linux and macOS installer |
+| `install.ps1` | Verified Windows x86-64 installer |
+| `SHA256SUMS` | SHA-256 manifest for every archive and installer |
 
 Each archive contains the native executable, README, MIT license, `release.json` build identity, and the canonical `skills/pkgshift` portable Agent Skill tree. GitHub artifact attestations bind the downloadable files to their build workflow and source revision. The workflow assembles a draft with every asset before publication; repository release immutability then prevents published tags and assets from being moved, replaced, or deleted.
 
-The product website distributes the shell installer defined by the [website delivery contract](/governance/website-delivery.md). The installer resolves a stable GitHub Release and verifies its archive against the release-owned `SHA256SUMS` before installing. It is a convenience delivery surface, not a separate package identity or source of release metadata.
+The product website and every release distribute the shell and PowerShell installers defined by the [website delivery contract](/governance/website-delivery.md). Each resolves a stable GitHub Release and verifies its archive against the release-owned `SHA256SUMS` before installing. Installers are convenience delivery surfaces, not separate package identities or sources of release metadata; their release copies are also checksummed and attested.
 
 ## Publication sequence
 

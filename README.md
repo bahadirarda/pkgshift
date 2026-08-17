@@ -32,13 +32,19 @@
 
 ## Install
 
-Install the latest native binary on Linux or macOS with the checksum-verifying installer:
+Install the latest native binary on Linux or macOS with the checksum-verifying shell installer:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://bahadirarda.github.io/pkgshift/install.sh | sh
 ```
 
-Set `PKGSHIFT_VERSION=v0.20260817.1` to pin an exact calendar release, `PKGSHIFT_INSTALL_DIR` to select the executable destination, or `PKGSHIFT_DATA_DIR` to select the shared portable-skill root. The [installer source](site/install.sh) is tracked in this repository and verifies the release archive against `SHA256SUMS` before extraction.
+On Windows x86-64, use the equivalent PowerShell installer:
+
+```powershell
+irm https://bahadirarda.github.io/pkgshift/install.ps1 | iex
+```
+
+Set `PKGSHIFT_VERSION=v0.20260817.1` on Unix or `$env:PKGSHIFT_VERSION='v0.20260817.1'` on Windows to pin an exact calendar release. `PKGSHIFT_INSTALL_DIR` selects the executable destination and `PKGSHIFT_DATA_DIR` selects the shared portable-skill root. The tracked [shell](site/install.sh) and [PowerShell](site/install.ps1) sources verify the release archive against `SHA256SUMS` before extraction, validate bundled release metadata, install binary and Skill data through staged replacements, and smoke-test the installed CLI.
 
 Download the archive for your platform from [GitHub Releases](https://github.com/bahadirarda/pkgshift/releases), verify it against `SHA256SUMS`, place `pkgshift` on your `PATH`, and retain its canonical `skills/pkgshift` tree beside the executable or in a supported shared-data path. Every release includes Linux x86-64 and ARM64, macOS Intel and Apple silicon, and Windows x86-64 builds with GitHub provenance attestations. Its bundled `release.json` records the calendar version and exact source commit.
 
@@ -160,7 +166,7 @@ implementations/
 └── typescript/          executable compatibility and parity reference
 
 docs/                    shared OKF knowledge bundle
-site/                    static product website and verified shell installer
+site/                    static product website and verified native installers
 skills/pkgshift/         shared portable Agent Skill
 .changeset/              committed release intent and fixed-group policy
 Cargo.toml               Rust workspace orchestration
