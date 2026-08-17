@@ -161,16 +161,29 @@ fn is_integration_file(path: &str) -> bool {
     (path.starts_with(".github/workflows/") && (path.ends_with(".yml") || path.ends_with(".yaml")))
         || [
             ".gitlab-ci.yml",
+            ".mise.toml",
+            ".tool-versions",
+            ".devcontainer.json",
             "azure-pipelines.yml",
             "Jenkinsfile",
             "Containerfile",
             "Dockerfile",
             "docker-compose.yml",
             "docker-compose.yaml",
+            "devcontainer.json",
+            "GNUmakefile",
+            "Justfile",
+            "Makefile",
             "README.md",
+            "Taskfile.yaml",
+            "Taskfile.yml",
+            "justfile",
+            "makefile",
+            "mise.toml",
             "readme.md",
         ]
         .contains(&path)
+        || path == ".devcontainer/devcontainer.json"
         || basename.starts_with("Dockerfile.")
 }
 

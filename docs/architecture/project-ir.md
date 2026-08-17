@@ -44,6 +44,8 @@ Every Project IR artifact contains:
 - Observed features consumed by the capability engine.
 - Repository integrations and structured diagnostics.
 
+Integration evidence includes registered CI, container, automation, Markdown command, devcontainer lifecycle, and toolchain-pin files. The Project IR records kind, path, and detected package-manager tokens without treating arbitrary prose as an executable command.
+
 # Evidence Boundary
 
 Workspace packages are selected from root manifest, pnpm workspace, or Deno workspace patterns. The fingerprint covers all discovered package manifests, package manager configuration, lockfiles, patch evidence, and detected integrations.

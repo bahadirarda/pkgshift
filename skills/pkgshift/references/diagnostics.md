@@ -38,6 +38,10 @@ The implementation may add codes while preserving the following baseline familie
 | `LOSSY_ACCEPTANCE_REQUIRED` | Lossy decisions were not accepted while creating the immutable plan. |
 | `NATIVE_IMPORT_UNAVAILABLE` | No verified target-native importer exists for the selected direction; target graph proof remains required. |
 | `SOURCE_RUNTIME_REFERENCES_PRESERVED` | Bun runtime dependencies, scripts, globals, or module imports remain outside package-manager cleanup and require intentional retention or a separate runtime migration. |
+| `INTEGRATION_COMMAND_AMBIGUOUS` | A source package-manager command remains in an executable integration context outside the deterministic command subset. |
+| `INTEGRATION_SETUP_ACTION_UNSUPPORTED` | A source CI setup action has no registered target action replacement. |
+| `INTEGRATION_CACHE_UNSUPPORTED` | The source CI cache input cannot represent the selected target safely. |
+| `INTEGRATION_DEVCONTAINER_COMMAND_UNSUPPORTED` | A devcontainer lifecycle command uses an object or array shape outside the string-command renderer. |
 | `LOCK_GRAPH_PARSE_FAILED` | A source or target lockfile could not produce a trustworthy normalized graph. |
 | `LOCK_GRAPH_FORMAT_UNSUPPORTED` | The lockfile format, including binary `bun.lockb`, cannot be proven safely. |
 | `PLAN_PRECONDITION_FAILED` | Repository evidence changed after planning. |
