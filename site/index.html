@@ -6,7 +6,7 @@
     <title>pkgshift — Transactional package manager migrations</title>
     <meta
       name="description"
-      content="Migrate JavaScript repositories between npm, pnpm, Yarn, Bun, vlt, and Deno with clean installs, isolated trials, deterministic planning, lock graph proof, exact approval, and rollback."
+      content="Migrate and compare JavaScript repositories across npm, pnpm, Yarn, Bun, vlt, and Deno with clean installs, isolated trials, deterministic planning, lock graph proof, exact approval, and rollback."
    >
     <meta
       name="keywords"
@@ -110,7 +110,7 @@
             <h1>Change package managers.<br><em>Keep control.</em></h1>
             <p class="hero-lede">
               Transactional migrations for JavaScript repositories. pkgshift understands the project,
-              creates an immutable plan, can trial it in isolation, waits for exact approval, and proves the resolved dependency set after apply.
+              creates an immutable plan, can compare targets in isolated sandboxes, waits for exact approval, and proves the resolved dependency set after apply.
             </p>
 
             <div class="hero-actions">
@@ -257,7 +257,7 @@
               pkgshift is built for coding agents and humans from the same deterministic core. JSON output,
               stable exit codes, and exact next actions make the approval contract machine-readable.
             </p>
-            <p><code>pkgshift to bun --trial</code> runs the accepted importer, installer, and graph verification in a disposable copy before any repository-write approval.</p>
+            <p><code>pkgshift compare bun deno</code> binds both plans to one approval, runs each executable target in its own disposable copy, and reports evidence without inventing a winner.</p>
             <a class="text-link" href="https://github.com/bahadirarda/pkgshift/tree/main/skills/pkgshift">
               Explore the portable Agent Skill <span aria-hidden="true">↗</span>
             </a>

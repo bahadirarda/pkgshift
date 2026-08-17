@@ -86,6 +86,14 @@ pkgshift to pnpm --trial
 
 A successful trial returns `repositoryUnchanged: true`, a nested verification report, and no source `runId`. Trial approval covers sandbox process execution only; run the normal preview again before approving apply.
 
+Compare multiple targets before choosing one:
+
+```bash
+pkgshift compare bun deno vlt --verify-script test
+```
+
+The first call is read-only and returns one aggregate comparison plan. After exact approval, each executable target runs in its own disposable repository copy. The report keeps passed, failed, and capability-blocked candidates separate, proves the source repository stayed unchanged, and does not invent a winner.
+
 Select representative root package scripts when application-level proof is required:
 
 ```bash
@@ -107,6 +115,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Transactional execution | Rechecks preconditions, snapshots affected files, removes pre-migration package-local dependency state, journals cleanup and process operations, and stops at the first unsafe transition. |
 | Verification | Proves a clean target install and zero source-only repository artifacts, compares reachable source and target lock resolutions, prunes only topology-proven stale entries, distinguishes optional-only platform absence, blocks version or comparable integrity drift, checks planned digests, target selection, workspace membership, and installer completion, and can run explicitly selected representative scripts. |
 | Isolated trial | Runs the exact accepted plan in a disposable repository copy and proves the source remained unchanged. |
+| Target comparison | Binds two or more target plans to one approval, trials every executable candidate in a separate disposable copy, and reports evidence without ranking by guesswork. |
 | Recovery | Restores repository files from integrity-checked snapshots and verifies the original fingerprint. |
 
 Unsupported, unknown, unsafe, or unimplemented semantics block execution. pkgshift does not hide uncertainty behind a successful exit code.
@@ -165,6 +174,8 @@ pkgshift is designed for Codex, Claude Code, and other coding agents, but the en
 ```bash
 pkgshift to bun --json --no-color --non-interactive
 ```
+
+For target selection, agents can use `pkgshift compare bun deno --json --no-color --non-interactive`, present the aggregate plan, obtain one process-execution approval, and compare the returned candidate reports. A failed or blocked candidate is evidence, not an internal command failure, when the comparison report itself completes and `repositoryUnchanged` is true.
 
 When a user asks for proof before mutation, the agent previews with `--trial`, obtains separate approval for its `process-execution` action, and reports the `trial-report`. A trial never authorizes the later repository-write action.
 

@@ -14,6 +14,7 @@ Map the request to the narrowest operation:
 - Assess a repository or identify its package manager: inspect.
 - Preview a specific migration without execution: guided dry-run.
 - Prove importer, installer, and verification behavior without source writes: guided trial.
+- Compare two or more candidate targets without source writes: aggregate comparison preview, exact approval, then independent target trials.
 - Prove user-named root scripts after migration: add one explicit `--verify-script <name>` per requested script, preferably to a trial first.
 - Perform a migration: guided preview, exact approval, then guided execution.
 - Produce independently stored stage artifacts: use the advanced plan, apply, and verify commands.
@@ -94,6 +95,18 @@ The first call remains read-only and returns exit code `7`. Present that its nex
 When representative scripts are selected, explain that each script runs repository-defined code without a shell under the plan's timeout. Require its exact target argv to appear as a `verification.run-script` operation. Script-created files are not part of pkgshift's migration rollback snapshot.
 
 Require `status: completed`, a passing `trial-report`, `repositoryUnchanged: true`, and passing nested verification. A trial returns no source `runId`. Trial approval never authorizes apply; obtain a new normal guided preview and separate repository-write approval before migration.
+
+## Compare Candidate Targets
+
+When the user has not selected a target but names two or more candidates, run:
+
+```text
+pkgshift compare <target> <target>... --json --no-color --non-interactive
+```
+
+The first call is read-only and returns one `target-comparison-plan`, aggregate plan identifier, and approval-bound next action. Present executable and blocked candidate counts plus each complete plan. After exact approval, execute the returned argv unchanged. Every executable candidate runs in its own disposable copy; blocked candidates run no process.
+
+Require `repositoryUnchanged: true` and read each candidate as `passed`, `failed`, or `blocked`. Top-level `completed` means the comparison report is trustworthy, not that every candidate passed. Do not calculate or assert a winner. Present evidence and obtain a separate ordinary migration preview after the user selects a target. Add `--verify-script` only for exact root scripts the user explicitly wants proven across candidates.
 
 ## Request Approval
 

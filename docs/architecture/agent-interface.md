@@ -35,7 +35,7 @@ Humans do not need to provide repository or state paths when running from the in
 
 # Implementation Availability
 
-The Rust CLI is the primary interface and implements `to`, isolated `to --trial`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, and `rollback`. The TypeScript reference preserves native-import planning and the established migration contract, and additionally retains `explain` plus managed `skill` lifecycle commands while their long-term ownership is decided. Isolated trial and blocking lock-graph comparison are currently Rust-primary trust features.
+The Rust CLI is the primary interface and implements `to`, isolated `to --trial`, isolated multi-target `compare`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, and `rollback`. The TypeScript reference preserves native-import planning and the established migration contract, and additionally retains `explain` plus managed `skill` lifecycle commands while their long-term ownership is decided. Isolated trial, multi-target comparison, and blocking lock-graph comparison are currently Rust-primary trust features.
 
 # Agent Flow
 
@@ -55,6 +55,7 @@ The staged commands remain available for diagnostics, integration, and recovery:
 
 ```text
 pkgshift inspect [package-manager]
+pkgshift compare <target> <target>... [--verify-script <name>]...
 pkgshift plan package-manager --to <target>
 pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
 pkgshift verify <run-id> --state-dir <path>
@@ -143,6 +144,8 @@ Planning emits Project IR, capability analysis, exact file mutations, and plan a
 Apply persists the run journal, package-local dependency-state cleanup records, recovery snapshot, and redacted process report. Explicitly selected representative scripts record their operation identifier, exact argv, exit code, duration, timeout status, and withheld-output metadata. Verify persists a report tied to the run and plan, including clean-install, source-artifact residue, and representative-script checks; it never reruns repository code. Explain can load diagnostic codes, plan bundles, run journals, process reports, and verification reports without mutation.
 
 Planning with a source lockfile also emits a redacted `source-lock-graph` artifact. Verification emits `lockGraphComparison` inside its report. Trial emits a `trial-report` containing withheld process records and nested verification.
+
+Multi-target comparison emits one `target-comparison-plan` before approval and one `target-comparison-report` afterward. Its aggregate plan identifier binds every normalized candidate plan. Each executable candidate owns an independent nested trial report; blocked candidates retain their plan diagnostics without process execution. Candidate failures are comparison data, so top-level completion means the report is trustworthy and the source stayed unchanged, not that every target passed.
 
 # Approval Contract
 
