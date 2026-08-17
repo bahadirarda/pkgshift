@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
 use std::path::Path;
 
@@ -6,8 +6,9 @@ use serde_json::Value;
 
 use crate::catalog::get_package_manager;
 use crate::model::{
-    Diagnostic, DiagnosticSeverity, EvidenceDetail, LockGraph, LockGraphComparison, LockGraphEdge,
-    LockGraphNode, PackageManagerId, SCHEMA_VERSION, VerificationStatus,
+    DependencyProtocol, Diagnostic, DiagnosticSeverity, EvidenceDetail, LockGraph,
+    LockGraphComparison, LockGraphEdge, LockGraphNode, PackageManagerId, ProjectIr, SCHEMA_VERSION,
+    VerificationStatus,
 };
 use crate::util::{PkgshiftError, Result, digest_bytes, short_digest};
 
@@ -63,6 +64,7 @@ fn dependency_edges(value: &Value, parent: &str, edges: &mut Vec<LockGraphEdge>)
                 from: parent.to_owned(),
                 dependency: name.clone(),
                 kind: kind.to_owned(),
+                target: None,
             });
         }
     }
@@ -293,6 +295,7 @@ fn flush_yarn_classic(
                 from: parent.clone(),
                 dependency,
                 kind,
+                target: None,
             }),
     );
 }
@@ -438,12 +441,46 @@ fn parse_yarn_modern_checked(
     Ok(parse_yarn_modern(value))
 }
 
+fn bun_dependency_target(
+    parent_locator: &str,
+    dependency: &str,
+    locator_resolutions: &BTreeMap<String, String>,
+) -> Option<String> {
+    let nested = format!("{parent_locator}/{dependency}");
+    if let Some(target) = locator_resolutions.get(&nested) {
+        return Some(target.clone());
+    }
+    let mut ancestors = locator_resolutions
+        .keys()
+        .filter(|candidate| parent_locator.starts_with(&format!("{candidate}/")))
+        .collect::<Vec<_>>();
+    ancestors.sort_by_key(|candidate| std::cmp::Reverse(candidate.len()));
+    for ancestor in ancestors {
+        let candidate = format!("{ancestor}/{dependency}");
+        if let Some(target) = locator_resolutions.get(&candidate) {
+            return Some(target.clone());
+        }
+    }
+    locator_resolutions.get(dependency).cloned()
+}
+
 fn parse_bun(value: &Value) -> (Vec<LockGraphNode>, Vec<LockGraphEdge>) {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
     let Some(packages) = object(value, "packages") else {
         return (nodes, edges);
     };
+    let locator_resolutions = packages
+        .iter()
+        .filter_map(|(locator, entry)| {
+            entry
+                .as_array()
+                .and_then(|values| values.first())
+                .and_then(Value::as_str)
+                .and_then(split_locator)
+                .map(|(name, version)| (locator.clone(), format!("{name}@{version}")))
+        })
+        .collect::<BTreeMap<_, _>>();
     for (locator, entry) in packages {
         let Some(values) = entry.as_array() else {
             continue;
@@ -462,7 +499,23 @@ fn parse_bun(value: &Value) -> (Vec<LockGraphNode>, Vec<LockGraphEdge>) {
             integrity: values.get(3).and_then(Value::as_str).map(str::to_owned),
         });
         if let Some(metadata) = values.get(2) {
-            dependency_edges(metadata, &parent, &mut edges);
+            for (section, kind) in [
+                ("dependencies", "dependency"),
+                ("optionalDependencies", "optional"),
+                ("peerDependencies", "peer"),
+            ] {
+                let Some(dependencies) = object(metadata, section) else {
+                    continue;
+                };
+                for dependency in dependencies.keys() {
+                    edges.push(LockGraphEdge {
+                        from: parent.clone(),
+                        dependency: dependency.clone(),
+                        kind: kind.to_owned(),
+                        target: bun_dependency_target(locator, dependency, &locator_resolutions),
+                    });
+                }
+            }
         }
     }
     (nodes, edges)
@@ -533,6 +586,8 @@ fn parse_deno_entry(
                         dependency: split_deno_locator(dependency)
                             .map_or_else(|| dependency.to_owned(), |(name, _)| name),
                         kind: kind.to_owned(),
+                        target: split_deno_locator(dependency)
+                            .map(|(name, version)| format!("{name}@{version}")),
                     }),
             );
         } else if let Some(dependencies) = dependencies.as_object() {
@@ -540,6 +595,7 @@ fn parse_deno_entry(
                 from: parent.clone(),
                 dependency: dependency.clone(),
                 kind: kind.to_owned(),
+                target: None,
             }));
         } else {
             return Err(format!("unsupported Deno {section} entry for {locator}"));
@@ -811,11 +867,230 @@ fn integrity_family(value: &str) -> &str {
     value.split(['-', ':']).next().unwrap_or(value)
 }
 
-pub fn compare_lock_graphs(source: &LockGraph, target: &LockGraph) -> Result<LockGraphComparison> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Reachability {
+    Optional,
+    Required,
+}
+
+struct ReachableGraph {
+    resolutions: BTreeMap<String, BTreeSet<String>>,
+    optional: BTreeSet<String>,
+    pruned: Vec<String>,
+    issues: Vec<String>,
+    edges: BTreeSet<LockGraphEdge>,
+}
+
+fn graph_supports_reachability(graph: &LockGraph) -> bool {
+    matches!(
+        graph.format.as_str(),
+        "npm-package-lock"
+            | "pnpm-lock"
+            | "yarn-classic-lock"
+            | "yarn-modern-lock"
+            | "bun-text-lock"
+            | "deno-lock-v5"
+            | "absent-empty"
+    )
+}
+
+fn alias_dependency_name(name: &str, specifier: &str) -> String {
+    specifier
+        .strip_prefix("npm:")
+        .and_then(split_locator)
+        .map_or_else(|| name.to_owned(), |(target, _)| target)
+}
+
+fn project_roots(project_ir: &ProjectIr) -> BTreeMap<String, Reachability> {
+    let workspace_packages = project_ir
+        .packages
+        .iter()
+        .filter_map(|package| package.name.clone())
+        .collect::<BTreeSet<_>>();
+    let mut roots = BTreeMap::<String, Reachability>::new();
+    for dependency in project_ir
+        .packages
+        .iter()
+        .flat_map(|package| &package.dependencies)
+    {
+        if matches!(
+            dependency.protocol,
+            DependencyProtocol::Workspace
+                | DependencyProtocol::File
+                | DependencyProtocol::Link
+                | DependencyProtocol::Portal
+        ) {
+            continue;
+        }
+        let name = alias_dependency_name(&dependency.name, &dependency.specifier);
+        if workspace_packages.contains(&name) {
+            continue;
+        }
+        let reachability = if matches!(
+            dependency.section.as_str(),
+            "optionalDependencies" | "peerDependencies"
+        ) {
+            Reachability::Optional
+        } else {
+            Reachability::Required
+        };
+        roots
+            .entry(name)
+            .and_modify(|current| *current = (*current).max(reachability))
+            .or_insert(reachability);
+    }
+    roots
+}
+
+fn resolution_name(resolution: &str) -> &str {
+    if resolution.starts_with('@') {
+        resolution
+            .find('/')
+            .and_then(|slash| {
+                resolution[slash + 1..]
+                    .find('@')
+                    .map(|index| slash + index + 1)
+            })
+            .map_or(resolution, |separator| &resolution[..separator])
+    } else {
+        resolution
+            .rfind('@')
+            .map_or(resolution, |separator| &resolution[..separator])
+    }
+}
+
+fn reachable_graph(
+    label: &str,
+    graph: &LockGraph,
+    roots: &BTreeMap<String, Reachability>,
+    exact_bun_roots: bool,
+) -> ReachableGraph {
+    let all_resolutions = resolution_integrities(graph);
+    let mut by_name = BTreeMap::<String, BTreeSet<String>>::new();
+    for node in &graph.nodes {
+        by_name
+            .entry(node.name.clone())
+            .or_default()
+            .insert(format!("{}@{}", node.name, node.version));
+    }
+    let mut edges_by_parent = BTreeMap::<String, Vec<&LockGraphEdge>>::new();
+    for edge in &graph.edges {
+        edges_by_parent
+            .entry(edge.from.clone())
+            .or_default()
+            .push(edge);
+    }
+
+    let mut states = BTreeMap::<String, Reachability>::new();
+    let mut queue = VecDeque::new();
+    let mut issues = BTreeSet::new();
+    let enqueue = |resolution: &str,
+                   reachability: Reachability,
+                   states: &mut BTreeMap<String, Reachability>,
+                   queue: &mut VecDeque<(String, Reachability)>| {
+        let current = states.get(resolution).copied();
+        if current.is_none_or(|value| value < reachability) {
+            states.insert(resolution.to_owned(), reachability);
+            queue.push_back((resolution.to_owned(), reachability));
+        }
+    };
+
+    for (name, reachability) in roots {
+        let exact_bun_root = (exact_bun_roots && graph.format == "bun-text-lock")
+            .then(|| {
+                graph
+                    .nodes
+                    .iter()
+                    .filter(|node| node.locator == *name)
+                    .map(|node| format!("{}@{}", node.name, node.version))
+                    .collect::<BTreeSet<_>>()
+            })
+            .filter(|candidates| !candidates.is_empty());
+        if let Some(candidates) = exact_bun_root.as_ref().or_else(|| by_name.get(name)) {
+            for resolution in candidates {
+                enqueue(resolution, *reachability, &mut states, &mut queue);
+            }
+        } else if *reachability == Reachability::Required {
+            issues.insert(format!("{label}: unresolved required root {name}"));
+        }
+    }
+
+    while let Some((parent, parent_reachability)) = queue.pop_front() {
+        if states.get(&parent).copied() != Some(parent_reachability) {
+            continue;
+        }
+        for edge in edges_by_parent.get(&parent).into_iter().flatten() {
+            let edge_reachability = if edge.kind == "dependency" {
+                parent_reachability
+            } else {
+                Reachability::Optional
+            };
+            if let Some(target) = edge.target.as_ref() {
+                if all_resolutions.contains_key(target) {
+                    enqueue(target, edge_reachability, &mut states, &mut queue);
+                } else if edge_reachability == Reachability::Required {
+                    issues.insert(format!(
+                        "{label}: unresolved required target {parent} -> {target}"
+                    ));
+                }
+            } else if let Some(candidates) = by_name.get(&edge.dependency) {
+                for resolution in candidates {
+                    enqueue(resolution, edge_reachability, &mut states, &mut queue);
+                }
+            } else if edge_reachability == Reachability::Required {
+                issues.insert(format!(
+                    "{label}: unresolved required edge {parent} -> {}",
+                    edge.dependency
+                ));
+            }
+        }
+    }
+
+    let resolutions = all_resolutions
+        .iter()
+        .filter(|(resolution, _)| states.contains_key(*resolution))
+        .map(|(resolution, integrities)| (resolution.clone(), integrities.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let optional = states
+        .iter()
+        .filter(|(_, reachability)| **reachability == Reachability::Optional)
+        .map(|(resolution, _)| resolution.clone())
+        .collect::<BTreeSet<_>>();
+    let pruned = all_resolutions
+        .keys()
+        .filter(|resolution| !states.contains_key(*resolution))
+        .cloned()
+        .collect::<Vec<_>>();
+    let edges = graph
+        .edges
+        .iter()
+        .filter(|edge| states.contains_key(&edge.from))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    ReachableGraph {
+        resolutions,
+        optional,
+        pruned,
+        issues: issues.into_iter().collect(),
+        edges,
+    }
+}
+
+fn compare_resolution_maps(
+    source: &LockGraph,
+    target: &LockGraph,
+    policy: &str,
+    source_map: &BTreeMap<String, BTreeSet<String>>,
+    target_map: &BTreeMap<String, BTreeSet<String>>,
+    source_edges: &BTreeSet<LockGraphEdge>,
+    target_edges: &BTreeSet<LockGraphEdge>,
+    pruned_source_resolutions: Vec<String>,
+    pruned_target_resolutions: Vec<String>,
+    optional_platform_differences: Vec<String>,
+    reachability_issues: Vec<String>,
+) -> Result<LockGraphComparison> {
     const MAX_REPORTED_EDGE_CHANGES: usize = 100;
 
-    let source_map = resolution_integrities(source);
-    let target_map = resolution_integrities(target);
     let source_resolutions = source_map.keys().cloned().collect::<BTreeSet<_>>();
     let target_resolutions = target_map.keys().cloned().collect::<BTreeSet<_>>();
     let added_resolutions = target_resolutions
@@ -843,10 +1118,8 @@ pub fn compare_lock_graphs(source: &LockGraph, target: &LockGraph) -> Result<Loc
         }
     }
 
-    let source_edges = source.edges.iter().cloned().collect::<BTreeSet<_>>();
-    let target_edges = target.edges.iter().cloned().collect::<BTreeSet<_>>();
     let mut edge_changes = source_edges
-        .symmetric_difference(&target_edges)
+        .symmetric_difference(target_edges)
         .map(|edge| format!("{} -> {} ({})", edge.from, edge.dependency, edge.kind))
         .collect::<Vec<_>>();
     if edge_changes.len() > MAX_REPORTED_EDGE_CHANGES {
@@ -857,6 +1130,7 @@ pub fn compare_lock_graphs(source: &LockGraph, target: &LockGraph) -> Result<Loc
 
     let status = if source.complete
         && target.complete
+        && reachability_issues.is_empty()
         && added_resolutions.is_empty()
         && removed_resolutions.is_empty()
         && integrity_mismatches.is_empty()
@@ -871,17 +1145,21 @@ pub fn compare_lock_graphs(source: &LockGraph, target: &LockGraph) -> Result<Loc
             SCHEMA_VERSION,
             &source.graph_id,
             &target.graph_id,
-            "resolution-set-v1",
+            policy,
             status,
             &added_resolutions,
             &removed_resolutions,
             &integrity_mismatches,
             &edge_changes,
+            &pruned_source_resolutions,
+            &pruned_target_resolutions,
+            &optional_platform_differences,
+            &reachability_issues,
         ),
     )?;
     Ok(LockGraphComparison {
         comparison_id,
-        policy: "resolution-set-v1".to_owned(),
+        policy: policy.to_owned(),
         status,
         source_graph_id: source.graph_id.clone(),
         target_graph_id: Some(target.graph_id.clone()),
@@ -891,7 +1169,99 @@ pub fn compare_lock_graphs(source: &LockGraph, target: &LockGraph) -> Result<Loc
         removed_resolutions,
         integrity_mismatches,
         edge_changes,
+        pruned_source_resolutions,
+        pruned_target_resolutions,
+        optional_platform_differences,
+        reachability_issues,
     })
+}
+
+pub fn compare_lock_graphs(source: &LockGraph, target: &LockGraph) -> Result<LockGraphComparison> {
+    let source_map = resolution_integrities(source);
+    let target_map = resolution_integrities(target);
+    let source_edges = source.edges.iter().cloned().collect::<BTreeSet<_>>();
+    let target_edges = target.edges.iter().cloned().collect::<BTreeSet<_>>();
+    compare_resolution_maps(
+        source,
+        target,
+        "resolution-set-v1",
+        &source_map,
+        &target_map,
+        &source_edges,
+        &target_edges,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    )
+}
+
+pub fn compare_lock_graphs_for_project(
+    source: &LockGraph,
+    target: &LockGraph,
+    project_ir: &ProjectIr,
+) -> Result<LockGraphComparison> {
+    if !graph_supports_reachability(source) || !graph_supports_reachability(target) {
+        return compare_lock_graphs(source, target);
+    }
+
+    let roots = project_roots(project_ir);
+    let exact_bun_roots = project_ir.packages.len() == 1;
+    let source_reachable = reachable_graph("source", source, &roots, exact_bun_roots);
+    let target_reachable = reachable_graph("target", target, &roots, exact_bun_roots);
+    let source_names = source_reachable
+        .resolutions
+        .keys()
+        .map(|resolution| resolution_name(resolution).to_owned())
+        .collect::<BTreeSet<_>>();
+    let target_names = target_reachable
+        .resolutions
+        .keys()
+        .map(|resolution| resolution_name(resolution).to_owned())
+        .collect::<BTreeSet<_>>();
+    let mut source_map = source_reachable.resolutions;
+    let mut target_map = target_reachable.resolutions;
+    let mut optional_platform_differences = Vec::new();
+
+    let source_optional_only = source_reachable
+        .optional
+        .iter()
+        .filter(|resolution| !target_names.contains(resolution_name(resolution)))
+        .cloned()
+        .collect::<Vec<_>>();
+    for resolution in source_optional_only {
+        source_map.remove(&resolution);
+        optional_platform_differences.push(format!("source-only:{resolution}"));
+    }
+    let target_optional_only = target_reachable
+        .optional
+        .iter()
+        .filter(|resolution| !source_names.contains(resolution_name(resolution)))
+        .cloned()
+        .collect::<Vec<_>>();
+    for resolution in target_optional_only {
+        target_map.remove(&resolution);
+        optional_platform_differences.push(format!("target-only:{resolution}"));
+    }
+    optional_platform_differences.sort();
+
+    let mut reachability_issues = source_reachable.issues;
+    reachability_issues.extend(target_reachable.issues);
+    reachability_issues.sort();
+    reachability_issues.dedup();
+    compare_resolution_maps(
+        source,
+        target,
+        "reachable-resolution-set-v2",
+        &source_map,
+        &target_map,
+        &source_reachable.edges,
+        &target_reachable.edges,
+        source_reachable.pruned,
+        target_reachable.pruned,
+        optional_platform_differences,
+        reachability_issues,
+    )
 }
 
 #[cfg(test)]
@@ -901,6 +1271,75 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    fn project_ir_with_dependencies(dependencies: &[(&str, &str)]) -> ProjectIr {
+        ProjectIr {
+            schema_version: SCHEMA_VERSION.to_owned(),
+            project_ir_id: "ir_fixture".to_owned(),
+            repository_fingerprint: "sha256:fixture".to_owned(),
+            source: Some(PackageManagerId::Npm),
+            root_package_path: ".".to_owned(),
+            packages: vec![crate::model::PackageIr {
+                path: ".".to_owned(),
+                manifest_path: "package.json".to_owned(),
+                name: Some("fixture".to_owned()),
+                version: Some("1.0.0".to_owned()),
+                private: Some(true),
+                dependencies: dependencies
+                    .iter()
+                    .map(|(section, name)| crate::model::DependencyIr {
+                        package_path: ".".to_owned(),
+                        section: (*section).to_owned(),
+                        name: (*name).to_owned(),
+                        specifier: "*".to_owned(),
+                        protocol: DependencyProtocol::Semver,
+                        location: format!("package.json#/{section}/{name}"),
+                    })
+                    .collect(),
+                script_names: Vec::new(),
+            }],
+            workspace_patterns: Vec::new(),
+            features: Vec::new(),
+            integrations: Vec::new(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn graph(
+        id: &str,
+        manager: PackageManagerId,
+        nodes: &[(&str, &str)],
+        edges: &[(&str, &str, &str)],
+    ) -> LockGraph {
+        LockGraph {
+            schema_version: SCHEMA_VERSION.to_owned(),
+            graph_id: id.to_owned(),
+            manager,
+            lockfile_path: "fixture.lock".to_owned(),
+            lockfile_digest: format!("sha256:{id}"),
+            format: "npm-package-lock".to_owned(),
+            complete: true,
+            nodes: nodes
+                .iter()
+                .map(|(name, version)| LockGraphNode {
+                    locator: format!("node_modules/{name}"),
+                    name: (*name).to_owned(),
+                    version: (*version).to_owned(),
+                    integrity: Some(format!("sha512-{name}-{version}")),
+                })
+                .collect(),
+            edges: edges
+                .iter()
+                .map(|(from, dependency, kind)| LockGraphEdge {
+                    from: (*from).to_owned(),
+                    dependency: (*dependency).to_owned(),
+                    kind: (*kind).to_owned(),
+                    target: None,
+                })
+                .collect(),
+            diagnostics: Vec::new(),
+        }
+    }
 
     #[test]
     fn compares_npm_and_pnpm_resolution_sets() {
@@ -1000,6 +1439,107 @@ mod tests {
     }
 
     #[test]
+    fn reachable_policy_prunes_stale_lockfile_resolutions() {
+        let project_ir = project_ir_with_dependencies(&[("dependencies", "live")]);
+        let source = graph(
+            "lockgraph_source",
+            PackageManagerId::Npm,
+            &[("child", "2.0.0"), ("live", "1.0.0"), ("stale", "9.0.0")],
+            &[("live@1.0.0", "child", "dependency")],
+        );
+        let target = graph(
+            "lockgraph_target",
+            PackageManagerId::Deno,
+            &[("child", "2.0.0"), ("live", "1.0.0")],
+            &[("live@1.0.0", "child", "dependency")],
+        );
+
+        let comparison = compare_lock_graphs_for_project(&source, &target, &project_ir)
+            .expect("reachable comparison");
+
+        assert_eq!(comparison.policy, "reachable-resolution-set-v2");
+        assert_eq!(comparison.status, VerificationStatus::Passed);
+        assert_eq!(comparison.source_resolutions, 2);
+        assert_eq!(comparison.pruned_source_resolutions, ["stale@9.0.0"]);
+        assert!(comparison.removed_resolutions.is_empty());
+    }
+
+    #[test]
+    fn reachable_policy_tolerates_absent_optional_platform_branches() {
+        let project_ir = project_ir_with_dependencies(&[("dependencies", "live")]);
+        let source = graph(
+            "lockgraph_source",
+            PackageManagerId::Npm,
+            &[("live", "1.0.0"), ("platform-package", "1.0.0")],
+            &[("live@1.0.0", "platform-package", "optional")],
+        );
+        let target = graph(
+            "lockgraph_target",
+            PackageManagerId::Deno,
+            &[("live", "1.0.0")],
+            &[],
+        );
+
+        let comparison = compare_lock_graphs_for_project(&source, &target, &project_ir)
+            .expect("optional comparison");
+
+        assert_eq!(comparison.status, VerificationStatus::Passed);
+        assert_eq!(
+            comparison.optional_platform_differences,
+            ["source-only:platform-package@1.0.0"]
+        );
+    }
+
+    #[test]
+    fn reachable_policy_still_blocks_optional_version_drift() {
+        let project_ir = project_ir_with_dependencies(&[("dependencies", "live")]);
+        let source = graph(
+            "lockgraph_source",
+            PackageManagerId::Npm,
+            &[("live", "1.0.0"), ("platform-package", "1.0.0")],
+            &[("live@1.0.0", "platform-package", "optional")],
+        );
+        let target = graph(
+            "lockgraph_target",
+            PackageManagerId::Deno,
+            &[("live", "1.0.0"), ("platform-package", "2.0.0")],
+            &[("live@1.0.0", "platform-package", "optional")],
+        );
+
+        let comparison = compare_lock_graphs_for_project(&source, &target, &project_ir)
+            .expect("optional drift comparison");
+
+        assert_eq!(comparison.status, VerificationStatus::Failed);
+        assert_eq!(comparison.added_resolutions, ["platform-package@2.0.0"]);
+        assert_eq!(comparison.removed_resolutions, ["platform-package@1.0.0"]);
+        assert!(comparison.optional_platform_differences.is_empty());
+    }
+
+    #[test]
+    fn reachable_policy_fails_closed_for_unresolved_required_edges() {
+        let project_ir = project_ir_with_dependencies(&[("dependencies", "live")]);
+        let source = graph(
+            "lockgraph_source",
+            PackageManagerId::Npm,
+            &[("live", "1.0.0")],
+            &[("live@1.0.0", "missing", "dependency")],
+        );
+        let target = source.clone();
+
+        let comparison = compare_lock_graphs_for_project(&source, &target, &project_ir)
+            .expect("unresolved comparison");
+
+        assert_eq!(comparison.status, VerificationStatus::Failed);
+        assert_eq!(comparison.reachability_issues.len(), 2);
+        assert!(
+            comparison
+                .reachability_issues
+                .iter()
+                .all(|issue| issue.contains("unresolved required edge"))
+        );
+    }
+
+    #[test]
     fn extracts_yarn_and_bun_text_lockfiles() {
         let yarn_classic = tempdir().expect("Yarn Classic fixture");
         fs::write(
@@ -1035,6 +1575,7 @@ mod tests {
   "lockfileVersion": 1,
   "packages": {
     "left-pad": ["left-pad@1.3.0", "", { "dependencies": { "repeat-string": "^1.6.1" } }, "sha512-example"],
+    "repeat-string": ["repeat-string@1.6.1", "", {}, "sha512-child"],
   },
 }
 "#,
@@ -1047,6 +1588,53 @@ mod tests {
         assert_eq!(bun.nodes[0].name, "left-pad");
         assert_eq!(bun.nodes[0].version, "1.3.0");
         assert_eq!(bun.edges[0].dependency, "repeat-string");
+        assert_eq!(bun.edges[0].target.as_deref(), Some("repeat-string@1.6.1"));
+    }
+
+    #[test]
+    fn reachable_policy_uses_exact_bun_edge_targets() {
+        let source_directory = tempdir().expect("Bun source fixture");
+        fs::write(
+            source_directory.path().join("bun.lock"),
+            r#"{
+  "lockfileVersion": 1,
+  "workspaces": { "": { "dependencies": { "live": "1.0.0" } } },
+  "packages": {
+    "live": ["live@1.0.0", "", { "dependencies": { "child": "^2.0.0" } }, "sha512-live"],
+    "child": ["child@2.0.0", "", {}, "sha512-child-current"],
+    "stale-parent/child": ["child@1.0.0", "", {}, "sha512-child-stale"],
+  },
+}
+"#,
+        )
+        .expect("Bun source lockfile");
+        let target_directory = tempdir().expect("Deno target fixture");
+        fs::write(
+            target_directory.path().join("deno.lock"),
+            r#"{
+  "version": "5",
+  "npm": {
+    "live@1.0.0": { "integrity": "sha512-live", "dependencies": ["child@2.0.0"] },
+    "child@2.0.0": { "integrity": "sha512-child-current" }
+  }
+}
+"#,
+        )
+        .expect("Deno target lockfile");
+        let source = extract_lock_graph(source_directory.path(), PackageManagerId::Bun)
+            .expect("Bun extraction")
+            .expect("Bun graph");
+        let target = extract_lock_graph(target_directory.path(), PackageManagerId::Deno)
+            .expect("Deno extraction")
+            .expect("Deno graph");
+        let project_ir = project_ir_with_dependencies(&[("dependencies", "live")]);
+
+        let comparison = compare_lock_graphs_for_project(&source, &target, &project_ir)
+            .expect("exact Bun comparison");
+
+        assert_eq!(comparison.status, VerificationStatus::Passed);
+        assert_eq!(comparison.source_resolutions, 2);
+        assert_eq!(comparison.pruned_source_resolutions, ["child@1.0.0"]);
     }
 
     #[test]

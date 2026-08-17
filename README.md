@@ -97,7 +97,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Policy translation | Converts supported linker, registry, override, resolution, package-extension, exact text-patch, and lifecycle allow-list semantics into deterministic target configuration. |
 | Approval boundary | Produces an immutable plan identifier and requires approval for that exact plan before mutation. |
 | Transactional execution | Rechecks preconditions, snapshots affected files, journals operations, and stops at the first unsafe transition. |
-| Verification | Normalizes source and target lock graphs, blocks resolution or comparable integrity drift, and checks planned digests, target selection, workspace membership, and installer completion. |
+| Verification | Compares reachable source and target lock resolutions, prunes only topology-proven stale entries, distinguishes optional-only platform absence, blocks version or comparable integrity drift, and checks planned digests, target selection, workspace membership, and installer completion. |
 | Isolated trial | Runs the exact accepted plan in a disposable repository copy and proves the source remained unchanged. |
 | Recovery | Restores repository files from integrity-checked snapshots and verifies the original fingerprint. |
 
@@ -215,7 +215,7 @@ The TypeScript reference still exposes managed copy, symlink, status, doctor, an
 - Apply and rollback require artifact-bound approval identifiers.
 - Plans bind to the repository fingerprint and exact before/after file digests.
 - Recovery snapshots are created before the first repository write.
-- Source lock graphs are bound to plans; target graphs are extracted independently after installation.
+- Source lock graphs are bound to plans; target graphs are extracted independently after installation. Topology-capable formats use `reachable-resolution-set-v2`, while topology-limited formats identify their conservative `resolution-set-v1` fallback explicitly.
 - Added, removed, or comparably integrity-mismatched resolutions block successful verification.
 - Trial sandboxes reject symbolic links and never persist migration state in the source repository.
 - Target installs run without a shell and with lifecycle scripts disabled.
@@ -260,4 +260,4 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 
 ## Current boundaries
 
-Automatic representative project-script execution is not part of the MVP. `resolution-set-v1` makes resolved version and comparable integrity drift blocking, while dependency edge differences remain evidence for later platform-aware policies. Binary `bun.lockb` graph extraction fails closed until converted to text. vlt and Deno are production targets only for their documented deterministic subsets; unsupported repository semantics still block apply, and lossy decisions require explicit acceptance when the plan is created. The TypeScript reference remains the renderer parity oracle for future capability expansion.
+Automatic representative project-script execution is not part of the MVP. `reachable-resolution-set-v2` makes reachable version and comparable integrity drift blocking, prunes proven-unreachable entries, and tolerates only package-name absence on optional-only paths. Dependency edge-shape differences remain evidence, and topology-limited formats retain explicit `resolution-set-v1` behavior. Binary `bun.lockb` graph extraction fails closed until converted to text. vlt and Deno are production targets only for their documented deterministic subsets; unsupported repository semantics still block apply, and lossy decisions require explicit acceptance when the plan is created. The TypeScript reference remains the renderer parity oracle for future capability expansion.

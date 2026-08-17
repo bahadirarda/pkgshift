@@ -1,0 +1,56 @@
+name: real-world-corpus
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-world-corpus
+  cancel-in-progress: false
+
+jobs:
+  plan-corpus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.97.1 --profile minimal
+
+      - name: Build pkgshift
+        run: cargo build --package pkgshift --release --locked
+
+      - name: Validate pinned real-world plans
+        env:
+          PKGSHIFT_CORPUS_OUTPUT: real-world-corpus-summary.json
+        run: bun run corpus:real-world
+
+      - name: Add corpus summary to the run
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f real-world-corpus-summary.json ]]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat real-world-corpus-summary.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload corpus summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: real-world-corpus-summary
+          path: real-world-corpus-summary.json
+          if-no-files-found: warn
+          retention-days: 30

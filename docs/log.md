@@ -2,6 +2,9 @@
 
 ## 2026-08-17
 
+* **Reachable graph proof**: Added `reachable-resolution-set-v2` with manifest-root traversal, exact Bun and Deno edge targets, proven-unreachable pruning, optional-only platform absence handling, and fail-closed required-path diagnostics while preserving `resolution-set-v1` for topology-limited formats.
+* **Corpus automation**: Converted the six pinned Hono, Vite, and vltpkg planning cases into a machine-readable contract with clean-checkout enforcement, bounded JSON summaries, and a weekly or manually dispatched GitHub Actions gate.
+* **Corpus correction**: Re-ran Hono Bun-to-Deno through a real isolated Deno 2.9.5 trial; V2 tolerated three optional-only absences but proved that the remaining 48 source-only versions were reachable drift rather than stale lockfile debris.
 * **Adapters**: Promoted vlt 1.0.2 and Deno 2.9.5 dependency mode to capability-gated production targets in both engines, expanding basic planning coverage to all 42 directed adapter pairs.
 * **vlt**: Added workspace, workspace protocol, catalog, graph modifier, public registry and scope, integration command, installer, and v1 lock graph support.
 * **Deno**: Added workspace, override, catalog expansion, isolated linker, preserved runtime configuration, import-map evidence, `deno task`, installer, and v5 npm and JSR lock graph support without expanding into runtime migration.

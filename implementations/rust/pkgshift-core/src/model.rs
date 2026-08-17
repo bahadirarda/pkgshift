@@ -276,6 +276,8 @@ pub struct LockGraphEdge {
     pub from: String,
     pub dependency: String,
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -555,6 +557,14 @@ pub struct LockGraphComparison {
     pub removed_resolutions: Vec<String>,
     pub integrity_mismatches: Vec<String>,
     pub edge_changes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pruned_source_resolutions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pruned_target_resolutions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub optional_platform_differences: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reachability_issues: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

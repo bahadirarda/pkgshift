@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "1.0",
+  "repositories": [
+    {
+      "id": "hono",
+      "url": "https://github.com/honojs/hono.git",
+      "revision": "ef0739d5f6e83242ba2b64c1365c9f96738933a1"
+    },
+    {
+      "id": "vite",
+      "url": "https://github.com/vitejs/vite.git",
+      "revision": "dcf88bd2ad2b1a8845f9029587cc8c825e382d42"
+    },
+    {
+      "id": "vltpkg",
+      "url": "https://github.com/vltpkg/vltpkg.git",
+      "revision": "2e790b2fc6a19c3b6ab332cea1b8f7fbdcb3768d"
+    }
+  ],
+  "cases": [
+    {
+      "id": "hono-bun-to-vlt",
+      "repository": "hono",
+      "target": "vlt",
+      "expect": {
+        "source": "bun",
+        "status": "planned",
+        "executable": true,
+        "operations": 6,
+        "capabilities": { "native": 0, "transform": 0, "lossy": 0, "unsupported": 0 },
+        "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE"]
+      }
+    },
+    {
+      "id": "hono-bun-to-deno",
+      "repository": "hono",
+      "target": "deno",
+      "expect": {
+        "source": "bun",
+        "status": "planned",
+        "executable": true,
+        "operations": 6,
+        "capabilities": { "native": 0, "transform": 0, "lossy": 0, "unsupported": 0 },
+        "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE"]
+      }
+    },
+    {
+      "id": "vite-pnpm-to-vlt",
+      "repository": "vite",
+      "target": "vlt",
+      "expect": {
+        "source": "pnpm",
+        "status": "blocked",
+        "executable": false,
+        "operations": 6,
+        "capabilities": { "native": 1, "transform": 2, "lossy": 0, "unsupported": 4 },
+        "diagnosticCodes": ["CAPABILITY_UNSUPPORTED"]
+      }
+    },
+    {
+      "id": "vite-pnpm-to-deno",
+      "repository": "vite",
+      "target": "deno",
+      "expect": {
+        "source": "pnpm",
+        "status": "blocked",
+        "executable": false,
+        "operations": 6,
+        "capabilities": { "native": 2, "transform": 1, "lossy": 0, "unsupported": 4 },
+        "diagnosticCodes": ["CAPABILITY_UNSUPPORTED", "DENO_DEPENDENCY_PROTOCOL_UNSUPPORTED"]
+      }
+    },
+    {
+      "id": "vltpkg-vlt-to-pnpm",
+      "repository": "vltpkg",
+      "target": "pnpm",
+      "expect": {
+        "source": "vlt",
+        "status": "planned",
+        "executable": true,
+        "operations": 6,
+        "capabilities": { "native": 5, "transform": 0, "lossy": 0, "unsupported": 0 },
+        "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE"]
+      }
+    },
+    {
+      "id": "vltpkg-vlt-to-deno",
+      "repository": "vltpkg",
+      "target": "deno",
+      "acceptLossy": true,
+      "expect": {
+        "source": "vlt",
+        "status": "planned",
+        "executable": true,
+        "operations": 6,
+        "capabilities": { "native": 2, "transform": 1, "lossy": 2, "unsupported": 0 },
+        "diagnosticCodes": ["NATIVE_IMPORT_UNAVAILABLE"]
+      }
+    }
+  ]
+}
