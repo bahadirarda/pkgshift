@@ -10,15 +10,15 @@
     },
     "implementations/rust/pkgshift-cli": {
       "name": "pkgshift",
-      "version": "0.20260817.3",
+      "version": "0.20260817.4",
     },
     "implementations/rust/pkgshift-core": {
       "name": "pkgshift-core",
-      "version": "0.20260817.3",
+      "version": "0.20260817.4",
     },
     "implementations/typescript": {
       "name": "@bahadirarda/pkgshift-typescript",
-      "version": "0.20260817.3",
+      "version": "0.20260817.4",
       "bin": {
         "pkgshift-typescript": "./src/cli.ts",
       },
