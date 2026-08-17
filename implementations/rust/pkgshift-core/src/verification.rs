@@ -10,6 +10,8 @@ use crate::model::{
 };
 use crate::util::{Result, file_digest, safe_join, short_digest};
 
+pub(crate) mod scripts;
+
 fn failure_diagnostic(failed: usize) -> Diagnostic {
     Diagnostic {
         code: "VERIFICATION_FAILED".to_owned(),
@@ -30,6 +32,7 @@ pub(crate) fn verify(
     run_id: &str,
     install_succeeded: bool,
     dependency_state_cleanups: &[DependencyStateCleanupRecord],
+    processes: &[crate::model::ProcessExecutionRecord],
 ) -> Result<VerificationReport> {
     let mut checks = Vec::new();
     let mut mismatches = Vec::new();
@@ -177,6 +180,8 @@ pub(crate) fn verify(
         },
         evidence: vec![format!("success:{install_succeeded}")],
     });
+
+    checks.push(scripts::verification_check(plan, processes));
 
     let lock_graph_comparison = if let Some(source_graph) = source_lock_graph {
         match extract_lock_graph(root, plan.target)? {

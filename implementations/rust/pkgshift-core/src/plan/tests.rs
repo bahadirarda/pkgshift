@@ -44,9 +44,17 @@ fn plan_manifest_policy(
     let analysis = analyze_capabilities(&ir, target)
         .expect("analysis")
         .expect("capability analysis");
-    plan_package_manager_migration(&inspection, &ir, &analysis, None, target, accepted_lossy)
-        .expect("planning")
-        .expect("migration plan")
+    plan_package_manager_migration(
+        &inspection,
+        &ir,
+        &analysis,
+        None,
+        target,
+        accepted_lossy,
+        &[],
+    )
+    .expect("planning")
+    .expect("migration plan")
 }
 
 fn mutation_content<'a>(plan: &'a MigrationPlan, path: &str) -> &'a str {
@@ -63,6 +71,15 @@ fn plan_fixture(
     target: PackageManagerId,
     accepted_lossy: bool,
 ) -> MigrationPlan {
+    plan_fixture_with_scripts(files, target, accepted_lossy, &[])
+}
+
+fn plan_fixture_with_scripts(
+    files: &[(&str, &str)],
+    target: PackageManagerId,
+    accepted_lossy: bool,
+    verification_scripts: &[String],
+) -> MigrationPlan {
     let directory = tempdir().expect("temporary directory");
     for (path, content) in files {
         let path = directory.path().join(path);
@@ -78,9 +95,73 @@ fn plan_fixture(
     let analysis = analyze_capabilities(&ir, target)
         .expect("analysis")
         .expect("capability analysis");
-    plan_package_manager_migration(&inspection, &ir, &analysis, None, target, accepted_lossy)
-        .expect("planning")
-        .expect("migration plan")
+    plan_package_manager_migration(
+        &inspection,
+        &ir,
+        &analysis,
+        None,
+        target,
+        accepted_lossy,
+        verification_scripts,
+    )
+    .expect("planning")
+    .expect("migration plan")
+}
+
+#[test]
+fn plans_only_explicit_root_representative_scripts() {
+    let plan = plan_fixture_with_scripts(
+        &[
+            (
+                "package.json",
+                r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0","scripts":{"test":"node test.js","lint":"node lint.js"}}"#,
+            ),
+            ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+        ],
+        PackageManagerId::Bun,
+        false,
+        &["test".to_owned(), "test".to_owned()],
+    );
+
+    let operations = plan
+        .operations
+        .iter()
+        .filter(|operation| operation.kind == "verification.run-script")
+        .collect::<Vec<_>>();
+    assert_eq!(operations.len(), 1);
+    assert_eq!(operations[0].phase, "verify");
+    assert_eq!(operations[0].command, ["bun", "run", "test"]);
+    assert_eq!(operations[0].timeout_seconds, Some(300));
+    assert_eq!(operations[0].side_effect, SideEffect::ProcessExecution);
+    assert!(plan.executable);
+}
+
+#[test]
+fn blocks_a_missing_representative_script() {
+    let plan = plan_fixture_with_scripts(
+        &[
+            (
+                "package.json",
+                r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0","scripts":{"test":"node test.js"}}"#,
+            ),
+            ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+        ],
+        PackageManagerId::Deno,
+        false,
+        &["smoke".to_owned()],
+    );
+
+    assert!(!plan.executable);
+    assert!(
+        plan.diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "VERIFICATION_SCRIPT_NOT_FOUND")
+    );
+    assert!(
+        plan.operations
+            .iter()
+            .all(|operation| operation.kind != "verification.run-script")
+    );
 }
 
 #[test]
@@ -121,6 +202,7 @@ fn plans_a_pnpm_to_bun_workspace() {
         None,
         PackageManagerId::Bun,
         false,
+        &[],
     )
     .expect("planning")
     .expect("migration plan");
@@ -175,10 +257,17 @@ fn plans_all_basic_production_directions() {
             let analysis = analyze_capabilities(&ir, target)
                 .expect("analysis")
                 .expect("capability analysis");
-            let plan =
-                plan_package_manager_migration(&inspection, &ir, &analysis, None, target, false)
-                    .expect("planning")
-                    .expect("migration plan");
+            let plan = plan_package_manager_migration(
+                &inspection,
+                &ir,
+                &analysis,
+                None,
+                target,
+                false,
+                &[],
+            )
+            .expect("planning")
+            .expect("migration plan");
             assert!(plan.executable, "{source} to {target} should be executable");
             let cleanup = plan
                 .operations
@@ -809,6 +898,7 @@ fn carries_pnpm_workspace_overrides_into_npm() {
         None,
         PackageManagerId::Npm,
         false,
+        &[],
     )
     .expect("planning")
     .expect("migration plan");

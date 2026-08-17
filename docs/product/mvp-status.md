@@ -5,7 +5,7 @@ description: Records the completed technical MVP, its validation evidence, and e
 tags: [product, mvp, status, delivery]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-17T07:24:55Z}
+generated: { by: bahadirarda, at: 2026-08-17T11:00:00Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -53,6 +53,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - A revisioned run and operation journal with stale-writer rejection and orphan-lock recovery.
 - A repository-scoped transaction lock that serializes competing agents and runs.
 - Shell-free package-manager execution with lifecycle scripts disabled and secret-safe process records.
+- Explicit root representative-script selection with immutable target argv, bounded shell-free execution, withheld output, and journal-backed verification that never reruns scripts.
 - Structural verification tied to the exact run and plan.
 - Repository rollback with snapshot integrity and restored-fingerprint verification.
 - Project and user Agent Skill installation for Codex and Claude Code through managed copies or links.
@@ -101,7 +102,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Rollback does not restore pre-migration `node_modules`, global stores, downloads, or package-manager caches; successful migration removes package-local source dependency state before target installation and never deletes global stores.
 - Binary `bun.lockb` graph extraction fails closed until the repository converts it to the current text `bun.lock` format.
 - Reachable-resolution proof does not yet make dependency edge shape blocking because peer placement, hoisting, and deduplication representations differ between managers.
-- Representative project scripts are not selected or executed automatically.
+- Representative project scripts are not selected automatically; only exact root script names supplied with `--verify-script` are executed, and their repository side effects remain outside rollback snapshots.
 - The Rust CLI does not yet own TypeScript reference commands for managed Agent Skill lifecycle or artifact explanation.
 - Unsupported and manual-only transformations emit blocking diagnostics instead of delegating edits to a model.
 - Registry tokens must use `${NAME}` references for Yarn Modern translation; literal credentials and unrecognized `.npmrc` settings fail closed without entering plan artifacts.
@@ -113,4 +114,4 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 
 # Post-MVP Work
 
-Expand patch conversion beyond the exact text-only subset, add configurable target-platform matrices and edge-equivalence policies, explicit representative-script selection, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.
+Expand patch conversion beyond the exact text-only subset, add configurable target-platform matrices and edge-equivalence policies, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.

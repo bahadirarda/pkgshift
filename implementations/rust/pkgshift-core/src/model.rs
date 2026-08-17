@@ -381,6 +381,8 @@ pub struct PlannedOperation {
     pub paths: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_seconds: Option<u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub capabilities: Vec<String>,
     pub side_effect: SideEffect,
@@ -520,11 +522,17 @@ pub struct SnapshotEntry {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessExecutionRecord {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub operation_id: String,
     pub argv: Vec<String>,
     pub exit_code: Option<i32>,
     pub stdout: String,
     pub stderr: String,
     pub success: bool,
+    #[serde(default)]
+    pub timed_out: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_millis: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

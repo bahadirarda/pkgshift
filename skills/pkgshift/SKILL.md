@@ -14,6 +14,7 @@ Map the request to the narrowest operation:
 - Assess a repository or identify its package manager: inspect.
 - Preview a specific migration without execution: guided dry-run.
 - Prove importer, installer, and verification behavior without source writes: guided trial.
+- Prove user-named root scripts after migration: add one explicit `--verify-script <name>` per requested script, preferably to a trial first.
 - Perform a migration: guided preview, exact approval, then guided execution.
 - Produce independently stored stage artifacts: use the advanced plan, apply, and verify commands.
 - Investigate a code or failed artifact: explain.
@@ -53,6 +54,8 @@ When the target is known, run from the repository root:
 pkgshift to <target> --json --no-color --non-interactive
 ```
 
+Add repeatable `--verify-script <name>` arguments only when the user explicitly selects root `package.json` scripts. Never infer defaults such as `test`, `lint`, or `build`, and never select a workspace-only script by name.
+
 This first invocation is read-only. An executable, unapproved plan returns exit code `7`, `status: planned`, a `planId`, artifacts, diagnostics, and an exact approval-bound next action. Exit code `7` is the expected approval boundary, not a migration failure.
 
 For a human-requested preview that should never proceed to approval, `--dry-run` is also available:
@@ -86,7 +89,9 @@ When the user requests execution proof before repository mutation, preview with:
 pkgshift to <target> --trial --json --no-color --non-interactive
 ```
 
-The first call remains read-only and returns exit code `7`. Present that its next action has `sideEffect: process-execution`: it runs native import, target installation, and verification in a disposable repository copy, but may use the network and package manager caches. After exact approval, execute the returned argument array unchanged.
+The first call remains read-only and returns exit code `7`. Present that its next action has `sideEffect: process-execution`: it runs native import, target installation, explicitly selected representative scripts, and verification in a disposable repository copy, but may use the network and package manager caches. After exact approval, execute the returned argument array unchanged.
+
+When representative scripts are selected, explain that each script runs repository-defined code without a shell under the plan's timeout. Require its exact target argv to appear as a `verification.run-script` operation. Script-created files are not part of pkgshift's migration rollback snapshot.
 
 Require `status: completed`, a passing `trial-report`, `repositoryUnchanged: true`, and passing nested verification. A trial returns no source `runId`. Trial approval never authorizes apply; obtain a new normal guided preview and separate repository-write approval before migration.
 
@@ -106,7 +111,7 @@ pkgshift to <target> --approve <plan-id> --json --no-color --non-interactive
 
 Do not reconstruct the command, invent paths, or add flags that were not approved. The CLI re-plans against current repository evidence, requires the identifier to remain exact, persists state under its default location, applies the migration, and verifies the run in one invocation. If preconditions conflict, stop and create a new preview. Preserve the `runId` on success, partial failure, or cancellation.
 
-Treat the migration as successful only when the approved invocation returns `status: completed` with no blocking verification diagnostic. Require passed `clean-target-install` and `source-artifact-residue` checks for newly created plans. Report passed, failed, and skipped checks separately. When a source lock graph exists, require a passing `lockGraphComparison`; graph comparison is skipped only when no source lockfile existed. The engine does not automatically run representative project scripts. Do not claim that skipped checks passed.
+Treat the migration as successful only when the approved invocation returns `status: completed` with no blocking verification diagnostic. Require passed `clean-target-install` and `source-artifact-residue` checks for newly created plans. Report passed, failed, and skipped checks separately. When a source lock graph exists, require a passing `lockGraphComparison`; graph comparison is skipped only when no source lockfile existed. Require `representative-scripts: passed` when scripts were explicitly selected; otherwise require the check to be explicitly skipped. A later `verify` reads the journal and never reruns those scripts. Do not claim that skipped checks passed.
 
 ## Use Advanced Stages Only When Needed
 
@@ -126,7 +131,7 @@ Request explicit rollback approval tied to the run. Then execute the returned ro
 pkgshift rollback <run-id> --state-dir .pkgshift/state --approve <run-id> --json --no-color --non-interactive
 ```
 
-Read the rollback fingerprint verification result. Describe `node_modules`, package-manager stores, downloads, and caches as external effects that remain.
+Read the rollback fingerprint verification result. Describe `node_modules`, package-manager stores, downloads, caches, and representative-script outputs outside planned mutation paths as external effects that remain.
 
 ## Consume Results Safely
 

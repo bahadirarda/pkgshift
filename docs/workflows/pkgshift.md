@@ -4,7 +4,7 @@ title: Package Manager Migration
 description: Defines the safe operational workflow for planning, approving, applying, and verifying a package manager migration.
 tags: [workflow, package-management, verification, rollback]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-17T11:00:00Z}
 sources:
   - id: transactional-decision
     resource: /decisions/transactional-migrations.md
@@ -52,6 +52,8 @@ The approved invocation automatically persists the plan under `.pkgshift/state`,
 
 When the user requests a trial first, add `--trial` to the initial preview and execute only its returned action after approval. A passing trial reports `repositoryUnchanged: true` and no `runId`. Return to a normal preview and approval before apply.
 
+When the user names representative root scripts, add one `--verify-script <name>` per script to the initial preview. Do not infer defaults such as `test`, `lint`, or `build`. The returned next action preserves the selection, target argv, and timeout in the immutable plan.
+
 # Preconditions
 
 - Run from the intended repository root.
@@ -77,6 +79,8 @@ Review detected source candidates, confidence, workspace shape, integrations, se
 pkgshift plan package-manager --to bun --state-dir .pkgshift/state --json --no-color
 ```
 
+Add repeatable `--verify-script <name>` options during this planning step when representative root scripts should run after installation.
+
 Review:
 
 - The source and target adapter versions.
@@ -99,7 +103,7 @@ Present the plan summary to the user. Approval must identify the exact plan. Gen
 pkgshift apply <plan-id> --state-dir .pkgshift/state --approve <plan-id> --json --no-color --non-interactive
 ```
 
-The engine rechecks preconditions and creates owner-only recovery snapshots before mutation. It removes accepted package-local `node_modules` paths, journals removed and already-absent dependency state, runs the target installer without a shell or lifecycle scripts, retires source-only repository artifacts, and persists a redacted process report. This cleanup is intentionally not rollback-snapshotted. If the repository fingerprint conflicts, stop and re-plan. Preserve the returned run identifier even when apply fails.
+The engine rechecks preconditions and creates owner-only recovery snapshots before mutation. It removes accepted package-local `node_modules` paths, journals removed and already-absent dependency state, runs the target installer without a shell or lifecycle scripts, retires source-only repository artifacts, and persists a redacted process report. Explicitly planned representative scripts then run without a shell under a fixed timeout. Cleanup and script-owned output outside planned mutation paths are intentionally not rollback-snapshotted. If the repository fingerprint conflicts, stop and re-plan. Preserve the returned run identifier even when apply fails.
 
 ## 5. Verify
 
@@ -107,7 +111,7 @@ The engine rechecks preconditions and creates owner-only recovery snapshots befo
 pkgshift verify <run-id> --state-dir .pkgshift/state --json --no-color
 ```
 
-Assess planned digests, the clean-install journal, source-artifact residue, target selection, lockfile behavior, installation completion, workspace behavior, integrations, and the source-to-target lock graph comparison. Graph comparison is skipped only when no source lockfile existed. The engine does not automatically choose representative project scripts.
+Assess planned digests, the clean-install journal, source-artifact residue, target selection, lockfile behavior, installation completion, workspace behavior, integrations, explicitly selected representative-script records, and the source-to-target lock graph comparison. Graph comparison is skipped only when no source lockfile existed. Verification never selects or reruns representative scripts.
 
 ## 6. Complete or Roll Back
 

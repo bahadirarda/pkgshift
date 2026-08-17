@@ -42,6 +42,9 @@ The implementation may add codes while preserving the following baseline familie
 | `INTEGRATION_SETUP_ACTION_UNSUPPORTED` | A source CI setup action has no registered target action replacement. |
 | `INTEGRATION_CACHE_UNSUPPORTED` | The source CI cache input cannot represent the selected target safely. |
 | `INTEGRATION_DEVCONTAINER_COMMAND_UNSUPPORTED` | A devcontainer lifecycle command uses an object or array shape outside the string-command renderer. |
+| `VERIFICATION_SCRIPT_INVALID` | A requested representative root script name cannot be stored safely in the plan. |
+| `VERIFICATION_SCRIPT_NOT_FOUND` | The root package does not define the explicitly requested representative script. |
+| `SCRIPT_VERIFICATION_EXECUTION_FAILED` | The approved representative script process could not be started, observed, or bounded safely. |
 | `LOCK_GRAPH_PARSE_FAILED` | A source or target lockfile could not produce a trustworthy normalized graph. |
 | `LOCK_GRAPH_FORMAT_UNSUPPORTED` | The lockfile format, including binary `bun.lockb`, cannot be proven safely. |
 | `PLAN_PRECONDITION_FAILED` | Repository evidence changed after planning. |

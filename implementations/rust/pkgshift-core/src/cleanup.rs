@@ -34,6 +34,7 @@ pub(crate) fn plan_operation(index: usize, project: &ProjectIr) -> PlannedOperat
             .to_owned(),
         paths,
         command: Vec::new(),
+        timeout_seconds: None,
         capabilities: Vec::new(),
         side_effect: SideEffect::DependencyState,
         reversible: false,

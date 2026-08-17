@@ -20,25 +20,30 @@ fn write(path: &Path, content: &str) {
 fn fake_package_managers(directory: &TempDir) -> PathBuf {
     let binary_directory = directory.path().join("bin");
     fs::create_dir_all(&binary_directory).expect("fake binary directory");
-    for (name, lockfile_command) in [
+    for (name, script_subcommand, lockfile_command) in [
         (
             "bun",
+            "run",
             "printf '%s\\n' '{\"lockfileVersion\":1,\"packages\":{}}' > bun.lock",
         ),
         (
             "pnpm",
+            "run",
             "printf '%s\\n' \"lockfileVersion: '9.0'\" 'packages: {}' 'snapshots: {}' > pnpm-lock.yaml",
         ),
         (
             "yarn",
+            "run",
             "printf '%s\\n' '__metadata:' '  version: 8' > yarn.lock",
         ),
         (
             "vlt",
+            "run",
             "printf '%s\\n' '{\"lockfileVersion\":1,\"nodes\":{},\"edges\":{}}' > vlt-lock.json",
         ),
         (
             "deno",
+            "task",
             "printf '%s\\n' '{\"version\":\"5\",\"npm\":{}}' > deno.lock",
         ),
     ] {
@@ -46,13 +51,159 @@ fn fake_package_managers(directory: &TempDir) -> PathBuf {
         write(
             &path,
             &format!(
-                "#!/bin/sh\nprintf 'fixture-secret-value\\n'\nprintf 'fixture-secret-value\\n' >&2\n{lockfile_command}\n"
+                "#!/bin/sh\nprintf 'fixture-secret-value\\n'\nprintf 'fixture-secret-value\\n' >&2\nif [ \"$1\" = \"{script_subcommand}\" ]; then printf '%s\\n' \"$2\" > .pkgshift-script-ran; if [ \"$2\" = \"fail\" ]; then exit 9; fi; exit 0; fi\n{lockfile_command}\n"
             ),
         );
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
             .expect("fake binary permissions");
     }
     binary_directory
+}
+
+#[test]
+fn runs_only_an_explicitly_planned_representative_script() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "script-verification-fixture",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "scripts": { "smoke": "node smoke.js", "unselected": "node unselected.js" }
+}
+"#,
+    );
+    write(&root.join("pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+    let planned = run(&root, &binaries, &["to", "bun", "--verify-script", "smoke"]);
+    assert_eq!(planned.status.code(), Some(7));
+    let planned = json_output(&planned);
+    let plan_id = planned["planId"].as_str().expect("plan identifier");
+    assert_eq!(
+        planned["nextActions"][0]["argv"],
+        serde_json::json!([
+            "pkgshift",
+            "to",
+            "bun",
+            "--verify-script",
+            "smoke",
+            "--approve",
+            plan_id,
+            "--json",
+            "--no-color",
+            "--non-interactive"
+        ])
+    );
+    let plan = artifact_content(&planned, "package-manager-plan");
+    let script_operation = plan["operations"]
+        .as_array()
+        .expect("plan operations")
+        .iter()
+        .find(|operation| operation["kind"] == "verification.run-script")
+        .expect("representative script operation");
+    assert_eq!(
+        script_operation["command"],
+        serde_json::json!(["bun", "run", "smoke"])
+    );
+    assert_eq!(script_operation["timeoutSeconds"], 300);
+
+    let applied = run(
+        &root,
+        &binaries,
+        &[
+            "to",
+            "bun",
+            "--verify-script",
+            "smoke",
+            "--approve",
+            plan_id,
+        ],
+    );
+    assert!(
+        applied.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&applied.stdout),
+        String::from_utf8_lossy(&applied.stderr)
+    );
+    let applied = json_output(&applied);
+    let journal = artifact_content(&applied, "run-journal");
+    let script_process = journal["processes"]
+        .as_array()
+        .expect("process journal")
+        .iter()
+        .find(|process| process["argv"] == serde_json::json!(["bun", "run", "smoke"]))
+        .expect("representative script process");
+    assert_eq!(script_process["success"], true);
+    assert_eq!(script_process["timedOut"], false);
+    assert_eq!(
+        fs::read_to_string(root.join(".pkgshift-script-ran")).expect("script marker"),
+        "smoke\n"
+    );
+    let verification = artifact_content(&applied, "verification-report");
+    let script_check = verification["checks"]
+        .as_array()
+        .expect("verification checks")
+        .iter()
+        .find(|check| check["id"] == "representative-scripts")
+        .expect("representative script check");
+    assert_eq!(script_check["status"], "passed");
+    assert_eq!(
+        script_check["summary"],
+        "All 1 explicitly selected representative scripts passed."
+    );
+    assert!(!applied.to_string().contains("fixture-secret-value"));
+}
+
+#[test]
+fn reports_a_failed_representative_script_as_a_verification_failure() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{"name":"script-failure-fixture","private":true,"packageManager":"pnpm@11.21.0","scripts":{"fail":"exit 9"}}
+"#,
+    );
+    write(&root.join("pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+    let planned = json_output(&run(
+        &root,
+        &binaries,
+        &["to", "bun", "--verify-script", "fail"],
+    ));
+    let plan_id = planned["planId"].as_str().expect("plan identifier");
+    let applied = run(
+        &root,
+        &binaries,
+        &["to", "bun", "--verify-script", "fail", "--approve", plan_id],
+    );
+    assert_eq!(applied.status.code(), Some(5));
+    let applied = json_output(&applied);
+    assert_eq!(applied["status"], "failed");
+    let journal = artifact_content(&applied, "run-journal");
+    let failed_process = journal["processes"]
+        .as_array()
+        .expect("process journal")
+        .iter()
+        .find(|process| process["argv"] == serde_json::json!(["bun", "run", "fail"]))
+        .expect("failed representative script process");
+    assert_eq!(failed_process["exitCode"], 9);
+    assert_eq!(failed_process["success"], false);
+    let verification = artifact_content(&applied, "verification-report");
+    let script_check = verification["checks"]
+        .as_array()
+        .expect("verification checks")
+        .iter()
+        .find(|check| check["id"] == "representative-scripts")
+        .expect("representative script check");
+    assert_eq!(script_check["status"], "failed");
+    assert_eq!(
+        script_check["evidence"],
+        serde_json::json!(["script:fail;status:failed;exitCode:9"])
+    );
+    assert!(!applied.to_string().contains("fixture-secret-value"));
 }
 
 fn bunx_package_manager(directory: &TempDir, name: &str, package: &str) -> PathBuf {
@@ -106,7 +257,18 @@ fn artifact_content<'a>(result: &'a Value, artifact_type: &str) -> &'a Value {
 }
 
 fn plan_and_apply(root: &Path, binaries: &Path, target: &str) -> Value {
-    let planned = run(root, binaries, &["to", target]);
+    plan_and_apply_with_options(root, binaries, target, &[])
+}
+
+fn plan_and_apply_with_options(
+    root: &Path,
+    binaries: &Path,
+    target: &str,
+    options: &[&str],
+) -> Value {
+    let mut preview_arguments = vec!["to", target];
+    preview_arguments.extend_from_slice(options);
+    let planned = run(root, binaries, &preview_arguments);
     assert_eq!(planned.status.code(), Some(7));
     let planned = json_output(&planned);
     assert_eq!(planned["status"], "planned");
@@ -115,7 +277,9 @@ fn plan_and_apply(root: &Path, binaries: &Path, target: &str) -> Value {
         .as_str()
         .expect("planned result identifier");
 
-    let applied = run(root, binaries, &["to", target, "--approve", plan_id]);
+    let mut apply_arguments = preview_arguments;
+    apply_arguments.extend(["--approve", plan_id]);
+    let applied = run(root, binaries, &apply_arguments);
     assert!(
         applied.status.success(),
         "stdout: {}\nstderr: {}",
@@ -813,7 +977,7 @@ fn migrates_a_real_pnpm_fixture_with_bun() {
     let root = directory.path().join("project");
     write(
         &root.join("package.json"),
-        r#"{"name":"live-bun-fixture","private":true,"packageManager":"pnpm@11.21.0","dependencies":{"local-package":"file:./local-package"}}
+        r#"{"name":"live-bun-fixture","private":true,"packageManager":"pnpm@11.21.0","scripts":{"smoke":"bun -e \"if (typeof Bun.version !== 'string') process.exit(1)\""},"dependencies":{"local-package":"file:./local-package"}}
 "#,
     );
     write(
@@ -826,10 +990,19 @@ fn migrates_a_real_pnpm_fixture_with_bun() {
         "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
     );
 
-    let applied = plan_and_apply(&root, binaries.path(), "bun");
+    let applied =
+        plan_and_apply_with_options(&root, binaries.path(), "bun", &["--verify-script", "smoke"]);
     assert_eq!(applied["status"], "completed");
     assert!(root.join("bun.lock").is_file());
     assert!(!root.join("pnpm-lock.yaml").exists());
+    let verification = artifact_content(&applied, "verification-report");
+    let script_check = verification["checks"]
+        .as_array()
+        .expect("verification checks")
+        .iter()
+        .find(|check| check["id"] == "representative-scripts")
+        .expect("representative script check");
+    assert_eq!(script_check["status"], "passed");
 }
 
 #[test]

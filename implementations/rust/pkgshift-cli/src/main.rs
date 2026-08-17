@@ -58,7 +58,12 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum CliCommand {
     /// Inspect, plan, approve, apply, and verify a migration from the project root.
-    To { target: String },
+    To {
+        target: String,
+        /// Run a root package script after migration; repeat to select multiple scripts.
+        #[arg(long, value_name = "NAME", action = clap::ArgAction::Append)]
+        verify_script: Vec<String>,
+    },
 
     /// Inspect repository package manager evidence and normalized project semantics.
     Inspect {
@@ -103,33 +108,51 @@ enum PlanSubject {
 
 #[derive(Debug, Subcommand)]
 enum PackageManagerCommand {
-    To { target: String },
+    To {
+        target: String,
+        /// Run a root package script after migration; repeat to select multiple scripts.
+        #[arg(long, value_name = "NAME", action = clap::ArgAction::Append)]
+        verify_script: Vec<String>,
+    },
 }
 
 #[derive(Debug, Args)]
 struct TargetArgument {
     #[arg(long)]
     to: String,
+    /// Run a root package script after migration; repeat to select multiple scripts.
+    #[arg(long, value_name = "NAME", action = clap::ArgAction::Append)]
+    verify_script: Vec<String>,
 }
 
-fn command_kind(command: CliCommand) -> CommandKind {
+fn command_kind(command: CliCommand) -> (CommandKind, Vec<String>) {
     match command {
-        CliCommand::To { target } => CommandKind::To { target },
+        CliCommand::To {
+            target,
+            verify_script,
+        } => (CommandKind::To { target }, verify_script),
         CliCommand::Pm {
-            command: PackageManagerCommand::To { target },
-        } => CommandKind::Plan { target },
+            command:
+                PackageManagerCommand::To {
+                    target,
+                    verify_script,
+                },
+        } => (CommandKind::Plan { target }, verify_script),
         CliCommand::Inspect {
             subject: InspectSubject::PackageManager,
-        } => CommandKind::Inspect,
+        } => (CommandKind::Inspect, Vec::new()),
         CliCommand::Plan {
             subject: PlanSubject::PackageManager(arguments),
-        } => CommandKind::Plan {
-            target: arguments.to,
-        },
-        CliCommand::Apply { plan_id } => CommandKind::Apply { plan_id },
-        CliCommand::Verify { run_id } => CommandKind::Verify { run_id },
-        CliCommand::Rollback { run_id } => CommandKind::Rollback { run_id },
-        CliCommand::Support => CommandKind::Support,
+        } => (
+            CommandKind::Plan {
+                target: arguments.to,
+            },
+            arguments.verify_script,
+        ),
+        CliCommand::Apply { plan_id } => (CommandKind::Apply { plan_id }, Vec::new()),
+        CliCommand::Verify { run_id } => (CommandKind::Verify { run_id }, Vec::new()),
+        CliCommand::Rollback { run_id } => (CommandKind::Rollback { run_id }, Vec::new()),
+        CliCommand::Support => (CommandKind::Support, Vec::new()),
     }
 }
 
@@ -202,12 +225,14 @@ fn interactive_approval(execution: &CommandExecution) -> io::Result<bool> {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let is_guided = matches!(cli.command, CliCommand::To { .. });
-    let mut options = CommandOptions::new(command_kind(cli.command), cli.cwd);
+    let (command, verification_scripts) = command_kind(cli.command);
+    let mut options = CommandOptions::new(command, cli.cwd);
     options.state_directory = cli.state_dir;
     options.accept_lossy = cli.accept_lossy;
     options.approval = cli.approve;
     options.dry_run = cli.dry_run;
     options.trial = cli.trial;
+    options.verification_scripts = verification_scripts;
 
     let mut execution = execute(&options);
     let can_prompt = is_guided

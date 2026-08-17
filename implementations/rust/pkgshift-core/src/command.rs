@@ -38,6 +38,7 @@ pub struct CommandOptions {
     pub approval: Option<String>,
     pub dry_run: bool,
     pub trial: bool,
+    pub verification_scripts: Vec<String>,
 }
 
 impl CommandOptions {
@@ -50,6 +51,7 @@ impl CommandOptions {
             approval: None,
             dry_run: false,
             trial: false,
+            verification_scripts: Vec::new(),
         }
     }
 }
@@ -260,6 +262,7 @@ fn create_plan(
     cwd: &Path,
     target: PackageManagerId,
     accept_lossy: bool,
+    verification_scripts: &[String],
 ) -> Result<Option<PlannedMigration>> {
     let inspection = inspect_project(cwd)?;
     let Some(project_ir) = build_project_ir(&inspection)? else {
@@ -280,6 +283,7 @@ fn create_plan(
         source_lock_graph.as_ref(),
         target,
         accept_lossy,
+        verification_scripts,
     )?
     else {
         return Ok(None);
@@ -376,7 +380,13 @@ fn plan_command(options: &CommandOptions, target_value: &str) -> Result<CommandE
         Ok(target) => target,
         Err(execution) => return Ok(execution),
     };
-    let Some(planned) = create_plan(&options.cwd, target, options.accept_lossy)? else {
+    let Some(planned) = create_plan(
+        &options.cwd,
+        target,
+        options.accept_lossy,
+        &options.verification_scripts,
+    )?
+    else {
         return blocked_plan(&options.cwd, "plan package-manager", target);
     };
     let blocked = planned.plan.diagnostics.iter().any(|entry| entry.blocking);
@@ -459,6 +469,7 @@ fn plan_command(options: &CommandOptions, target_value: &str) -> Result<CommandE
                 ),
                 ("artifactStored", json!(artifact_stored)),
                 ("executionAvailable", json!(planned.plan.executable)),
+                ("verificationScripts", json!(options.verification_scripts)),
             ]),
             planned.plan.diagnostics.clone(),
             artifacts,
@@ -475,7 +486,13 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
         Ok(target) => target,
         Err(execution) => return Ok(execution),
     };
-    let Some(planned) = create_plan(&options.cwd, target, options.accept_lossy)? else {
+    let Some(planned) = create_plan(
+        &options.cwd,
+        target,
+        options.accept_lossy,
+        &options.verification_scripts,
+    )?
+    else {
         return blocked_plan(&options.cwd, &command_name, target);
     };
     if !planned.plan.executable {
@@ -502,6 +519,10 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
     }
     if options.trial {
         approved_argv.push("--trial".to_owned());
+    }
+    for script in &options.verification_scripts {
+        approved_argv.push("--verify-script".to_owned());
+        approved_argv.push(script.clone());
     }
     if !options.trial
         && let Some(value) = options.state_directory.as_deref()
@@ -563,6 +584,7 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
                         json!(planned.plan.native_import.as_ref().map(|entry| &entry.id)),
                     ),
                     ("repositoryChanged", json!(false)),
+                    ("verificationScripts", json!(options.verification_scripts)),
                 ]),
                 diagnostics,
                 planned_artifacts(&planned)?,
