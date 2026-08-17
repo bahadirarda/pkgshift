@@ -37,6 +37,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - The `pkgshift pm to <target>` planning shortcut.
 - Versioned JSON results with artifacts, diagnostics, and side-effect metadata.
 - Deterministic target rendering and digest-bound file mutations.
+- Context-aware repository integration rendering for package scripts, registered CI command fields, setup actions, cache lockfile references, Docker and automation commands, Markdown command spans, devcontainer lifecycle strings, Volta and engine metadata, `.tool-versions`, and mise pins.
 - Bidirectional vlt rendering for workspaces, catalogs, graph modifiers, public registry configuration, integrations, and package manager pins.
 - Deno dependency-mode rendering for workspaces, overrides, catalog expansion, isolated linking, preserved runtime configuration, integrations, and package manager pins.
 - Rust-primary npm and pnpm override plus Yarn resolution rendering for the deterministic selector subset, including policy detected in `pnpm-workspace.yaml`.
@@ -58,6 +59,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Conflict detection and local-modification protection for skill uninstall.
 - End-to-end fixtures for guided interactive and noninteractive migrations, exact approval, success, failed installation, partial failure, tampering, verification, and rollback.
 - Real pnpm-to-Bun execution fixtures covering multi-package workspaces, workspace protocols, default and named catalogs, isolated linking, trusted dependencies, exclusion patterns, local dependencies, registry configuration, and CI, container, and documentation integrations.
+- Rust pnpm-to-Bun execution coverage that migrates and rolls back GitHub Actions setup and commands, cache lockfile references, package scripts, Dockerfile, Makefile, devcontainer, Volta, engines, `.tool-versions`, and mise state in one transaction.
 - Direction-matrix fixtures for every basic migration pair across the seven production adapters.
 - An OKF v0.2 knowledge bundle and a portable Agent Skill source.
 - A pinned Rust 1.97.1 workspace with separate core and CLI crates.

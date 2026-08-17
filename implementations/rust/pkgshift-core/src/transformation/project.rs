@@ -1,4 +1,5 @@
-use super::commands::replace_command_token;
+use super::commands::rewrite_package_manager_commands;
+use super::integration::{rewrite_manifest_toolchain_pins, transform_integrations};
 use super::{
     BTreeMap, BTreeSet, CapabilityAnalysis, CapabilityClassification, Diagnostic, Map,
     MutationAction, PackageManagerId, Path, PlannedFileMutation, ProjectInspection, ProjectIr,
@@ -463,6 +464,13 @@ pub(crate) fn transform_project(
             continue;
         };
         if package.path == "." {
+            rewrite_manifest_toolchain_pins(
+                &mut manifest,
+                source,
+                target,
+                &package.manifest_path,
+                &mut diagnostics,
+            );
             remove_source_lifecycle_policy(&mut manifest, remove_yarn_build_policy);
             manifest.remove("packageExtensions");
             manifest.remove("patchedDependencies");
@@ -602,6 +610,14 @@ pub(crate) fn transform_project(
             }
             if target == PackageManagerId::YarnModern {
                 configure_yarn_lifecycle_policy(&mut manifest, &trusted_dependencies);
+            }
+        }
+        if let Some(scripts) = manifest.get_mut("scripts").and_then(Value::as_object_mut) {
+            for value in scripts.values_mut() {
+                if let Some(command) = value.as_str() {
+                    *value =
+                        Value::String(rewrite_package_manager_commands(command, source, target));
+                }
             }
         }
         for section in [
@@ -893,33 +909,8 @@ pub(crate) fn transform_project(
         configuration_mutations.push(change);
     }
 
-    let source_command = match source {
-        PackageManagerId::YarnClassic | PackageManagerId::YarnModern => "yarn".to_owned(),
-        _ => source.to_string(),
-    };
-    let target_command = match target {
-        PackageManagerId::YarnClassic | PackageManagerId::YarnModern => "yarn".to_owned(),
-        _ => target.to_string(),
-    };
-    let mut integration_mutations = Vec::new();
-    if source_command != target_command {
-        for integration in &inspection.integrations {
-            let Some(content) = read_text(&root.join(&integration.path))? else {
-                continue;
-            };
-            let replaced = replace_command_token(&content, &source_command, &target_command);
-            if let Some(change) = mutation(
-                root,
-                &integration.path,
-                MutationAction::Write,
-                Some(replaced),
-                "Translate recognized package manager commands.",
-                Vec::new(),
-            )? {
-                integration_mutations.push(change);
-            }
-        }
-    }
+    let integration_mutations =
+        transform_integrations(root, inspection, source, target, &mut diagnostics)?;
 
     let target_definition = get_package_manager(target);
     let source_definition = get_package_manager(source);

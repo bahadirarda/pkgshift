@@ -8,5 +8,6 @@
 * [Run Journal](run-journal.md) - Defines run and operation state transitions, revisions, and persistence.
 * [Recovery and Verification](recovery-and-verification.md) - Defines snapshot integrity, post-apply checks, rollback, and external-effect limits.
 * [Lock Graph Proof](lock-graph-proof.md) - Defines normalized lock graphs, native import paths, and blocking resolution drift policy.
+* [Repository Integrations](repository-integrations.md) - Defines deterministic CI, container, toolchain, documentation, and development-environment migration.
 * [Repository Layout](repository-layout.md) - Maps the MVP implementation to architecture boundaries and tests.
 * [Skill Distribution](skill-distribution.md) - Defines portable Agent Skill locations and compatibility strategy.

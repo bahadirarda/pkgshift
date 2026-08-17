@@ -136,6 +136,9 @@ fn migrates_a_pnpm_workspace_to_bun_and_rolls_it_back() {
   "name": "pnpm-workspace-fixture",
   "private": true,
   "packageManager": "pnpm@11.21.0",
+  "scripts": { "test": "pnpm test", "prepare": "echo pnpm install" },
+  "volta": { "node": "22.22.0", "pnpm": "11.21.0" },
+  "engines": { "node": ">=22", "pnpm": ">=11" },
   "workspaces": ["apps/*", "packages/*"],
   "dependencies": { "shared": "workspace:^" }
 }
@@ -162,7 +165,21 @@ fn migrates_a_pnpm_workspace_to_bun_and_rolls_it_back() {
     );
     write(
         &root.join(".github/workflows/ci.yml"),
-        "steps:\n  - run: pnpm install --frozen-lockfile\n  - run: pnpm test\n",
+        "steps:\n  - uses: pnpm/action-setup@v4\n  - run: pnpm install --frozen-lockfile\n  - run: pnpm test\n  - run: echo ${{ hashFiles('pnpm-lock.yaml') }}\n",
+    );
+    write(&root.join("Dockerfile"), "FROM node:22\nRUN pnpm install\n");
+    write(&root.join("Makefile"), "test:\n\tpnpm test\n");
+    write(
+        &root.join(".tool-versions"),
+        "nodejs 22.22.0\npnpm 11.21.0\n",
+    );
+    write(
+        &root.join("mise.toml"),
+        "[tools]\nnode = \"22.22.0\"\npnpm = \"11.21.0\"\n",
+    );
+    write(
+        &root.join(".devcontainer/devcontainer.json"),
+        "{\n  \"postCreateCommand\": \"pnpm install && pnpm test\"\n}\n",
     );
 
     let applied = plan_and_apply(&root, &binaries, "bun");
@@ -181,10 +198,40 @@ fn migrates_a_pnpm_workspace_to_bun_and_rolls_it_back() {
             .expect("migrated manifest")
             .contains("\"packageManager\": \"bun@1.3.14\"")
     );
+    let manifest = fs::read_to_string(root.join("package.json")).expect("migrated manifest");
+    assert!(manifest.contains("\"test\": \"bun run test\""));
+    assert!(manifest.contains("\"prepare\": \"echo pnpm install\""));
+    assert!(manifest.contains("\"node\": \"22.22.0\""));
+    assert!(!manifest.contains("\"pnpm\": \"11.21.0\""));
+    assert!(manifest.contains("\"bun\": \">=1.3.14\""));
+    let workflow =
+        fs::read_to_string(root.join(".github/workflows/ci.yml")).expect("migrated workflow");
+    assert!(workflow.contains("uses: oven-sh/setup-bun@v2"));
+    assert!(workflow.contains("bun install"));
+    assert!(workflow.contains("bun run test"));
+    assert!(workflow.contains("hashFiles('bun.lock')"));
     assert!(
-        fs::read_to_string(root.join(".github/workflows/ci.yml"))
-            .expect("migrated workflow")
-            .contains("bun install")
+        fs::read_to_string(root.join("Dockerfile"))
+            .expect("migrated Dockerfile")
+            .contains("RUN bun install")
+    );
+    assert!(
+        fs::read_to_string(root.join("Makefile"))
+            .expect("migrated Makefile")
+            .contains("\tbun run test")
+    );
+    assert_eq!(
+        fs::read_to_string(root.join(".tool-versions")).expect("migrated tool versions"),
+        "nodejs 22.22.0\nbun 1.3.14\n"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("mise.toml")).expect("migrated mise configuration"),
+        "[tools]\nnode = \"22.22.0\"\nbun = \"1.3.14\"\n"
+    );
+    assert!(
+        fs::read_to_string(root.join(".devcontainer/devcontainer.json"))
+            .expect("migrated devcontainer")
+            .contains("bun install && bun run test")
     );
 
     let run_id = applied["runId"].as_str().expect("run identifier");
