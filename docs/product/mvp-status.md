@@ -36,6 +36,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - An approved `--trial` workflow that executes the exact plan and verification in a disposable copy without persisting source repository state.
 - An aggregate `compare` workflow that binds two or more normalized target plans to one approval and runs each executable candidate in an independent disposable copy without ranking them.
 - The `pkgshift pm to <target>` planning shortcut.
+- A separate `pkgshift runtime to deno` workflow with read-only preview, explicit Deno permission review, exact approval, deterministic recipes, private recovery state, residue verification, and runtime rollback.
 - Versioned JSON results with artifacts, diagnostics, and side-effect metadata.
 - Deterministic target rendering and digest-bound file mutations.
 - Context-aware repository integration rendering for package scripts, registered CI command fields, setup actions, cache lockfile references, Docker and automation commands, Markdown command spans, devcontainer lifecycle strings, Volta and engine metadata, `.tool-versions`, and mise pins.
@@ -70,9 +71,11 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Rust subprocess fixtures for isolated trial, native importer ordering, successful graph proof, intentional graph drift, and source repository preservation.
 - Deterministic package-local dependency-state cleanup before target installation, with fail-closed path validation, cleanup journal evidence, and explicit source-artifact residue verification.
 - Bounded Bun runtime-reference scanning for type dependencies, manifest scripts, global API use, and `bun:` imports, reported without conflating runtime migration with package-manager cleanup.
+- Deterministic Bun-to-Deno recipes for official Hono `Bun.serve` handlers, `bun:test`, Bun text and JSON reads, direct runtime scripts, and Bun type residue, with SQLite and other unsupported APIs blocked instead of delegated to a model.
 - A real-installer Rust acceptance run for a multi-package pnpm workspace migrated to Bun and rolled back to its original fingerprint.
 - Real Bun 1.3.14 acceptance runs for dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback.
 - Real vlt 1.0.2 and Deno 2.9.5 acceptance runs for dependency-bearing multi-package Bun workspaces, workspace protocols, target installation, and graph proof.
+- A real Hono Bun-to-Deno runtime acceptance run that applies the approved source plan, installs with pinned Deno 2.9.5, type-checks the migrated server, and passes the migrated test suite.
 - A machine-readable pinned upstream corpus covering executable Bun-to-vlt and Bun-to-Deno plans, vlt-to-pnpm and accepted-lossy vlt-to-Deno plans, Vite capability blockers, clean-checkout enforcement, weekly CI, external vlt installer failure, and strict Deno post-install graph rejection without source writes.
 - Sibling Rust and TypeScript engines under `implementations/`, with shared root orchestration for both implementations.
 
@@ -87,6 +90,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Verification | MVP complete | Planned digests, clean-install evidence, source-artifact residue, target selection, lockfile behavior, workspace membership, install completion, and reachable resolution-set parity are checked. |
 | Isolated trial | MVP complete | Exact approval executes the accepted plan in a disposable copy and reports repository preservation plus nested verification. |
 | Multi-target comparison | MVP complete | Aggregate approval binds candidate plan identities; independent disposable trials report passed, failed, and blocked evidence while preserving the source repository. |
+| Bun-to-Deno runtime recipes | Initial production subset complete | Explicit permissions, exact approval, source-content redaction, digest-bound apply, residue verification, rollback, and a real Hono Deno run pass. |
 | Rollback | MVP complete | Successful, failed, and partially applied runs restore repository files and verify the baseline fingerprint. |
 | Skill installer | MVP complete | Codex and Claude Code project destinations pass copy, link, conflict, status, and protected-uninstall fixtures. |
 | Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode produce executable plans when every observed feature has a safe implemented path. |
@@ -107,6 +111,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Representative project scripts are not selected automatically; only exact root script names supplied with `--verify-script` are executed, and their repository side effects remain outside rollback snapshots.
 - The Rust CLI does not yet own TypeScript reference commands for managed Agent Skill lifecycle or artifact explanation.
 - Unsupported and manual-only transformations emit blocking diagnostics instead of delegating edits to a model.
+- Runtime migration is a separate Rust-only command and currently targets Deno from Bun; package-manager selection, lockfiles, installation, advanced Bun APIs, `bunfig.toml`, shell behavior, macros, routes, and WebSockets remain outside its deterministic recipe subset.
 - Registry tokens must use `${NAME}` references for Yarn Modern translation; literal credentials and unrecognized `.npmrc` settings fail closed without entering plan artifacts.
 - pnpm output uses the current `allowBuilds` map while inspection continues to accept legacy `onlyBuiltDependencies` input.
 - Yarn per-dependency build denials outside global allow-list mode remain blocking because other targets cannot preserve them safely.
@@ -116,4 +121,4 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 
 # Post-MVP Work
 
-Expand patch conversion beyond the exact text-only subset, add configurable target-platform matrices and edge-equivalence policies, target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.
+Expand patch conversion beyond the exact text-only subset, grow runtime recipes beyond Bun-to-Deno safe shapes, add configurable target-platform matrices and edge-equivalence policies, add target executable version resolution, and decide whether ancillary Agent Skill lifecycle commands belong in Rust or release tooling.

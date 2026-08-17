@@ -38,6 +38,16 @@ The implementation may add codes while preserving the following baseline familie
 | `LOSSY_ACCEPTANCE_REQUIRED` | Lossy decisions were not accepted while creating the immutable plan. |
 | `NATIVE_IMPORT_UNAVAILABLE` | No verified target-native importer exists for the selected direction; target graph proof remains required. |
 | `SOURCE_RUNTIME_REFERENCES_PRESERVED` | Bun runtime dependencies, scripts, globals, or module imports remain outside package-manager cleanup and require intentional retention or a separate runtime migration. |
+| `RUNTIME_BUN_SOURCE_NOT_DETECTED` | The dedicated runtime command found no Bun application runtime evidence in its bounded inspection surface. |
+| `DENO_PERMISSION_REQUIRED` | A safe runtime recipe requires an explicit plan-bound Deno permission that was not supplied. |
+| `RUNTIME_BUN_SERVE_UNSUPPORTED` | A `Bun.serve` call contains routes, WebSockets, lifecycle hooks, or another shape outside the fetch-handler recipe. |
+| `RUNTIME_SOURCE_FILE_TOO_LARGE` | A runtime input exceeds the bounded deterministic inspection limit. |
+| `RUNTIME_SOURCE_SYMLINK_UNSUPPORTED` | A runtime source or source directory crosses a symbolic-link boundary. |
+| `RUNTIME_BUN_MODULE_UNSUPPORTED` | A Bun-specific module import remains outside the registered runtime recipe set. |
+| `RUNTIME_BUN_GLOBAL_UNSUPPORTED` | A Bun global API remains after safe recipes are evaluated. |
+| `RUNTIME_BUN_SCRIPT_UNSUPPORTED` | A Bun package script contains flags or shell semantics outside direct Deno command translation. |
+| `RUNTIME_BUN_RESIDUE_REMAINS` | Verification detected Bun application runtime evidence after approved mutation. |
+| `RUNTIME_ROLLBACK_FAILED` | Runtime snapshots did not restore the exact pre-plan fingerprint. |
 | `INTEGRATION_COMMAND_AMBIGUOUS` | A source package-manager command remains in an executable integration context outside the deterministic command subset. |
 | `INTEGRATION_SETUP_ACTION_UNSUPPORTED` | A source CI setup action has no registered target action replacement. |
 | `INTEGRATION_CACHE_UNSUPPORTED` | The source CI cache input cannot represent the selected target safely. |

@@ -11,7 +11,7 @@ use pkgshift_core::model::{CommandExecution, CommandStatus};
 #[command(
     name = "pkgshift",
     version,
-    about = "Deterministic, transactional package manager migrations",
+    about = "Deterministic, transactional JavaScript repository migrations",
     long_about = None
 )]
 struct Cli {
@@ -103,6 +103,12 @@ enum CliCommand {
         #[command(subcommand)]
         command: PackageManagerCommand,
     },
+
+    /// Migrate runtime-specific APIs independently from package manager state.
+    Runtime {
+        #[command(subcommand)]
+        command: RuntimeCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -123,6 +129,19 @@ enum PackageManagerCommand {
         #[arg(long, value_name = "NAME", action = clap::ArgAction::Append)]
         verify_script: Vec<String>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum RuntimeCommand {
+    /// Plan, approve, apply, and verify a runtime migration.
+    To {
+        target: String,
+        /// Grant a reviewed Deno permission; repeat for multiple permissions.
+        #[arg(long, value_name = "NAME", action = clap::ArgAction::Append)]
+        deno_permission: Vec<String>,
+    },
+    /// Restore files from a runtime migration snapshot.
+    Rollback { run_id: String },
 }
 
 #[derive(Debug, Args)]
@@ -166,6 +185,22 @@ fn command_kind(command: CliCommand) -> (CommandKind, Vec<String>) {
         CliCommand::Verify { run_id } => (CommandKind::Verify { run_id }, Vec::new()),
         CliCommand::Rollback { run_id } => (CommandKind::Rollback { run_id }, Vec::new()),
         CliCommand::Support => (CommandKind::Support, Vec::new()),
+        CliCommand::Runtime {
+            command:
+                RuntimeCommand::To {
+                    target,
+                    deno_permission,
+                },
+        } => (
+            CommandKind::RuntimeTo {
+                target,
+                permissions: deno_permission,
+            },
+            Vec::new(),
+        ),
+        CliCommand::Runtime {
+            command: RuntimeCommand::Rollback { run_id },
+        } => (CommandKind::RuntimeRollback { run_id }, Vec::new()),
     }
 }
 
@@ -258,7 +293,11 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let is_guided = matches!(
         cli.command,
-        CliCommand::To { .. } | CliCommand::Compare { .. }
+        CliCommand::To { .. }
+            | CliCommand::Compare { .. }
+            | CliCommand::Runtime {
+                command: RuntimeCommand::To { .. }
+            }
     );
     let (command, verification_scripts) = command_kind(cli.command);
     let mut options = CommandOptions::new(command, cli.cwd);

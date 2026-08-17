@@ -1,7 +1,7 @@
 {
   "name": "pkgshift",
   "short_name": "pkgshift",
-  "description": "Transactional package manager migrations for JavaScript repositories.",
+  "description": "Transactional package manager and Bun-to-Deno runtime migrations for JavaScript repositories.",
   "start_url": "/pkgshift/",
   "scope": "/pkgshift/",
   "display": "standalone",

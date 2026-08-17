@@ -10,5 +10,6 @@
 * [Lock Graph Proof](lock-graph-proof.md) - Defines normalized lock graphs, native import paths, and blocking resolution drift policy.
 * [Repository Integrations](repository-integrations.md) - Defines deterministic CI, container, toolchain, documentation, and development-environment migration.
 * [Target Comparison](target-comparison.md) - Defines aggregate approval and independent isolated evidence for two or more candidate targets.
+* [Bun to Deno Runtime Recipes](runtime-migration-recipes.md) - Defines the dedicated deterministic runtime transformation, permission, transaction, and residue-verification boundary.
 * [Repository Layout](repository-layout.md) - Maps the MVP implementation to architecture boundaries and tests.
 * [Skill Distribution](skill-distribution.md) - Defines portable Agent Skill locations and compatibility strategy.

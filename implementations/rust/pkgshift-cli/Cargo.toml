@@ -1,6 +1,6 @@
 [package]
 name = "pkgshift"
-description = "Transactional package manager migration CLI"
+description = "Transactional package manager and runtime migration CLI"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

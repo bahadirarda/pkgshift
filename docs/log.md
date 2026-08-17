@@ -2,6 +2,7 @@
 
 ## 2026-08-17
 
+* **Runtime migration**: Added dedicated `pkgshift runtime to deno` planning and execution with reviewed Hono `Bun.serve`, `bun:test`, Bun file, script, and type-cleanup recipes; explicit Deno permissions; content-redacted artifacts; owner-only recovery state; residue verification; rollback; and a passing real Hono run on Deno 2.9.5. SQLite remains fail-closed because similarly named APIs do not prove behavioral compatibility.
 * **Target comparison**: Added deterministic `pkgshift compare` planning, one aggregate process-execution approval, independent candidate sandboxes, nested trial evidence, capability-blocked candidates, explicit no-ranking semantics, and a passing real Bun 1.3.14 plus Deno 2.9.5 comparison run.
 * **Representative verification**: Added explicit repeatable root-script selection, immutable target argv, bounded shell-free execution, operation-bound withheld process records, verification checks that never rerun repository code, and a passing real pnpm-to-Bun acceptance run.
 * **Repository integrations**: Added context-aware package script, CI setup and command, cache lockfile, container, automation, Markdown, devcontainer, Volta, engine, `.tool-versions`, and mise migration with fail-closed ambiguous-command diagnostics.

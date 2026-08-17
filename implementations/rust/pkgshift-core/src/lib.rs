@@ -7,6 +7,7 @@ pub mod inspect;
 pub mod lock_graph;
 pub mod model;
 pub mod plan;
+pub mod runtime;
 pub mod transaction;
 mod transformation;
 pub mod util;

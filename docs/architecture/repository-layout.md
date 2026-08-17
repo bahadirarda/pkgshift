@@ -26,6 +26,7 @@ implementations/
       src/
         capability.rs      feature classification rules
         cleanup.rs         clean-install planning, execution, and residue proof
+        runtime/           dedicated runtime inspection, recipes, transactions, and rollback
         plan.rs            immutable plan orchestration
         plan/tests.rs      planner regression suite
         transaction.rs     apply, trial, verify, and rollback orchestration
@@ -60,7 +61,7 @@ A Rust distribution compiles to one standalone CLI, but apply still requires the
 
 `implementations/rust/pkgshift-cli/src/main.rs` delegates domain work to `pkgshift-core`. Inspection collects weighted evidence and creates a redacted repository fingerprint. Project IR extracts workspace, dependency, policy, linker, registry-reference, and integration semantics. Capability analysis classifies every observed feature for the selected target. Planning renders deterministic target content and binds exact file mutations to before and after digests.
 
-The guided `to` command keeps its first plan read-only, requests approval, then uses `.pkgshift/state` to persist and execute the exact plan before invoking verification. `to --trial` instead copies the repository into a disposable boundary, executes cleanup, importer, installer, and verifier there, and returns without source state. The advanced staged interface persists a plan only when `--state-dir` is explicit. Rust stored plans and runs use digest-verified envelopes. Apply validates exact approval and the baseline fingerprint, creates recovery snapshots, atomically writes planned content, removes pre-migration package-local dependency state, and executes target-native import plus installation operations. Repository locks recover a dead Linux writer and serialize mutation per repository.
+The guided `to` command keeps its first plan read-only, requests approval, then uses `.pkgshift/state` to persist and execute the exact plan before invoking verification. `to --trial` instead copies the repository into a disposable boundary, executes cleanup, importer, installer, and verifier there, and returns without source state. The dedicated `runtime to deno` surface uses its own fingerprint, recipe planner, content-redacted artifact, private state subtree, verification report, and rollback command without entering the package-manager adapter pipeline. The advanced staged interface persists a package-manager plan only when `--state-dir` is explicit. Rust stored plans and runs use digest-verified envelopes. Apply validates exact approval and the baseline fingerprint, creates recovery snapshots, atomically writes planned content, removes pre-migration package-local dependency state, and executes target-native import plus installation operations. Repository locks recover a dead Linux writer and serialize mutation per repository.
 
 Verify checks planned digests, clean-install records, source-artifact residue, package-manager selection, lockfile behavior, workspace membership, installer completion, and normalized source-to-target resolution parity. Rollback validates every backup digest, restores snapshot entries, and requires the repository fingerprint to match the plan baseline. The TypeScript reference retains managed Agent Skill lifecycle commands until that ancillary interface is ported or replaced by distribution tooling.
 
@@ -84,6 +85,7 @@ Tests create isolated temporary repositories and remove only generated fixtures.
 - Rust planning coverage for all 42 basic production-adapter directions.
 - Live Rust runs with Bun 1.3.14 covering dependency-bearing npm-to-Bun trial, native migration, install, graph proof, apply, and rollback.
 - Live Rust runs with vlt 1.0.2 and Deno 2.9.5 covering dependency-bearing workspaces, clean target installation, source-state retirement, and graph proof.
+- Dedicated Bun-to-Deno runtime subprocess coverage for permission blocking, source and script recipes, type residue cleanup, redacted artifacts, verification, rollback, and a real Hono type-check and test on Deno 2.9.5.
 - Pinned upstream corpus runs covering executable plans, capability blockers, installer failures, post-install graph rejection, and source preservation.
 - TypeScript end-to-end guided and staged CLI plan, approval, apply, verify, and rollback.
 - Codex and Claude Code skill copy, link, conflict, and protected uninstall behavior.
@@ -91,4 +93,4 @@ Tests create isolated temporary repositories and remove only generated fixtures.
 
 # Post-MVP Extensions
 
-The next architecture slice closes advanced renderer parity, adds configurable target-platform matrices and edge-equivalence graph policies, explicit representative-script checks, target executable version resolution, and a final ancillary-command ownership decision. These extensions must preserve [Migration Engine](/architecture/migration-engine.md), [Agent Interface](/architecture/agent-interface.md), and [Rust-Primary Polyglot Monorepo](/decisions/rust-primary-polyglot-monorepo.md).
+The next architecture slices add configurable target-platform matrices and edge-equivalence graph policies, expand runtime recipes beyond the verified Bun-to-Deno subset, add target executable version resolution, and make a final ancillary-command ownership decision. These extensions must preserve [Migration Engine](/architecture/migration-engine.md), [Agent Interface](/architecture/agent-interface.md), and [Rust-Primary Polyglot Monorepo](/decisions/rust-primary-polyglot-monorepo.md).

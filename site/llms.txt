@@ -1,8 +1,8 @@
 # pkgshift
 
-> pkgshift is an open-source CLI for deterministic, transactional package manager migrations in JavaScript repositories.
+> pkgshift is an open-source CLI for deterministic, transactional package manager and Bun-to-Deno runtime migrations in JavaScript repositories.
 
-pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode as production targets. It inspects the repository, creates an immutable plan, requires approval for that exact plan, applies the planned operations, verifies the result, and retains rollback artifacts. Coding agents operate the CLI; they do not author migration edits.
+pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode as production targets. A separate `pkgshift runtime to deno` surface applies permission-aware deterministic recipes for supported Bun application semantics without changing package-manager ownership. It inspects the repository, creates an immutable plan, requires approval for that exact plan, applies the planned operations, verifies the result, and retains rollback artifacts. Coding agents operate the CLI; they do not author migration edits.
 
 ## Product
 
@@ -16,6 +16,7 @@ pkgshift supports npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno depen
 - [Migration engine](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/migration-engine.md): Inspect, plan, approve, apply, verify, and rollback pipeline.
 - [Agent interface](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/agent-interface.md): Machine-readable output, exit codes, next actions, and approval semantics.
 - [Recovery and verification](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/recovery-and-verification.md): Snapshots, run journals, integrity checks, and rollback boundaries.
+- [Bun-to-Deno runtime recipes](https://raw.githubusercontent.com/bahadirarda/pkgshift/main/docs/architecture/runtime-migration-recipes.md): Dedicated runtime recipe, permission, transaction, and residue-verification contract.
 
 ## Agent integration
 

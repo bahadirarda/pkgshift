@@ -13,22 +13,42 @@ use crate::model::{
     ProjectIr, ResultArtifact, SCHEMA_VERSION, SideEffect, StoredPlan, VerificationStatus,
 };
 use crate::plan::{analyze_capabilities, plan_package_manager_migration};
-use crate::transaction::{
-    apply_stored_plan, rollback_stored_run, save_plan, trial_stored_plan, verify_stored_run,
-};
+use crate::transaction::{apply_stored_plan, save_plan, trial_stored_plan};
 use crate::util::{PkgshiftError, Result, resolve_root};
 
 mod comparison;
+mod lifecycle;
+
+use lifecycle::{apply_command, rollback_command, verify_command};
 
 #[derive(Debug, Clone)]
 pub enum CommandKind {
     Inspect,
-    Compare { targets: Vec<String> },
-    Plan { target: String },
-    To { target: String },
-    Apply { plan_id: String },
-    Verify { run_id: String },
-    Rollback { run_id: String },
+    Compare {
+        targets: Vec<String>,
+    },
+    Plan {
+        target: String,
+    },
+    To {
+        target: String,
+    },
+    Apply {
+        plan_id: String,
+    },
+    Verify {
+        run_id: String,
+    },
+    Rollback {
+        run_id: String,
+    },
+    RuntimeTo {
+        target: String,
+        permissions: Vec<String>,
+    },
+    RuntimeRollback {
+        run_id: String,
+    },
     Support,
 }
 
@@ -59,7 +79,7 @@ impl CommandOptions {
     }
 }
 
-fn artifact<T: Serialize>(
+pub(crate) fn artifact<T: Serialize>(
     id: String,
     artifact_type: &str,
     media_type: &str,
@@ -77,7 +97,7 @@ fn artifact<T: Serialize>(
     })
 }
 
-fn result(
+pub(crate) fn result(
     command: impl Into<String>,
     status: CommandStatus,
     summary: BTreeMap<String, Value>,
@@ -100,7 +120,9 @@ fn result(
     }
 }
 
-fn summary(entries: impl IntoIterator<Item = (&'static str, Value)>) -> BTreeMap<String, Value> {
+pub(crate) fn summary(
+    entries: impl IntoIterator<Item = (&'static str, Value)>,
+) -> BTreeMap<String, Value> {
     entries
         .into_iter()
         .map(|(key, value)| (key.to_owned(), value))
@@ -351,7 +373,7 @@ fn blocked_plan(cwd: &Path, command: &str, target: PackageManagerId) -> Result<C
     })
 }
 
-fn resolve_state_directory(root: &Path, value: Option<&Path>) -> PathBuf {
+pub(crate) fn resolve_state_directory(root: &Path, value: Option<&Path>) -> PathBuf {
     value.map_or_else(
         || root.join(".pkgshift/state"),
         |path| {
@@ -720,191 +742,6 @@ fn guided_command(options: &CommandOptions, target_value: &str) -> Result<Comman
     })
 }
 
-fn apply_command(options: &CommandOptions, plan_id: &str) -> Result<CommandExecution> {
-    let root = resolve_root(&options.cwd)?;
-    let state_directory = resolve_state_directory(&root, options.state_directory.as_deref());
-    let outcome = apply_stored_plan(
-        &root,
-        &state_directory,
-        plan_id,
-        options.approval.as_deref(),
-    )?;
-    let failed = outcome.run.state != "succeeded";
-    let next_actions = if failed {
-        let mut argv = vec![
-            "pkgshift".to_owned(),
-            "rollback".to_owned(),
-            outcome.run.run_id.clone(),
-        ];
-        argv.extend([
-            "--state-dir".to_owned(),
-            state_directory.to_string_lossy().into_owned(),
-            "--approve".to_owned(),
-            outcome.run.run_id.clone(),
-        ]);
-        vec![NextAction {
-            argv,
-            requires_approval: true,
-            side_effect: SideEffect::RepositoryWrite,
-        }]
-    } else {
-        Vec::new()
-    };
-    let mut artifacts = vec![artifact(
-        outcome.run.run_id.clone(),
-        "run-journal",
-        "application/vnd.pkgshift.run+json",
-        &outcome.run,
-    )?];
-    if let Some(report) = &outcome.verification {
-        artifacts.push(artifact(
-            report.report_id.clone(),
-            "verification-report",
-            "application/vnd.pkgshift.verification+json",
-            report,
-        )?);
-    }
-    Ok(CommandExecution {
-        exit_code: if failed { 5 } else { 0 },
-        result: result(
-            "apply",
-            if failed {
-                CommandStatus::Failed
-            } else {
-                CommandStatus::Completed
-            },
-            summary([
-                ("runStatus", json!(outcome.run.state)),
-                (
-                    "dependencyStateCleanups",
-                    json!(outcome.run.dependency_state_cleanups.len()),
-                ),
-                ("processes", json!(outcome.run.processes.len())),
-                ("rollbackAvailable", json!(true)),
-            ]),
-            outcome.run.diagnostics.clone(),
-            artifacts,
-            Some(plan_id.to_owned()),
-            Some(outcome.run.run_id),
-            next_actions,
-        ),
-    })
-}
-
-fn verify_command(options: &CommandOptions, run_id: &str) -> Result<CommandExecution> {
-    let root = resolve_root(&options.cwd)?;
-    let state_directory = resolve_state_directory(&root, options.state_directory.as_deref());
-    let report = verify_stored_run(&root, &state_directory, run_id)?;
-    let failed = report.status == VerificationStatus::Failed;
-    let next_actions = if failed {
-        let mut argv = vec![
-            "pkgshift".to_owned(),
-            "rollback".to_owned(),
-            run_id.to_owned(),
-        ];
-        argv.extend([
-            "--state-dir".to_owned(),
-            state_directory.to_string_lossy().into_owned(),
-            "--approve".to_owned(),
-            run_id.to_owned(),
-        ]);
-        vec![NextAction {
-            argv,
-            requires_approval: true,
-            side_effect: SideEffect::RepositoryWrite,
-        }]
-    } else {
-        Vec::new()
-    };
-    Ok(CommandExecution {
-        exit_code: if failed { 6 } else { 0 },
-        result: result(
-            "verify",
-            if failed {
-                CommandStatus::Failed
-            } else {
-                CommandStatus::Completed
-            },
-            summary([
-                ("checks", json!(report.checks.len())),
-                (
-                    "passed",
-                    json!(
-                        report
-                            .checks
-                            .iter()
-                            .filter(|check| check.status == VerificationStatus::Passed)
-                            .count()
-                    ),
-                ),
-                (
-                    "failed",
-                    json!(
-                        report
-                            .checks
-                            .iter()
-                            .filter(|check| check.status == VerificationStatus::Failed)
-                            .count()
-                    ),
-                ),
-                (
-                    "skipped",
-                    json!(
-                        report
-                            .checks
-                            .iter()
-                            .filter(|check| check.status == VerificationStatus::Skipped)
-                            .count()
-                    ),
-                ),
-            ]),
-            report.diagnostics.clone(),
-            vec![artifact(
-                report.report_id.clone(),
-                "verification-report",
-                "application/vnd.pkgshift.verification+json",
-                &report,
-            )?],
-            Some(report.plan_id.clone()),
-            Some(run_id.to_owned()),
-            next_actions,
-        ),
-    })
-}
-
-fn rollback_command(options: &CommandOptions, run_id: &str) -> Result<CommandExecution> {
-    let root = resolve_root(&options.cwd)?;
-    let state_directory = resolve_state_directory(&root, options.state_directory.as_deref());
-    let run = rollback_stored_run(&root, &state_directory, run_id, options.approval.as_deref())?;
-    let failed = run.state == "rollback-failed";
-    Ok(CommandExecution {
-        exit_code: if failed { 5 } else { 0 },
-        result: result(
-            "rollback",
-            if failed {
-                CommandStatus::Failed
-            } else {
-                CommandStatus::RolledBack
-            },
-            summary([
-                ("runStatus", json!(run.state)),
-                ("repositoryFilesRestored", json!(!failed)),
-                ("externalDependencyStateRestored", json!(false)),
-            ]),
-            run.diagnostics.clone(),
-            vec![artifact(
-                run.run_id.clone(),
-                "run-journal",
-                "application/vnd.pkgshift.run+json",
-                &run,
-            )?],
-            Some(run.plan.plan_id.clone()),
-            Some(run.run_id.clone()),
-            Vec::new(),
-        ),
-    })
-}
-
 fn support_command() -> Result<CommandExecution> {
     let adapters = PACKAGE_MANAGERS
         .iter()
@@ -976,6 +813,8 @@ pub fn execute(options: &CommandOptions) -> CommandExecution {
         CommandKind::Apply { .. } => "apply".to_owned(),
         CommandKind::Verify { .. } => "verify".to_owned(),
         CommandKind::Rollback { .. } => "rollback".to_owned(),
+        CommandKind::RuntimeTo { target, .. } => format!("runtime to {target}"),
+        CommandKind::RuntimeRollback { .. } => "runtime rollback".to_owned(),
         CommandKind::Support => "support".to_owned(),
     };
     let execution = match &options.command {
@@ -986,6 +825,13 @@ pub fn execute(options: &CommandOptions) -> CommandExecution {
         CommandKind::Apply { plan_id } => apply_command(options, plan_id),
         CommandKind::Verify { run_id } => verify_command(options, run_id),
         CommandKind::Rollback { run_id } => rollback_command(options, run_id),
+        CommandKind::RuntimeTo {
+            target,
+            permissions,
+        } => crate::runtime::to_command(options, target, permissions),
+        CommandKind::RuntimeRollback { run_id } => {
+            crate::runtime::rollback_command(options, run_id)
+        }
         CommandKind::Support => support_command(),
     };
     execution.unwrap_or_else(|error| failure(&command_name, &error))

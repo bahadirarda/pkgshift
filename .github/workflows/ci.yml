@@ -140,3 +140,8 @@ jobs:
         run: >-
           cargo test --package pkgshift --test e2e
           comparison::compares_real_bun_and_deno_trials -- --ignored --exact
+
+      - name: Migrate a real Hono Bun runtime to Deno
+        run: >-
+          cargo test --package pkgshift --test e2e
+          runtime::migrates_a_real_hono_bun_project_and_runs_it_with_deno -- --ignored --exact
