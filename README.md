@@ -86,6 +86,14 @@ pkgshift to pnpm --trial
 
 A successful trial returns `repositoryUnchanged: true`, a nested verification report, and no source `runId`. Trial approval covers sandbox process execution only; run the normal preview again before approving apply.
 
+Select representative root package scripts when application-level proof is required:
+
+```bash
+pkgshift to bun --trial --verify-script lint --verify-script test
+```
+
+`--verify-script` is repeatable and opt-in. pkgshift verifies that each name exists in the root `package.json`, records the exact target argv and a 300-second ceiling in the immutable plan, then runs it without a shell after the target install. A later `verify <run-id>` evaluates the journaled result and never runs the script again. Selected scripts execute repository code and may create files outside pkgshift's migration snapshot, so use `--trial` first and review each script before approving a normal apply.
+
 ## Why pkgshift
 
 A package manager migration is larger than replacing a lockfile. Workspaces, dependency protocols, catalogs, overrides, patches, linker policy, registry configuration, CI, containers, runtime pins, and contributor commands can all carry package-manager semantics.
@@ -97,7 +105,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Policy translation | Converts supported linker, registry, override, resolution, package-extension, exact text-patch, and lifecycle allow-list semantics into deterministic target configuration. |
 | Approval boundary | Produces an immutable plan identifier and requires approval for that exact plan before mutation. |
 | Transactional execution | Rechecks preconditions, snapshots affected files, removes pre-migration package-local dependency state, journals cleanup and process operations, and stops at the first unsafe transition. |
-| Verification | Proves a clean target install and zero source-only repository artifacts, compares reachable source and target lock resolutions, prunes only topology-proven stale entries, distinguishes optional-only platform absence, blocks version or comparable integrity drift, and checks planned digests, target selection, workspace membership, and installer completion. |
+| Verification | Proves a clean target install and zero source-only repository artifacts, compares reachable source and target lock resolutions, prunes only topology-proven stale entries, distinguishes optional-only platform absence, blocks version or comparable integrity drift, checks planned digests, target selection, workspace membership, and installer completion, and can run explicitly selected representative scripts. |
 | Isolated trial | Runs the exact accepted plan in a disposable repository copy and proves the source remained unchanged. |
 | Recovery | Restores repository files from integrity-checked snapshots and verifies the original fingerprint. |
 
@@ -116,7 +124,7 @@ flowchart LR
     G -->|failure| H[rollback]
 ```
 
-The normal command orchestrates this pipeline without exposing repository or state paths. Before target import or installation, pkgshift removes every package-local `node_modules` directory recorded by the accepted Project IR and journals whether each path was removed or already absent. Target-native importers then run when available; source-only lockfiles remain until import and installation complete. Context-aware integration adapters update registered package scripts, CI commands and setup actions, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins without rewriting ordinary prose or runtime commands. Verification requires the cleanup record and rejects any remaining source-only lockfile or configuration artifact. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The TypeScript reference also retains diagnostic explanation and managed Agent Skill lifecycle commands during the port transition.
+The normal command orchestrates this pipeline without exposing repository or state paths. Before target import or installation, pkgshift removes every package-local `node_modules` directory recorded by the accepted Project IR and journals whether each path was removed or already absent. Target-native importers then run when available; source-only lockfiles remain until import and installation complete. Context-aware integration adapters update registered package scripts, CI commands and setup actions, cache lockfile references, containers, automation recipes, Markdown command spans, devcontainers, and toolchain pins without rewriting ordinary prose or runtime commands. Verification requires the cleanup record, rejects any remaining source-only lockfile or configuration artifact, and runs only representative root scripts that were explicitly bound into the approved plan. `--trial` executes the same plan and verifier in a disposable copy. Advanced `inspect`, `plan`, `apply`, `verify`, and `rollback` commands remain available for integrations that need stage-level control. The TypeScript reference also retains diagnostic explanation and managed Agent Skill lifecycle commands during the port transition.
 
 ## Monorepo layout
 
@@ -219,6 +227,7 @@ The TypeScript reference still exposes managed copy, symlink, status, doctor, an
 - Added, removed, or comparably integrity-mismatched resolutions block successful verification.
 - Trial sandboxes reject symbolic links and never persist migration state in the source repository.
 - Target installs run without a shell and with lifecycle scripts disabled.
+- Representative scripts are never inferred; explicitly selected scripts run without a shell, have a fixed timeout, and persist only withheld output metadata. Their repository side effects are not rollback-snapshotted.
 - Credentials are redacted from repository evidence, and Rust process output is withheld from persisted artifacts.
 - Yarn registry migration accepts authentication only through environment references and never persists literal `.npmrc` tokens.
 - Symbolic-link traversal outside the selected repository root is rejected.

@@ -35,6 +35,7 @@ fn operation(
         description,
         paths: mutations.iter().map(|entry| entry.path.clone()).collect(),
         command: Vec::new(),
+        timeout_seconds: None,
         capabilities,
         side_effect: SideEffect::RepositoryWrite,
         reversible: true,
@@ -51,6 +52,7 @@ pub fn plan_package_manager_migration(
     source_lock_graph: Option<&LockGraph>,
     target: PackageManagerId,
     accepted_lossy: bool,
+    verification_scripts: &[String],
 ) -> Result<Option<MigrationPlan>> {
     let Some(source) = inspection.package_manager.selected else {
         return Ok(None);
@@ -172,6 +174,7 @@ pub fn plan_package_manager_migration(
                     .map(ToString::to_string)
                     .collect(),
                 command: strategy.command.clone(),
+                timeout_seconds: None,
                 capabilities: analysis
                     .decisions
                     .iter()
@@ -221,6 +224,7 @@ pub fn plan_package_manager_migration(
                 .iter()
                 .map(ToString::to_string)
                 .collect(),
+            timeout_seconds: None,
             capabilities: analysis
                 .decisions
                 .iter()
@@ -244,6 +248,14 @@ pub fn plan_package_manager_migration(
         ) {
             operations.push(value);
         }
+        let (script_operations, script_diagnostics) = crate::verification::scripts::plan_operations(
+            operations.len() + 1,
+            project_ir,
+            target,
+            verification_scripts,
+        );
+        operations.extend(script_operations);
+        diagnostics.extend(script_diagnostics);
         operations.push(PlannedOperation {
             id: format!("op_{:03}", operations.len() + 1),
             phase: "verify".to_owned(),
@@ -251,6 +263,7 @@ pub fn plan_package_manager_migration(
             description: "Verify planned digests and target dependency state.".to_owned(),
             paths: Vec::new(),
             command: Vec::new(),
+            timeout_seconds: None,
             capabilities: analysis
                 .decisions
                 .iter()
@@ -311,6 +324,12 @@ pub fn plan_package_manager_migration(
                 .to_owned(),
             "workspace membership is preserved".to_owned(),
             "target installation operation succeeded".to_owned(),
+            if verification_scripts.is_empty() {
+                "representative script verification is skipped unless explicitly selected"
+                    .to_owned()
+            } else {
+                "explicitly selected representative scripts exit successfully".to_owned()
+            },
             if source_lock_graph.is_some() {
                 "source and target resolution sets match".to_owned()
             } else {

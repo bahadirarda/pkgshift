@@ -1,7 +1,6 @@
 use std::collections::BTreeSet;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
@@ -9,15 +8,18 @@ use crate::catalog::get_package_manager;
 use crate::cleanup;
 use crate::inspect::inspect_project;
 use crate::model::{
-    ApplyOutcome, Diagnostic, DiagnosticSeverity, MutationAction, ProcessExecutionRecord,
-    SCHEMA_VERSION, SnapshotEntry, StoredPlan, StoredRun, TrialReport, VerificationReport,
-    VerificationStatus,
+    ApplyOutcome, Diagnostic, DiagnosticSeverity, MutationAction, SCHEMA_VERSION, SnapshotEntry,
+    StoredPlan, StoredRun, TrialReport, VerificationReport, VerificationStatus,
 };
 use crate::util::{
     PkgshiftError, Result, atomic_write, create_new_lock, digest_json, file_digest, read_json,
     resolve_root, safe_join, short_digest, unix_timestamp_millis, write_private_json,
 };
 use crate::verification;
+
+mod process;
+
+use process::{run_bounded_process, run_process};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -435,35 +437,6 @@ fn execute_mutation(root: &Path, mutation: &crate::model::PlannedFileMutation) -
     Ok(())
 }
 
-fn withheld_output(bytes: &[u8]) -> String {
-    if bytes.is_empty() {
-        String::new()
-    } else {
-        format!("<{} bytes withheld by pkgshift>", bytes.len())
-    }
-}
-
-fn run_process(root: &Path, argv: &[String]) -> Result<ProcessExecutionRecord> {
-    let (program, arguments) = argv.split_first().ok_or_else(|| {
-        PkgshiftError::InvalidState("process operation has an empty command".to_owned())
-    })?;
-    let output = Command::new(program)
-        .args(arguments)
-        .current_dir(root)
-        .env("npm_config_ignore_scripts", "true")
-        .env("YARN_ENABLE_SCRIPTS", "false")
-        .env("BUN_INSTALL_IGNORE_SCRIPTS", "1")
-        .output()
-        .map_err(|source| PkgshiftError::Process(format!("could not start {program}: {source}")))?;
-    Ok(ProcessExecutionRecord {
-        argv: argv.to_vec(),
-        exit_code: output.status.code(),
-        stdout: withheld_output(&output.stdout),
-        stderr: withheld_output(&output.stderr),
-        success: output.status.success(),
-    })
-}
-
 pub fn apply_stored_plan(
     root: &Path,
     state_directory: &Path,
@@ -547,7 +520,7 @@ pub fn apply_stored_plan(
                 execute_mutation(&root, mutation)?;
             }
             if !operation.command.is_empty() {
-                let process = run_process(&root, &operation.command)?;
+                let process = run_process(&root, &operation.id, &operation.command)?;
                 let success = process.success;
                 run.processes.push(process);
                 save_run(&state_directory, &run)?;
@@ -578,6 +551,40 @@ pub fn apply_stored_plan(
         }
     }
 
+    for operation in plan
+        .operations
+        .iter()
+        .filter(|operation| operation.kind == verification::scripts::OPERATION_KIND)
+    {
+        let process = run_bounded_process(
+            &root,
+            &operation.id,
+            &operation.command,
+            operation.timeout_seconds.unwrap_or(300),
+        );
+        let process = match process {
+            Ok(process) => process,
+            Err(error) => {
+                run.state = "failed".to_owned();
+                run.diagnostics.push(diagnostic(
+                    "SCRIPT_VERIFICATION_EXECUTION_FAILED",
+                    error.to_string(),
+                    vec![format!(
+                        "Run pkgshift rollback {} --approve {}.",
+                        run.run_id, run.run_id
+                    )],
+                ));
+                save_run(&state_directory, &run)?;
+                return Ok(ApplyOutcome {
+                    run,
+                    verification: None,
+                });
+            }
+        };
+        run.processes.push(process);
+        save_run(&state_directory, &run)?;
+    }
+
     run.state = "verifying".to_owned();
     save_run(&state_directory, &run)?;
     let verification = verification::verify(
@@ -588,6 +595,7 @@ pub fn apply_stored_plan(
         &run_id,
         true,
         &run.dependency_state_cleanups,
+        &run.processes,
     )?;
     run.state = if verification.status == VerificationStatus::Passed {
         "succeeded"
@@ -641,6 +649,7 @@ pub fn verify_stored_run(
         run_id,
         install_succeeded,
         &run.dependency_state_cleanups,
+        &run.processes,
     )?;
     run.state = if report.status == VerificationStatus::Passed {
         "succeeded"

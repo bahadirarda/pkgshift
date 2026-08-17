@@ -4,7 +4,7 @@ title: Recovery and Verification
 description: Defines snapshot integrity, verification checks, rollback scope, and failure behavior for migration runs.
 tags: [architecture, recovery, verification, rollback, integrity]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-17T11:00:00Z}
 sources:
   - id: transactional-decision
     resource: /decisions/transactional-migrations.md
@@ -52,11 +52,20 @@ Verify reads the plan, journal, and repository. It records these MVP checks:
 | Source artifact residue | A source-only lockfile or configuration file remains after migration. |
 | Workspace membership | Package paths differ from the source Project IR. |
 | Target install | The journaled install operation is not successful. |
+| Representative scripts | Any explicitly selected root script was not run, timed out, or exited unsuccessfully. The check is skipped when no script was selected. |
 | Dependency graph drift | Added or removed resolutions, comparable integrity mismatches, a missing non-empty target graph, or incomplete parsing. |
 
 A failed check moves the verification operation and run to `failed`. A successful report moves both to `succeeded`. Reports carry their own identity and integrity digest.
 
 The source graph is extracted before planning and persisted with the accepted plan. The target graph is extracted after installation. `reachable-resolution-set-v2` prunes topology-proven unreachable entries and tolerates package-name absence only on optional-only paths; reachable version and comparable integrity drift remain blocking. Formats without sufficient topology report and apply `resolution-set-v1`. Edge-shape differences remain non-blocking evidence. A dependency-free target may omit its lockfile only when the accepted source graph proves an empty resolved set. See [Lock Graph Proof](/architecture/lock-graph-proof.md).
+
+# Representative Script Boundary
+
+pkgshift never selects project scripts automatically. Each repeatable `--verify-script <name>` value must exactly match a script in the root `package.json`; missing, malformed, or workspace-only names block the plan. The immutable operation stores its exact target argv as `npm|pnpm|yarn|bun|vlt run <name>` or `deno task <name>`, declares `process-execution`, and applies a 300-second ceiling. Execution does not pass through a shell.
+
+Representative scripts run after target installation and before structural report finalization. Their operation identifier, argv, exit code, duration, timeout state, and withheld-output byte counts are stored in the run journal. A later `verify` command reads this evidence and does not execute the script again.
+
+Unlike target installation, an explicitly selected script intentionally runs repository-defined code and is not given lifecycle-suppression environment overrides. It may create or modify paths outside the migration plan. Those script-owned effects are not included in rollback snapshots; use an isolated trial first and review the selected script before repository apply.
 
 # Isolated Trial
 
@@ -70,4 +79,4 @@ The run reaches `rolled-back` only when the restored repository fingerprint equa
 
 # External Effects
 
-The repository transaction deliberately does not snapshot `node_modules`, package-manager caches, global stores, or downloaded content. Clean target installation removes pre-migration package-local `node_modules`, and the target installer may recreate it with target-owned state. A successful rollback therefore emits `ROLLBACK_EXTERNAL_EFFECTS_REMAIN`; reinstall the source dependency state when exact local dependency parity is required. pkgshift never deletes global package-manager caches or stores during migration.
+The repository transaction deliberately does not snapshot `node_modules`, package-manager caches, global stores, downloaded content, or outputs created by explicitly selected representative scripts. Clean target installation removes pre-migration package-local `node_modules`, and the target installer may recreate it with target-owned state. A successful rollback therefore emits `ROLLBACK_EXTERNAL_EFFECTS_REMAIN`; reinstall the source dependency state when exact local dependency parity is required. pkgshift never deletes global package-manager caches or stores during migration.

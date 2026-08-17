@@ -4,7 +4,7 @@ title: Agent Interface
 description: Defines a simple keyword-based CLI and deterministic output contract for coding agents and humans.
 tags: [architecture, cli, json, agents]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-17T11:00:00Z}
 sources:
   - id: agent-first-decision
     resource: /decisions/agent-first-cli.md
@@ -29,6 +29,8 @@ It performs deterministic inspection, Project IR construction, capability analys
 
 `pkgshift to <target> --trial` preserves the same plan and approval identifier but changes the authorized side effect to process execution in a disposable repository copy. A trial returns no source run identifier and does not authorize later repository mutation.
 
+`pkgshift to <target> --verify-script <name>` binds one exact root `package.json` script to the plan. The option is repeatable and remains planning-only; staged apply reads the stored operations. pkgshift does not infer script names.
+
 Humans do not need to provide repository or state paths when running from the intended repository root.
 
 # Implementation Availability
@@ -45,7 +47,7 @@ pkgshift to bun --json --no-color --non-interactive
 
 When the plan is executable but unapproved, the command returns exit code `7`, `status: planned`, and one exact approval-bound `nextActions[].argv`. The agent presents the plan and waits for the user. After approval, it executes that argument array without reconstructing it. The approved call persists, applies, and verifies the exact plan in one invocation.
 
-For `--trial`, `nextActions[].sideEffect` is `process-execution` and the returned argument array retains `--trial`. A passing trial returns a `trial-report`, `repositoryUnchanged: true`, and `runId: null`. Agents must request a separate normal preview and repository-write approval before apply.
+For `--trial`, `nextActions[].sideEffect` is `process-execution` and the returned argument array retains `--trial`. A passing trial returns a `trial-report`, `repositoryUnchanged: true`, and `runId: null`. Agents must request a separate normal preview and repository-write approval before apply. When the preview contains repeatable `--verify-script` values, the returned argument array also preserves them unchanged.
 
 # Advanced Command Surface
 
@@ -84,6 +86,7 @@ This shortcut is equivalent to `pkgshift plan package-manager --to bun`. Neither
 - The guided command uses `.pkgshift/state` only after approval; `--state-dir <path>` can override it.
 - Trial uses private state inside its temporary copy and never creates the default state directory in the source repository.
 - Advanced planning persists an artifact only when `--state-dir <path>` is explicitly supplied.
+- `--verify-script <name>` is accepted only by guided or staged planning commands, validates exact root script membership, and adds a bounded shell-free `verification.run-script` operation.
 
 # Result Envelope
 
@@ -137,7 +140,7 @@ Diagnostics provide the stable, specific reason. Exit codes remain intentionally
 
 Planning emits Project IR, capability analysis, exact file mutations, and plan artifacts through the result envelope. The first guided call does not persist them. Once the exact plan is approved, the command re-plans against current repository evidence, requires the same plan identifier, and stores one integrity-checked bundle in `.pkgshift/state` before apply. Advanced planning stores a bundle only when `--state-dir` is provided. Persistence does not imply approval. A plan is executable only when its target is production, all observed capabilities have implemented safe transformations, every blocking diagnostic is absent, and any lossy decisions were accepted while planning.
 
-Apply persists the run journal, package-local dependency-state cleanup records, recovery snapshot, and redacted process report. Verify persists a report tied to the run and plan, including clean-install and source-artifact residue checks. Explain can load diagnostic codes, plan bundles, run journals, process reports, and verification reports without mutation.
+Apply persists the run journal, package-local dependency-state cleanup records, recovery snapshot, and redacted process report. Explicitly selected representative scripts record their operation identifier, exact argv, exit code, duration, timeout status, and withheld-output metadata. Verify persists a report tied to the run and plan, including clean-install, source-artifact residue, and representative-script checks; it never reruns repository code. Explain can load diagnostic codes, plan bundles, run journals, process reports, and verification reports without mutation.
 
 Planning with a source lockfile also emits a redacted `source-lock-graph` artifact. Verification emits `lockGraphComparison` inside its report. Trial emits a `trial-report` containing withheld process records and nested verification.
 
@@ -145,4 +148,4 @@ Planning with a source lockfile also emits a redacted `source-lock-graph` artifa
 
 An agent may run a guided preview, inspect, plan, explain, status, and doctor operations without migration approval. It must present the plan summary, warnings, and side effects before executing an approval-bound next action. Guided execution and advanced apply require `--approve <plan-id>`; rollback requires `--approve <run-id>`. Skill install and uninstall require the exact `skill:pkgshift:<scope>:<client>` approval token.
 
-Apply and trial remove accepted package-local source dependency state before running declared native import and target installation commands without lifecycle scripts. Verify is filesystem- and artifact-read-only and therefore does not need a second approval. Rollback does not recreate the removed source `node_modules` state.
+Apply and trial remove accepted package-local source dependency state before running declared native import and target installation commands without lifecycle scripts. Explicit representative scripts run repository-defined code after installation and may create output outside the rollback snapshot; agents should prefer a trial before normal apply. Verify is filesystem- and artifact-read-only and therefore does not need a second approval. Rollback does not recreate the removed source `node_modules` state or remove unplanned script output.
