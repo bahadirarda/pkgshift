@@ -948,6 +948,7 @@ fn resolutions_to_vlt_modifiers(resolutions: &Map<String, Value>) -> Option<Map<
     Some(output)
 }
 
+mod commands;
 mod project;
 
 pub(crate) use project::transform_project;
