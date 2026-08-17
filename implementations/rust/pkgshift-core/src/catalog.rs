@@ -1,6 +1,8 @@
 use std::str::FromStr;
 
-use crate::model::{NativeImportMode, NativeImportStrategy, PackageManagerId, SupportTier};
+use crate::model::{
+    ExecutableRequirement, NativeImportMode, NativeImportStrategy, PackageManagerId, SupportTier,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct PackageManagerDefinition {
@@ -92,6 +94,24 @@ pub fn get_package_manager(id: PackageManagerId) -> &'static PackageManagerDefin
         .iter()
         .find(|definition| definition.id == id)
         .expect("every package manager identifier has a catalog entry")
+}
+
+pub fn executable_requirement(id: PackageManagerId) -> ExecutableRequirement {
+    let definition = get_package_manager(id);
+    let program = definition
+        .install_command
+        .first()
+        .expect("every package manager install command has a program");
+    let (_, required_version) = definition
+        .package_manager_pin
+        .rsplit_once('@')
+        .expect("every package manager pin includes an exact version");
+    ExecutableRequirement {
+        program: (*program).to_owned(),
+        required_version: required_version.to_owned(),
+        version_command: vec![(*program).to_owned(), "--version".to_owned()],
+        package_manager_pin: definition.package_manager_pin.to_owned(),
+    }
 }
 
 pub fn normalize_package_manager_id(value: &str) -> Option<PackageManagerId> {

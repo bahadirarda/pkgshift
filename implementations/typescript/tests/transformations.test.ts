@@ -708,7 +708,97 @@ describe("target transformations", () => {
     });
   });
 
-  test("blocks patch ranges and missing patch files", async () => {
+  test("converts a Yarn range and standard unified diff to pnpm", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "yarn@4.18.0",
+        dependencies: {
+          "left-pad": "patch:left-pad@npm%3A%5E1.3.0#~/.yarn/patches/left-pad.patch",
+        },
+      }),
+      "yarn.lock": "# fixture\n",
+      ".yarnrc.yml": "nodeLinker: node-modules\n",
+      ".yarn/patches/left-pad.patch": [
+        "--- a/index.js",
+        "+++ b/index.js",
+        "@@ -1 +1 @@",
+        "-old",
+        "+new",
+        "",
+      ].join("\n"),
+    }, "pnpm");
+
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    const parsedManifest = JSON.parse(manifest?.content ?? "{}") as {
+      dependencies: Record<string, string>;
+    };
+    expect(parsedManifest.dependencies["left-pad"]).toBe("^1.3.0");
+    const configuration = mutations(plan).find((entry) => entry.path === "pnpm-workspace.yaml");
+    const parsed = Bun.YAML.parse(configuration?.content ?? "") as {
+      patchedDependencies: Record<string, string>;
+    };
+    expect(parsed.patchedDependencies).toEqual({
+      "left-pad@^1.3.0": ".yarn/patches/left-pad.patch",
+    });
+  });
+
+  test("converts pnpm range and name-only patches to Yarn resolutions", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "pnpm@11.21.0",
+        dependencies: { "left-pad": "1.3.0", "repeat-string": "1.6.1" },
+      }),
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "pnpm-workspace.yaml": [
+        "patchedDependencies:",
+        "  'left-pad@^1.3.0': 'patches/left-pad.patch'",
+        "  'repeat-string': 'patches/repeat-string.patch'",
+        "",
+      ].join("\n"),
+      "patches/left-pad.patch": TEXT_PATCH,
+      "patches/repeat-string.patch": TEXT_PATCH,
+    }, "yarn-modern");
+
+    expect(plan.executable).toBeTrue();
+    const manifest = mutations(plan).find((entry) => entry.path === "package.json");
+    const parsed = JSON.parse(manifest?.content ?? "{}") as {
+      resolutions: Record<string, string>;
+    };
+    expect(parsed.resolutions).toEqual({
+      "left-pad@npm:1.3.0": "patch:left-pad@npm%3A1.3.0#~/patches/left-pad.patch",
+      "repeat-string@npm:1.6.1": "patch:repeat-string@npm%3A1.6.1#~/patches/repeat-string.patch",
+    });
+  });
+
+  test("blocks non-exact Yarn patch expansion without resolution evidence", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "pnpm@11.21.0",
+        dependencies: { "left-pad": "^1.3.0" },
+      }),
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "pnpm-workspace.yaml": [
+        "patchedDependencies:",
+        "  'left-pad@^1.3.0': 'patches/left-pad.patch'",
+        "",
+      ].join("\n"),
+      "patches/left-pad.patch": TEXT_PATCH,
+    }, "yarn-modern");
+
+    expect(plan.executable).toBeFalse();
+    expect(plan.diagnostics.map((entry) => entry.code)).toContain(
+      "PATCH_RESOLUTION_EVIDENCE_MISSING",
+    );
+  });
+
+  test("blocks patch ranges for Bun and missing patch files", async () => {
     const range = await planFixture({
       "package.json": JSON.stringify({
         name: "root",

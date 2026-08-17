@@ -8,6 +8,7 @@
 * [Run Journal](run-journal.md) - Defines run and operation state transitions, revisions, and persistence.
 * [Recovery and Verification](recovery-and-verification.md) - Defines snapshot integrity, post-apply checks, rollback, and external-effect limits.
 * [Lock Graph Proof](lock-graph-proof.md) - Defines normalized lock graphs, native import paths, and blocking resolution drift policy.
+* [Platform, Edge, and Executable Verification](verification-policies.md) - Defines target matrices, edge equivalence, and exact target executable proof.
 * [Repository Integrations](repository-integrations.md) - Defines deterministic CI, container, toolchain, documentation, and development-environment migration.
 * [Target Comparison](target-comparison.md) - Defines aggregate approval and independent isolated evidence for two or more candidate targets.
 * [Bun to Deno Runtime Recipes](runtime-migration-recipes.md) - Defines the dedicated deterministic runtime transformation, permission, transaction, and residue-verification boundary.

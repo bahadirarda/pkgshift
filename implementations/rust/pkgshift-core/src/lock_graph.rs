@@ -1,14 +1,11 @@
 mod comparison;
 mod extraction;
 
-pub use comparison::{compare_lock_graphs, compare_lock_graphs_for_project};
-pub use extraction::extract_lock_graph;
-
-#[cfg(test)]
-use crate::model::{
-    DependencyProtocol, LockGraph, LockGraphEdge, LockGraphNode, PackageManagerId, ProjectIr,
-    SCHEMA_VERSION, VerificationStatus,
+pub use comparison::{
+    compare_lock_graphs, compare_lock_graphs_for_project,
+    compare_lock_graphs_for_project_with_policy,
 };
+pub use extraction::extract_lock_graph;
 
 #[cfg(test)]
 mod tests {
@@ -17,6 +14,13 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+    use crate::model::{
+        DependencyProtocol, LockGraph, LockGraphEdge, LockGraphNode, PackageManagerId, ProjectIr,
+        SCHEMA_VERSION, VerificationStatus,
+    };
+    use crate::{
+        EdgeEquivalencePolicy, PackagePlatformConstraint, TargetPlatform, VerificationPolicy,
+    };
 
     fn project_ir_with_dependencies(dependencies: &[(&str, &str)]) -> ProjectIr {
         ProjectIr {
@@ -72,6 +76,7 @@ mod tests {
                     name: (*name).to_owned(),
                     version: (*version).to_owned(),
                     integrity: Some(format!("sha512-{name}-{version}")),
+                    platform: PackagePlatformConstraint::default(),
                 })
                 .collect(),
             edges: edges
@@ -161,6 +166,7 @@ mod tests {
                 name: "example".to_owned(),
                 version: "1.0.0".to_owned(),
                 integrity: Some("sha512-old".to_owned()),
+                platform: PackagePlatformConstraint::default(),
             }],
             edges: Vec::new(),
             diagnostics: Vec::new(),
@@ -203,7 +209,7 @@ mod tests {
         let comparison = compare_lock_graphs_for_project(&source, &target, &project_ir)
             .expect("reachable comparison");
 
-        assert_eq!(comparison.policy, "reachable-resolution-set-v2");
+        assert_eq!(comparison.policy, "reachable-resolution-set-v3");
         assert_eq!(comparison.status, VerificationStatus::Passed);
         assert_eq!(comparison.source_resolutions, 2);
         assert_eq!(comparison.pruned_source_resolutions, ["stale@9.0.0"]);
@@ -233,6 +239,87 @@ mod tests {
         assert_eq!(
             comparison.optional_platform_differences,
             ["source-only:platform-package@1.0.0"]
+        );
+    }
+
+    #[test]
+    fn target_matrix_tolerates_only_proven_incompatible_optional_branches() {
+        let project_ir = project_ir_with_dependencies(&[("dependencies", "live")]);
+        let mut source = graph(
+            "lockgraph_source",
+            PackageManagerId::Npm,
+            &[("live", "1.0.0"), ("platform-package", "1.0.0")],
+            &[("live@1.0.0", "platform-package", "optional")],
+        );
+        let target = graph(
+            "lockgraph_target",
+            PackageManagerId::Deno,
+            &[("live", "1.0.0")],
+            &[],
+        );
+        let policy = VerificationPolicy::normalized(
+            ["linux/x64/glibc"
+                .parse::<TargetPlatform>()
+                .expect("target platform")],
+            EdgeEquivalencePolicy::Compatible,
+        );
+        source
+            .nodes
+            .iter_mut()
+            .find(|node| node.name == "platform-package")
+            .expect("optional node")
+            .platform
+            .os = vec!["darwin".to_owned()];
+        let compatible =
+            compare_lock_graphs_for_project_with_policy(&source, &target, &project_ir, &policy)
+                .expect("matrix comparison");
+        assert_eq!(compatible.status, VerificationStatus::Passed);
+
+        source
+            .nodes
+            .iter_mut()
+            .find(|node| node.name == "platform-package")
+            .expect("optional node")
+            .platform
+            .os = vec!["linux".to_owned()];
+        let drift =
+            compare_lock_graphs_for_project_with_policy(&source, &target, &project_ir, &policy)
+                .expect("matrix comparison");
+        assert_eq!(drift.status, VerificationStatus::Failed);
+        assert_eq!(drift.removed_resolutions, ["platform-package@1.0.0"]);
+    }
+
+    #[test]
+    fn strict_edge_equivalence_blocks_reachable_edge_shape_drift() {
+        let project_ir = project_ir_with_dependencies(&[("dependencies", "live")]);
+        let source = graph(
+            "lockgraph_source",
+            PackageManagerId::Npm,
+            &[("child", "2.0.0"), ("live", "1.0.0")],
+            &[("live@1.0.0", "child", "dependency")],
+        );
+        let target = graph(
+            "lockgraph_target",
+            PackageManagerId::Pnpm,
+            &[("child", "2.0.0"), ("live", "1.0.0")],
+            &[("live@1.0.0", "child", "optional")],
+        );
+        let compatible = compare_lock_graphs_for_project(&source, &target, &project_ir)
+            .expect("compatible comparison");
+        assert_eq!(compatible.status, VerificationStatus::Passed);
+        assert!(!compatible.edge_changes.is_empty());
+
+        let strict = compare_lock_graphs_for_project_with_policy(
+            &source,
+            &target,
+            &project_ir,
+            &VerificationPolicy::normalized([], EdgeEquivalencePolicy::Strict),
+        )
+        .expect("strict comparison");
+        assert_eq!(strict.status, VerificationStatus::Failed);
+        assert_eq!(
+            strict.verification_policy.edge_equivalence,
+            EdgeEquivalencePolicy::Strict
         );
     }
 

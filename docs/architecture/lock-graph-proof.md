@@ -5,7 +5,7 @@ description: Defines normalized source and target lock graphs, native importer s
 tags: [architecture, lockfile, dependency-graph, verification, integrity]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-17T07:24:55Z}
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: pnpm-import
     resource: https://pnpm.io/cli/import
@@ -36,7 +36,7 @@ The Rust engine extracts the accepted source lockfile into a normalized `LockGra
 
 The graph intentionally contains dependency evidence rather than raw lockfile content:
 
-- Package name, resolved version, source locator, and integrity value when present.
+- Package name, resolved version, source locator, integrity value, and OS, CPU, or libc constraints when present.
 - Logical dependency, optional dependency, and peer dependency edges where the format exposes them, including an exact `name@version` target when the lockfile provides enough locator evidence.
 - Source manager, format, lockfile path, content digest, completeness, and diagnostics.
 
@@ -61,19 +61,19 @@ Malformed, non-UTF-8, structurally unsupported, or incomplete production lockfil
 
 `resolution-set-v1` remains a stable whole-lockfile policy. It compares every unique `name@version` resolution across the source and target graphs and remains active for formats, including vlt v1, that do not expose enough topology for reachability proof.
 
-`reachable-resolution-set-v2` is the default when both formats expose dependency topology. It starts from external dependencies declared by every Project IR package, excludes local workspace and filesystem protocols, and traverses normalized edges. Exact lockfile targets are followed when available. When only a dependency name is available, every matching version remains reachable; this conservative expansion may retain obsolete same-name entries but cannot silently discard a possible dependency.
+`reachable-resolution-set-v3` is the default when both formats expose dependency topology. It starts from external dependencies declared by every Project IR package, excludes local workspace and filesystem protocols, and traverses normalized edges. Exact lockfile targets are followed when available. When only a dependency name is available, every matching version remains reachable; this conservative expansion may retain obsolete same-name entries but cannot silently discard a possible dependency.
 
 - Added resolutions block verification.
 - Removed resolutions block verification.
 - Different integrity values block verification when both formats expose comparable integrity families.
-- Resolutions not reachable from a manifest root are pruned and recorded separately under V2.
-- A package reached only through optional or peer edges may be absent on one platform when that package name is entirely absent on the other graph. An optional package present on both sides with different versions still blocks verification.
-- Missing required roots, edges, or exact targets block V2 instead of falling back to a manifest-only success claim.
-- Edge changes are reported as evidence but do not block in this policy because package managers encode peer placement, optional dependencies, hoisting, and deduplication differently.
+- Resolutions not reachable from a manifest root are pruned and recorded separately under V3.
+- Without a target matrix, a package reached only through optional or peer edges may be absent when that package name is entirely absent on the other graph. With a matrix, the package's recorded constraints must prove incompatibility with every selected target. An optional package present on both sides with different versions still blocks verification.
+- Missing required roots, edges, exact targets, or required platform evidence block V3 instead of falling back to a manifest-only success claim.
+- Compatible edge policy reports normalized parent, dependency, and kind changes as evidence. Strict edge policy makes those changes blocking. Target locator encodings are excluded from edge identity.
 - An incomplete target graph blocks verification.
 - When the accepted source resolution set is empty and the target manager legitimately omits an empty lockfile, verification records an absent target graph and passes the explicit empty-set proof.
 
-The comparison artifact records counts, bounded drift lists, graph identifiers, policy identifier, pruned resolutions, tolerated optional platform differences, reachability issues, and status. V2 does not change the meaning of `resolution-set-v1`, and neither policy treats edge-shape differences as blocking equivalence yet.
+The comparison artifact records counts, bounded drift lists, graph identifiers, policy identifier, normalized verification policy, pruned resolutions, tolerated optional platform differences, reachability issues, and status. V3 does not change the meaning of `resolution-set-v1`.
 
 # Native Import Selection
 
@@ -92,4 +92,4 @@ A dedicated importer runs after deterministic target configuration is rendered a
 
 Graph extraction diagnostics participate in plan executability. Graph comparison participates in run verification. Failure preserves the run journal and recovery snapshot so the operator can inspect evidence and approve rollback. No graph mismatch is converted into an automatic manifest edit, dependency upgrade, or AI-authored repair.
 
-Both policies remain fail-closed. V2 removes only entries that topology proves unreachable, tolerates only package-name absence on optional-only paths, and keeps reachable version or integrity drift blocking. Isolated trial exposes those distinctions before repository writes. If a format lacks topology, the report names `resolution-set-v1` explicitly rather than implying V2 coverage.
+Both policies remain fail-closed. V3 removes only entries that topology proves unreachable, applies target-matrix evidence to optional-only absence, and keeps reachable version or integrity drift blocking. Strict mode also blocks normalized dependency-edge drift. Isolated trial exposes those distinctions before repository writes. If a format lacks topology, the report names `resolution-set-v1` explicitly rather than implying V3 coverage.

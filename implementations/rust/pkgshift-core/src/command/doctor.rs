@@ -27,6 +27,14 @@ fn next_action_for_report(
         argv.push("--verify-script".to_owned());
         argv.push(script.clone());
     }
+    for platform in &options.verification_policy.target_platforms {
+        argv.push("--target-platform".to_owned());
+        argv.push(platform.to_string());
+    }
+    if options.verification_policy.edge_equivalence != crate::EdgeEquivalencePolicy::Compatible {
+        argv.push("--edge-equivalence".to_owned());
+        argv.push(options.verification_policy.edge_equivalence.to_string());
+    }
     argv.extend([
         "--json".to_owned(),
         "--no-color".to_owned(),
@@ -63,6 +71,7 @@ fn target_doctor_command(options: &CommandOptions, target_value: &str) -> Result
         target,
         options.accept_lossy,
         &options.verification_scripts,
+        &options.verification_policy,
     )?;
     let mut artifacts = context_artifacts(&context)?;
     if let Some(analysis) = &assessment.capability_analysis {
@@ -139,6 +148,7 @@ fn matrix_doctor_command(options: &CommandOptions) -> Result<CommandExecution> {
         &context,
         options.accept_lossy,
         &options.verification_scripts,
+        &options.verification_policy,
     )?;
     let mut artifacts = context_artifacts(&context)?;
     artifacts.push(artifact(

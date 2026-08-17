@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 
+use crate::VerificationPolicy;
 use crate::catalog::get_package_manager;
 use crate::doctor::context::ReadinessContext;
 use crate::doctor::model::{
@@ -32,6 +33,7 @@ struct ReportIdentity<'a> {
     executable: bool,
     available_after_review: bool,
     accepted_lossy: bool,
+    verification_policy: &'a VerificationPolicy,
     package_count: usize,
     workspace_patterns: &'a [String],
     available_root_scripts: &'a [String],
@@ -160,6 +162,7 @@ pub(crate) fn assess(
     target: PackageManagerId,
     accepted_lossy: bool,
     verification_scripts: &[String],
+    verification_policy: &VerificationPolicy,
 ) -> Result<ReadinessAssessment> {
     let capability_analysis = match context.project_ir.as_ref() {
         Some(project) => analyze_capabilities(project, target)?,
@@ -174,6 +177,7 @@ pub(crate) fn assess(
             target,
             accepted_lossy,
             verification_scripts,
+            verification_policy,
         )?,
         _ => None,
     };
@@ -227,6 +231,7 @@ pub(crate) fn assess(
             executable,
             available_after_review,
             accepted_lossy,
+            verification_policy,
             package_count,
             workspace_patterns: &workspace_patterns,
             available_root_scripts: &scripts,
@@ -244,6 +249,7 @@ pub(crate) fn assess(
         migration_available: executable,
         available_after_review,
         accepted_lossy,
+        verification_policy: verification_policy.clone(),
         source,
         target,
         target_tier,

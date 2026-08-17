@@ -5,7 +5,7 @@ description: Records the completed technical MVP, its validation evidence, and e
 tags: [product, mvp, status, delivery]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-17T11:00:00Z}
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -27,7 +27,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Explicit ambiguity and conflicting-evidence diagnostics.
 - Repository fingerprints over migration-relevant evidence.
 - Normalized source lock graphs bound to immutable plans and independently extracted target graphs.
-- Blocking `reachable-resolution-set-v2` verification with proven-unreachable pruning, optional-only platform absence handling, and explicit `resolution-set-v1` fallback for topology-limited formats.
+- Blocking `reachable-resolution-set-v3` verification with proven-unreachable pruning, configurable target-platform matrices, compatible or strict dependency-edge equivalence, and explicit `resolution-set-v1` fallback for topology-limited formats.
 - Target-native importer selection for verified pnpm, Bun, Yarn Classic, Yarn Modern, and npm migration paths.
 - Versioned Project IR across workspace packages, dependency protocols, policy shapes, linker settings, and integrations.
 - Source-to-target capability analysis backed by explicit rules and authoritative documentation.
@@ -48,7 +48,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Secret-safe `.npmrc` translation into Yarn Modern registry, scope, authentication-policy, and environment-token configuration.
 - Bidirectional Bun, pnpm, and Yarn Modern lifecycle allow-list rendering using current `trustedDependencies`, `allowBuilds`, and `dependenciesMeta` contracts.
 - Shared-schema `packageExtensions` rendering among npm, pnpm, and Yarn Modern.
-- Exact-version, text-only patch conversion among Yarn Modern, pnpm, and Bun for direct dependencies and transitive Yarn resolutions.
+- Portable text unified-diff patch conversion among Yarn Modern, pnpm, and Bun for direct dependencies and transitive Yarn resolutions. Yarn Modern and pnpm retain exact, range, and name-only selectors; Bun remains exact-version only.
 - Repository fingerprints and exact approval preconditions that include project patch files regardless of their directory.
 - Opt-in atomic plan bundle persistence with digest verification.
 - Exact plan and run approval tokens before mutation.
@@ -56,6 +56,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - A revisioned run and operation journal with stale-writer rejection and orphan-lock recovery.
 - A repository-scoped transaction lock that serializes competing agents and runs.
 - Shell-free package-manager execution with lifecycle scripts disabled and secret-safe process records.
+- Exact target executable resolution and bounded version probing before snapshots, with the resolved path, version, and package-manager pin persisted as verification evidence.
 - Explicit root representative-script selection with immutable target argv, bounded shell-free execution, withheld output, and journal-backed verification that never reruns scripts.
 - Structural verification tied to the exact run and plan.
 - Repository rollback with snapshot integrity and restored-fingerprint verification.
@@ -73,7 +74,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Rust subprocess fixtures for isolated trial, native importer ordering, successful graph proof, intentional graph drift, and source repository preservation.
 - Deterministic package-local dependency-state cleanup before target installation, with fail-closed path validation, cleanup journal evidence, and explicit source-artifact residue verification.
 - Bounded Bun runtime-reference scanning for type dependencies, manifest scripts, global API use, and `bun:` imports, reported without conflating runtime migration with package-manager cleanup.
-- Deterministic Bun-to-Deno recipes for official Hono `Bun.serve` handlers, `bun:test`, Bun text and JSON reads, direct runtime scripts, and Bun type residue, with SQLite and other unsupported APIs blocked instead of delegated to a model.
+- Deterministic Bun-to-Deno recipes for official Hono `Bun.serve` handlers, `bun:test`, Bun text and JSON reads, the shared `bun:sqlite` `Database` subset, Bun `$` shell templates through dax, direct runtime scripts, and Bun type residue, with unsupported shapes blocked instead of delegated to a model.
 - A real-installer Rust acceptance run for a multi-package pnpm workspace migrated to Bun and rolled back to its original fingerprint.
 - Real Bun 1.3.14 acceptance runs for dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback.
 - Real vlt 1.0.2 and Deno 2.9.5 acceptance runs for dependency-bearing multi-package Bun workspaces, workspace protocols, target installation, and graph proof.
@@ -90,17 +91,17 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Migration readiness | MVP complete | Rust doctor reports deterministic verdicts, diagnostics, integration impact, and projected effects without a plan, persisted state, process execution, or repository mutation. |
 | Plan artifact persistence | MVP complete | Persistence is explicit, atomic, immutable, digest-checked, and repository-bound. |
 | Transaction executor | MVP complete | Recovery snapshots, precondition rechecks, atomic writes, journal transitions, and partial-failure fixtures pass. |
-| Verification | MVP complete | Planned digests, clean-install evidence, source-artifact residue, target selection, lockfile behavior, workspace membership, install completion, and reachable resolution-set parity are checked. |
+| Verification | Post-MVP roadmap complete | Planned digests, exact executable evidence, clean-install evidence, source-artifact residue, target selection, lockfile behavior, workspace membership, install completion, platform-aware reachable resolution parity, and configurable edge equivalence are checked. |
 | Isolated trial | MVP complete | Exact approval executes the accepted plan in a disposable copy and reports repository preservation plus nested verification. |
 | Multi-target comparison | MVP complete | Aggregate approval binds candidate plan identities; independent disposable trials report passed, failed, and blocked evidence while preserving the source repository. |
-| Bun-to-Deno runtime recipes | Initial production subset complete | Explicit permissions, exact approval, source-content redaction, digest-bound apply, residue verification, rollback, and a real Hono Deno run pass. |
+| Bun-to-Deno runtime recipes | Expanded production subset complete | Explicit permissions, exact approval, Hono serving, tests, files, SQLite, shell templates, source-content redaction, digest-bound apply, residue verification, rollback, and end-to-end Deno migration fixtures pass. |
 | Rollback | MVP complete | Successful, failed, and partially applied runs restore repository files and verify the baseline fingerprint. |
 | Skill installer | MVP complete | Codex and Claude Code project destinations pass copy, link, conflict, status, and protected-uninstall fixtures. |
 | Native distribution | MVP complete | Unix fixture archives pass install, stale-data cleanup, and smoke-failure rollback; Windows fixtures additionally prove checksum rejection on `windows-2025`. |
 | Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode produce executable plans when every observed feature has a safe implemented path. |
 | Rust primary path | MVP complete | Inspect, plan, exact approval, apply, verify, and rollback pass subprocess and real-installer acceptance coverage. |
 | Polyglot workspace | MVP complete | Cargo crates and the TypeScript reference run from isolated workspace boundaries under one CI contract. |
-| Advanced Rust renderer parity | Production parity complete | Override, resolution, package-extension, exact text-patch, linker, registry, lifecycle, vlt, and Deno rendering pass Rust and TypeScript parity fixtures; unsupported and manual-only transformations remain fail-closed. |
+| Advanced Rust renderer parity | Production parity complete | Override, resolution, package-extension, portable text-patch, linker, registry, lifecycle, vlt, and Deno rendering pass Rust and TypeScript parity fixtures; unsupported and manual-only transformations remain fail-closed. |
 
 # Explicit Boundaries
 
@@ -111,18 +112,25 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Dependency lifecycle scripts remain disabled during target installation.
 - Rollback does not restore pre-migration `node_modules`, global stores, downloads, or package-manager caches; successful migration removes package-local source dependency state before target installation and never deletes global stores.
 - Binary `bun.lockb` graph extraction fails closed until the repository converts it to the current text `bun.lock` format.
-- Reachable-resolution proof does not yet make dependency edge shape blocking because peer placement, hoisting, and deduplication representations differ between managers.
+- Compatible reachable-resolution proof reports dependency-edge shape differences without blocking because peer placement, hoisting, and deduplication representations differ between managers. `--edge-equivalence strict` makes normalized parent, dependency, and kind drift blocking when a repository requires that stronger contract.
 - Representative project scripts are not selected automatically; only exact root script names supplied with `--verify-script` are executed, and their repository side effects remain outside rollback snapshots.
 - Artifact explanation is read-only and covers registered diagnostics plus persisted package-manager and runtime plans, runs, and verification reports; ephemeral trial and comparison reports remain available only in their originating command result.
 - Unsupported and manual-only transformations emit blocking diagnostics instead of delegating edits to a model.
-- Runtime migration is a separate Rust-only command and currently targets Deno from Bun; package-manager selection, lockfiles, installation, advanced Bun APIs, `bunfig.toml`, shell behavior, macros, routes, and WebSockets remain outside its deterministic recipe subset.
+- Runtime migration is a separate Rust-only command and currently targets Deno from Bun; package-manager selection, lockfiles, installation, advanced Bun APIs, `bunfig.toml`, shell behavior beyond the verified `$` template, Bun-only SQLite members, macros, routes, and WebSockets remain outside its deterministic recipe subset.
 - Registry tokens must use `${NAME}` references for Yarn Modern translation; literal credentials and unrecognized `.npmrc` settings fail closed without entering plan artifacts.
 - pnpm output uses the current `allowBuilds` map while inspection continues to accept legacy `onlyBuiltDependencies` input.
 - Yarn per-dependency build denials outside global allow-list mode remain blocking because other targets cannot preserve them safely.
 - Override nesting beyond one deterministic parent-child selector level and Yarn resolution selectors that cannot map to a bare npm package remain blocking.
-- Patch conversion requires one exact `name@version`, one project-relative `.patch` file, and a text-only git unified diff; ranges, binary patches, missing files, and multiple or parameterized Yarn patch sources remain blocking.
+- Patch conversion requires one project-relative `.patch` file and a portable text unified diff. Yarn Modern and pnpm may retain exact, semver-range, or name-only selectors; Bun requires an exact `name@version`. Binary patches, missing files, remote paths, and multiple, optional, or parameterized Yarn patch sources remain blocking.
 - Documentation remains `draft` until a human verifier records review evidence.
 
-# Post-MVP Work
+# Completed Post-MVP Roadmap
 
-Expand patch conversion beyond the exact text-only subset, grow runtime recipes beyond Bun-to-Deno safe shapes, add configurable target-platform matrices and edge-equivalence policies, and add target executable version resolution.
+The accepted post-MVP roadmap is complete:
+
+- Patch conversion now supports portable semver ranges and name-only pnpm selectors for Yarn Modern while retaining Bun's exact-version safety boundary and text unified-diff validation.
+- Bun-to-Deno runtime coverage now includes deterministic `bun:sqlite` `Database` and Bun `$` shell recipes in addition to serving, tests, files, scripts, and type cleanup.
+- Package-manager plans now bind normalized target-platform matrices and compatible or strict dependency-edge equivalence into planning, approval, doctor, comparison, and verification evidence.
+- Apply now resolves the target executable, requires the exact catalog version before mutation, persists the resolved identity, and verifies it as a blocking check.
+
+No accepted roadmap item remains open. Further package-manager formats, binary patch transport, runtime APIs, and platform metadata sources require separately researched and approved scope.

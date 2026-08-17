@@ -1,7 +1,10 @@
 mod bun_file;
 mod bun_serve;
+mod bun_shell;
+mod bun_sqlite;
 mod imports;
 mod manifest;
+mod named_import;
 mod tsconfig;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -159,6 +162,8 @@ pub(crate) fn transform_file(
     let mut result = TransformResult::unchanged(&file.content);
     if source_file(&file.path) {
         result.merge(imports::transform(&file.path, &result.content));
+        result.merge(bun_sqlite::transform(&file.path, &result.content));
+        result.merge(bun_shell::transform(&file.path, &result.content));
         result.merge(bun_serve::transform(&file.path, &result.content));
         result.merge(bun_file::transform(&file.path, &result.content));
         result
@@ -235,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn leaves_sqlite_fail_closed() {
+    fn transforms_the_verified_sqlite_subset() {
         let output = transform_file(
             &RuntimeFile {
                 path: "src/database.ts".to_owned(),
@@ -243,12 +248,10 @@ mod tests {
             },
             &BTreeSet::new(),
         );
-        assert_eq!(output.content, "import { Database } from \"bun:sqlite\";\n");
-        assert!(
-            output
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.code == "RUNTIME_BUN_MODULE_UNSUPPORTED")
+        assert_eq!(
+            output.content,
+            "import { DatabaseSync as Database } from \"node:sqlite\";\n"
         );
+        assert!(output.diagnostics.is_empty());
     }
 }

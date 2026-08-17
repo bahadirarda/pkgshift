@@ -5,6 +5,8 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::verification_policy::{PackagePlatformConstraint, VerificationPolicy};
+
 pub const SCHEMA_VERSION: &str = "1.0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -268,6 +270,8 @@ pub struct LockGraphNode {
     pub version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub integrity: Option<String>,
+    #[serde(default, skip_serializing_if = "PackagePlatformConstraint::is_empty")]
+    pub platform: PackagePlatformConstraint,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -414,6 +418,24 @@ pub struct NativeImportStrategy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ExecutableRequirement {
+    pub program: String,
+    pub required_version: String,
+    pub version_command: Vec<String>,
+    pub package_manager_pin: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedExecutable {
+    pub program: String,
+    pub path: String,
+    pub version: String,
+    pub package_manager_pin: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MigrationPlan {
     pub schema_version: String,
     pub plan_id: String,
@@ -430,6 +452,10 @@ pub struct MigrationPlan {
     pub source_lock_graph_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub native_import: Option<NativeImportStrategy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_executable: Option<ExecutableRequirement>,
+    #[serde(default)]
+    pub verification_policy: VerificationPolicy,
     pub operations: Vec<PlannedOperation>,
     pub diagnostics: Vec<Diagnostic>,
     pub verification: Vec<String>,
@@ -495,6 +521,8 @@ pub struct StoredRun {
     pub snapshot_entries: Vec<SnapshotEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependency_state_cleanups: Vec<DependencyStateCleanupRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_executable: Option<ResolvedExecutable>,
     pub processes: Vec<ProcessExecutionRecord>,
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -576,6 +604,8 @@ pub struct LockGraphComparison {
     pub removed_resolutions: Vec<String>,
     pub integrity_mismatches: Vec<String>,
     pub edge_changes: Vec<String>,
+    #[serde(default)]
+    pub verification_policy: VerificationPolicy,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pruned_source_resolutions: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

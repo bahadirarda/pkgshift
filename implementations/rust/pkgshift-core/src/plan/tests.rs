@@ -52,6 +52,7 @@ fn plan_manifest_policy(
         target,
         accepted_lossy,
         &[],
+        &crate::VerificationPolicy::default(),
     )
     .expect("planning")
     .expect("migration plan")
@@ -103,6 +104,7 @@ fn plan_fixture_with_scripts(
         target,
         accepted_lossy,
         verification_scripts,
+        &crate::VerificationPolicy::default(),
     )
     .expect("planning")
     .expect("migration plan")
@@ -203,6 +205,7 @@ fn plans_a_pnpm_to_bun_workspace() {
         PackageManagerId::Bun,
         false,
         &[],
+        &crate::VerificationPolicy::default(),
     )
     .expect("planning")
     .expect("migration plan");
@@ -265,6 +268,7 @@ fn plans_all_basic_production_directions() {
                 target,
                 false,
                 &[],
+                &crate::VerificationPolicy::default(),
             )
             .expect("planning")
             .expect("migration plan");
@@ -797,7 +801,107 @@ fn carries_bun_patched_dependencies_into_pnpm_configuration() {
 }
 
 #[test]
-fn blocks_patch_ranges_and_missing_patch_files() {
+fn converts_a_yarn_semver_range_and_standard_unified_diff_to_pnpm() {
+    let plan = plan_fixture(
+        &[
+            (
+                "package.json",
+                r#"{"name":"fixture","private":true,"packageManager":"yarn@4.18.0","dependencies":{"left-pad":"patch:left-pad@npm%3A%5E1.3.0#~/.yarn/patches/left-pad.patch"}}"#,
+            ),
+            ("yarn.lock", "# fixture\n"),
+            (".yarnrc.yml", "nodeLinker: node-modules\n"),
+            (
+                ".yarn/patches/left-pad.patch",
+                "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+            ),
+        ],
+        PackageManagerId::Pnpm,
+        false,
+    );
+
+    assert!(plan.executable, "diagnostics: {:?}", plan.diagnostics);
+    let manifest: Value =
+        serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+    assert_eq!(manifest["dependencies"]["left-pad"], "^1.3.0");
+    let configuration: Value = noyalib::from_str(mutation_content(&plan, "pnpm-workspace.yaml"))
+        .expect("pnpm configuration YAML");
+    assert_eq!(
+        configuration["patchedDependencies"]["left-pad@^1.3.0"],
+        ".yarn/patches/left-pad.patch"
+    );
+}
+
+#[test]
+fn converts_pnpm_range_and_name_only_patches_to_yarn_resolutions() {
+    let plan = plan_fixture(
+        &[
+            (
+                "package.json",
+                r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0","dependencies":{"left-pad":"1.3.0","repeat-string":"1.6.1"}}"#,
+            ),
+            ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+            (
+                "pnpm-workspace.yaml",
+                "patchedDependencies:\n  'left-pad@^1.3.0': 'patches/left-pad.patch'\n  'repeat-string': 'patches/repeat-string.patch'\n",
+            ),
+            (
+                "patches/left-pad.patch",
+                "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+            ),
+            (
+                "patches/repeat-string.patch",
+                "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+            ),
+        ],
+        PackageManagerId::YarnModern,
+        false,
+    );
+
+    assert!(plan.executable, "diagnostics: {:?}", plan.diagnostics);
+    let manifest: Value =
+        serde_json::from_str(mutation_content(&plan, "package.json")).expect("manifest JSON");
+    assert_eq!(
+        manifest["resolutions"]["left-pad@npm:1.3.0"],
+        "patch:left-pad@npm%3A1.3.0#~/patches/left-pad.patch"
+    );
+    assert_eq!(
+        manifest["resolutions"]["repeat-string@npm:1.6.1"],
+        "patch:repeat-string@npm%3A1.6.1#~/patches/repeat-string.patch"
+    );
+}
+
+#[test]
+fn blocks_non_exact_yarn_patch_expansion_without_resolution_evidence() {
+    let plan = plan_fixture(
+        &[
+            (
+                "package.json",
+                r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0","dependencies":{"left-pad":"^1.3.0"}}"#,
+            ),
+            ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+            (
+                "pnpm-workspace.yaml",
+                "patchedDependencies:\n  'left-pad@^1.3.0': 'patches/left-pad.patch'\n",
+            ),
+            (
+                "patches/left-pad.patch",
+                "--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+new\n",
+            ),
+        ],
+        PackageManagerId::YarnModern,
+        false,
+    );
+
+    assert!(!plan.executable);
+    assert!(
+        plan.diagnostics
+            .iter()
+            .any(|entry| entry.code == "PATCH_RESOLUTION_EVIDENCE_MISSING")
+    );
+}
+
+#[test]
+fn blocks_patch_ranges_for_bun_and_missing_patch_files() {
     let range = plan_fixture(
         &[
             (
@@ -899,6 +1003,7 @@ fn carries_pnpm_workspace_overrides_into_npm() {
         PackageManagerId::Npm,
         false,
         &[],
+        &crate::VerificationPolicy::default(),
     )
     .expect("planning")
     .expect("migration plan");

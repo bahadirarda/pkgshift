@@ -148,6 +148,14 @@ fn next_action(
         argv.push("--verify-script".to_owned());
         argv.push(script.clone());
     }
+    for platform in &options.verification_policy.target_platforms {
+        argv.push("--target-platform".to_owned());
+        argv.push(platform.to_string());
+    }
+    if options.verification_policy.edge_equivalence != crate::EdgeEquivalencePolicy::Compatible {
+        argv.push("--edge-equivalence".to_owned());
+        argv.push(options.verification_policy.edge_equivalence.to_string());
+    }
     argv.extend([
         "--approve".to_owned(),
         comparison_id.to_owned(),
@@ -433,6 +441,7 @@ pub(super) fn comparison_command(
             target,
             options.accept_lossy,
             &options.verification_scripts,
+            &options.verification_policy,
         )?
         else {
             return super::blocked_plan(&options.cwd, "compare", target);

@@ -4,7 +4,7 @@ title: pkgshift Product Vision
 description: Defines an agent-first product for safe and explainable JavaScript package manager migrations.
 tags: [product, migration, package-management, agents]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: founding-discussion
     resource: "founding product discussion on 2026-08-15"
@@ -57,7 +57,7 @@ The MVP covers:
 - Explicitly selected, bounded representative root-script execution with withheld output and journal-backed verification.
 - Non-ranking readiness assessment for one target or every production adapter without creating a plan.
 
-Configurable target-platform matrices and strict edge-equivalence policies extend the MVP's blocking reachable-resolution proof.
+Configurable target-platform matrices, compatible or strict dependency-edge equivalence, and exact target executable resolution extend the MVP's blocking reachable-resolution proof. These policies are explicit, normalized, and bound to the immutable plan rather than inferred from the caller's current machine.
 
 # Non-goals
 

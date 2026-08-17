@@ -1,4 +1,3 @@
-import { lstat } from "node:fs/promises";
 import { join, posix } from "node:path";
 import type { CapabilityAnalysis } from "../capabilities/models.ts";
 import {
@@ -9,7 +8,6 @@ import {
 } from "../core/files.ts";
 import { redactSensitiveText } from "../core/redaction.ts";
 import { parseJsoncObject } from "../core/jsonc.ts";
-import { safeProjectFilePath, UnsafeProjectPathError } from "../core/project-path.ts";
 import type {
   Diagnostic,
   PackageManagerId,
@@ -19,6 +17,7 @@ import type {
 import type { ProjectIR } from "../ir/models.ts";
 import { getPackageManager } from "../adapters/catalog.ts";
 import type { TransformationResult } from "./models.ts";
+import { buildPatchState, type YarnPatchConversion } from "./patches.ts";
 import { stringifyYaml } from "./yaml.ts";
 
 const IMPLEMENTED_TRANSFORMATIONS = new Set([
@@ -572,254 +571,6 @@ function validPackageExtensions(entries: Record<string, unknown>): boolean {
   );
 }
 
-interface YarnPatchConversion {
-  baseSpecifier: string;
-  selector: string;
-  path: string;
-}
-
-function exactSemver(value: string): boolean {
-  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(value);
-}
-
-function exactPackageSelector(selector: string): { name: string; version: string } | null {
-  const match = selector.startsWith("@")
-    ? selector.match(/^(@[^/@\s]+\/[^/@\s]+)@(.+)$/)
-    : selector.match(/^([^@/\s]+)@(.+)$/);
-  if (!match || !exactSemver(match[2]!)) return null;
-  return { name: match[1]!, version: match[2]! };
-}
-
-async function normalizePatchPath(
-  root: string,
-  rawPath: string,
-  diagnostics: Diagnostic[],
-): Promise<string | null> {
-  const path = rawPath.replace(/^~\//, "").replace(/^\.\//, "");
-  if (!safePath(path) || posix.extname(path) !== ".patch") {
-    diagnostics.push(diagnostic(
-      "PATCH_PATH_UNSUPPORTED",
-      "A patch path is outside the deterministic project-relative subset.",
-      path,
-    ));
-    return null;
-  }
-  let content: string | null = null;
-  try {
-    const absolutePath = await safeProjectFilePath(root, path);
-    const state = await lstat(absolutePath);
-    if (state.isSymbolicLink() || !state.isFile()) {
-      diagnostics.push(diagnostic(
-        "PATCH_PATH_UNSUPPORTED",
-        "A patch path traverses a symbolic link or non-file project entry.",
-        path,
-      ));
-      return null;
-    }
-    content = await readText(absolutePath);
-  } catch (error) {
-    if (error instanceof UnsafeProjectPathError) {
-      diagnostics.push(diagnostic(
-        "PATCH_PATH_UNSUPPORTED",
-        "A patch path traverses a symbolic link or non-file project entry.",
-        path,
-      ));
-      return null;
-    }
-    content = null;
-  }
-  if (content === null) {
-    diagnostics.push(diagnostic(
-      "PATCH_FILE_NOT_FOUND",
-      "A configured patch file does not exist in the project.",
-      path,
-    ));
-    return null;
-  }
-  if (
-    !content.startsWith("diff --git a/")
-    || !content.split("\n").some((line) => line.startsWith("--- "))
-    || !content.split("\n").some((line) => line.startsWith("+++ "))
-    || content.includes("GIT binary patch")
-    || content.includes("Binary files ")
-  ) {
-    diagnostics.push(diagnostic(
-      "PATCH_FORMAT_UNSUPPORTED",
-      "A patch file is outside the portable text unified-diff subset.",
-      path,
-    ));
-    return null;
-  }
-  return path;
-}
-
-async function yarnPatchConversion(
-  root: string,
-  name: string,
-  specifier: string,
-  diagnostics: Diagnostic[],
-): Promise<YarnPatchConversion | null> {
-  const value = specifier.slice("patch:".length);
-  const hash = value.indexOf("#");
-  if (hash < 1) {
-    diagnostics.push(diagnostic(
-      "PATCH_LOCATOR_UNSUPPORTED",
-      "A Yarn patch locator does not include one local patch file.",
-    ));
-    return null;
-  }
-  const source = value.slice(0, hash);
-  const rawPath = value.slice(hash + 1);
-  if (/[&!%]/.test(rawPath) || rawPath.includes("::")) {
-    diagnostics.push(diagnostic(
-      "PATCH_LOCATOR_UNSUPPORTED",
-      "A Yarn patch locator uses multiple, optional, encoded, or parameterized patch sources.",
-    ));
-    return null;
-  }
-  const prefix = `${name}@`;
-  if (!source.startsWith(prefix)) {
-    diagnostics.push(diagnostic(
-      "PATCH_LOCATOR_UNSUPPORTED",
-      "A Yarn patch locator aliases a different package identity.",
-    ));
-    return null;
-  }
-  const reference = source.slice(prefix.length);
-  const version = reference.replace(/^npm(?:%3A|%3a|:)/, "");
-  if (!exactSemver(version)) {
-    diagnostics.push(diagnostic(
-      "PATCH_SELECTOR_UNSUPPORTED",
-      "A patch targets a range or non-registry reference instead of one exact package version.",
-    ));
-    return null;
-  }
-  const path = await normalizePatchPath(root, rawPath, diagnostics);
-  return path ? { baseSpecifier: version, selector: `${name}@${version}`, path } : null;
-}
-
-async function patchState(
-  root: string,
-  source: PackageManagerId,
-  projectIr: ProjectIR,
-  configured: Record<string, unknown>,
-  configuredResolutions: Record<string, unknown>,
-  diagnostics: Diagnostic[],
-): Promise<{
-  patchedDependencies: Record<string, string>;
-  patchConversions: Map<string, YarnPatchConversion>;
-  patchResolutions: Record<string, string>;
-  remainingResolutions: Record<string, unknown>;
-}> {
-  const patchedDependencies: Record<string, string> = {};
-  for (const [selector, rawPath] of Object.entries(configured)) {
-    if (!exactPackageSelector(selector)) {
-      diagnostics.push(diagnostic(
-        "PATCH_SELECTOR_UNSUPPORTED",
-        "A patched dependency does not target one exact package version.",
-      ));
-      continue;
-    }
-    if (typeof rawPath !== "string") {
-      diagnostics.push(diagnostic(
-        "PATCH_POLICY_UNSUPPORTED",
-        "A patched dependency value is not a patch file path.",
-      ));
-      continue;
-    }
-    const path = await normalizePatchPath(root, rawPath, diagnostics);
-    if (path) patchedDependencies[selector] = path;
-  }
-
-  const patchConversions = new Map<string, YarnPatchConversion>();
-  const patchDependencies = projectIr.packages.flatMap((entry) => entry.dependencies)
-    .filter((entry) => entry.protocol === "patch");
-  const yarnPatchResolutions = Object.entries(configuredResolutions).filter(
-    (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].startsWith("patch:"),
-  );
-  if ((patchDependencies.length > 0 || yarnPatchResolutions.length > 0) && source !== "yarn-modern") {
-    diagnostics.push(diagnostic(
-      "PATCH_SOURCE_UNSUPPORTED",
-      "A Yarn patch protocol dependency was found outside a Yarn Modern project.",
-    ));
-  } else {
-    for (const dependency of patchDependencies) {
-      const conversion = await yarnPatchConversion(
-        root,
-        dependency.name,
-        dependency.specifier,
-        diagnostics,
-      );
-      if (!conversion) continue;
-      const existing = patchedDependencies[conversion.selector];
-      if (existing && existing !== conversion.path) {
-        diagnostics.push(diagnostic(
-          "PATCH_POLICY_CONFLICT",
-          "Multiple patch declarations target the same exact package version with different files.",
-          dependency.evidence.location,
-        ));
-        continue;
-      }
-      patchedDependencies[conversion.selector] = conversion.path;
-      patchConversions.set(
-        `${dependency.evidence.location}#/${dependency.section}/${dependency.name}`,
-        conversion,
-      );
-    }
-    for (const [selector, specifier] of yarnPatchResolutions) {
-      const match = specifier.match(/^patch:((?:@[^/@]+\/)?[^@]+)@/);
-      const name = match?.[1];
-      if (!name) {
-        diagnostics.push(diagnostic(
-          "PATCH_LOCATOR_UNSUPPORTED",
-          "A Yarn patch resolution does not identify one registry package.",
-          "package.json",
-        ));
-        continue;
-      }
-      const conversion = await yarnPatchConversion(root, name, specifier, diagnostics);
-      if (!conversion) continue;
-      const exactResolution = `${name}@npm:${conversion.baseSpecifier}`;
-      if (selector !== exactResolution && selector !== conversion.selector) {
-        diagnostics.push(diagnostic(
-          "PATCH_SELECTOR_UNSUPPORTED",
-          "A Yarn patch resolution selector does not match its exact patch locator.",
-          "package.json",
-        ));
-        continue;
-      }
-      const existing = patchedDependencies[conversion.selector];
-      if (existing && existing !== conversion.path) {
-        diagnostics.push(diagnostic(
-          "PATCH_POLICY_CONFLICT",
-          "Multiple patch declarations target the same exact package version with different files.",
-          "package.json",
-        ));
-        continue;
-      }
-      patchedDependencies[conversion.selector] = conversion.path;
-    }
-  }
-
-  const patchResolutions = Object.fromEntries(Object.entries(patchedDependencies).flatMap(
-    ([selector, path]) => {
-      const parsed = exactPackageSelector(selector);
-      return parsed
-        ? [[
-            `${parsed.name}@npm:${parsed.version}`,
-            `patch:${parsed.name}@npm%3A${parsed.version}#~/${path}`,
-          ]]
-        : [];
-    },
-  ));
-  const remainingResolutions = Object.fromEntries(
-    Object.entries(configuredResolutions).filter(([, value]) =>
-      typeof value !== "string" || !value.startsWith("patch:")
-    ),
-  );
-  return { patchedDependencies, patchConversions, patchResolutions, remainingResolutions };
-}
-
 function removeLifecyclePolicy(
   manifest: Record<string, unknown>,
   removeYarnBuildPolicy: boolean,
@@ -1312,9 +1063,10 @@ export async function transformProject(
     ));
     policies.packageExtensions = {};
   }
-  const patches = await patchState(
+  const patches = await buildPatchState(
     inspection.root,
     source,
+    target,
     projectIr,
     policies.patchedDependencies,
     policies.resolutions,

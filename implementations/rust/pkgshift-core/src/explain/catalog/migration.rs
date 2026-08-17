@@ -236,6 +236,12 @@ pub(super) static ENTRIES: &[DiagnosticExplanation] = &[
         &["Normalize the source patch resolution before planning."],
     ),
     DiagnosticExplanation::new(
+        "PATCH_RESOLUTION_EVIDENCE_MISSING",
+        "Patch resolution evidence missing",
+        "A range or name-only patch selector cannot be bound to an exact Yarn package locator from the source project or lock graph.",
+        &["Retain a source lockfile or use an exact registry version in a project dependency."],
+    ),
+    DiagnosticExplanation::new(
         "PATCH_SELECTOR_UNSUPPORTED",
         "Patch selector unsupported",
         "The patched dependency selector is outside deterministic conversion coverage.",

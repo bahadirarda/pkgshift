@@ -1,5 +1,9 @@
 use super::commands::rewrite_package_manager_commands;
 use super::integration::{rewrite_manifest_toolchain_pins, transform_integrations};
+use super::patch::{
+    source_patched_dependencies, validated_patched_dependencies, yarn_patch_conversion,
+    yarn_patch_name, yarn_patch_resolutions,
+};
 use super::{
     BTreeMap, BTreeSet, CapabilityAnalysis, CapabilityClassification, Diagnostic, Map,
     MutationAction, PackageManagerId, Path, PlannedFileMutation, ProjectInspection, ProjectIr,
@@ -9,9 +13,8 @@ use super::{
     package_version_by_name, parse_pnpm_catalogs, read_json_object, read_text,
     remove_source_lifecycle_policy, render_bun_configuration, render_pnpm_workspace,
     render_yarn_configuration, resolutions_to_vlt_modifiers, source_package_extensions,
-    source_patched_dependencies, source_trusted_dependencies, transform_specifier,
-    valid_package_extensions, validated_patched_dependencies, vlt_modifiers_to_overrides,
-    yarn_patch_conversion, yarn_patch_name, yarn_patch_resolutions,
+    source_trusted_dependencies, transform_specifier, valid_package_extensions,
+    vlt_modifiers_to_overrides,
 };
 
 pub(crate) struct Transformation {
@@ -27,6 +30,7 @@ pub(crate) fn transform_project(
     inspection: &ProjectInspection,
     project_ir: &ProjectIr,
     analysis: &CapabilityAnalysis,
+    source_lock_graph: Option<&crate::model::LockGraph>,
     target: PackageManagerId,
 ) -> Result<Transformation> {
     let root = Path::new(&inspection.root);
@@ -205,7 +209,7 @@ pub(crate) fn transform_project(
         &pnpm_configuration,
     );
     let mut patched_dependencies =
-        validated_patched_dependencies(root, &configured_patches, &mut diagnostics)?;
+        validated_patched_dependencies(root, &configured_patches, target, &mut diagnostics)?;
     let mut yarn_patch_conversions = BTreeMap::new();
     if project_ir
         .features
@@ -234,6 +238,7 @@ pub(crate) fn transform_project(
                     root,
                     &dependency.name,
                     &dependency.specifier,
+                    target,
                     &mut diagnostics,
                 )?
                 else {
@@ -278,7 +283,7 @@ pub(crate) fn transform_project(
                         continue;
                     };
                     let Some(conversion) =
-                        yarn_patch_conversion(root, name, specifier, &mut diagnostics)?
+                        yarn_patch_conversion(root, name, specifier, target, &mut diagnostics)?
                     else {
                         continue;
                     };
@@ -307,7 +312,16 @@ pub(crate) fn transform_project(
             }
         }
     }
-    let patch_resolutions = yarn_patch_resolutions(&patched_dependencies);
+    let patch_resolutions = if target == PackageManagerId::YarnModern {
+        yarn_patch_resolutions(
+            &patched_dependencies,
+            project_ir,
+            source_lock_graph,
+            &mut diagnostics,
+        )
+    } else {
+        Map::new()
+    };
     let trusted_dependencies = source_trusted_dependencies(
         &root_manifest_before,
         &pnpm_manifest,

@@ -4,7 +4,7 @@ title: Package Manager Migration
 description: Defines the safe operational workflow for planning, approving, applying, and verifying a package manager migration.
 tags: [workflow, package-management, verification, rollback]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-17T11:00:00Z}
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: transactional-decision
     resource: /decisions/transactional-migrations.md
@@ -68,6 +68,18 @@ Run:
 pkgshift to bun --json --no-color --non-interactive
 ```
 
+When deployment targets or dependency-edge shape are part of the acceptance contract, add the same repeatable policy options to the first preview:
+
+```text
+pkgshift to bun \
+  --target-platform darwin/arm64 \
+  --target-platform linux/x64/glibc \
+  --edge-equivalence strict \
+  --json --no-color --non-interactive
+```
+
+The returned next action preserves the normalized matrix and edge policy. Never add, remove, or reconstruct those values after approval.
+
 The expected approval boundary is exit code `7` with a complete plan and one `nextActions` entry. Present the source, target, plan identifier, file and operation counts, warnings, capability losses, side effects, and verification scope. If the user approves that exact plan, execute `nextActions[0].argv` as an argument array. Do not add a repository path or state path, and do not reconstruct the command from prose.
 
 The approved invocation automatically persists the plan under `.pkgshift/state`, applies it, and verifies the run. Treat the migration as complete only when the returned status is `completed` and verification has no blocking failure.
@@ -85,6 +97,7 @@ When the target is undecided, run aggregate doctor first. After the user narrows
 - Know the target package manager, or inspect first and present supported candidates.
 - Use doctor to assess the selected target before full planning when repository impact is not already understood.
 - Use noninteractive structured output when a coding agent is the caller.
+- Activate the exact target package-manager pin reported by the plan before apply or an approved trial.
 
 # Advanced Staged Procedure
 
@@ -113,6 +126,7 @@ Review:
 - File and command operations in execution order.
 - Capability transformations and losses.
 - Dependency graph expectations.
+- Target executable requirement and verification policy.
 - Declared side effects, warnings, and rollback limits.
 - Verification checks.
 
@@ -128,7 +142,7 @@ Present the plan summary to the user. Approval must identify the exact plan. Gen
 pkgshift apply <plan-id> --state-dir .pkgshift/state --approve <plan-id> --json --no-color --non-interactive
 ```
 
-The engine rechecks preconditions and creates owner-only recovery snapshots before mutation. It removes accepted package-local `node_modules` paths, journals removed and already-absent dependency state, runs the target installer without a shell or lifecycle scripts, retires source-only repository artifacts, and persists a redacted process report. Explicitly planned representative scripts then run without a shell under a fixed timeout. Cleanup and script-owned output outside planned mutation paths are intentionally not rollback-snapshotted. If the repository fingerprint conflicts, stop and re-plan. Preserve the returned run identifier even when apply fails.
+The engine rechecks repository preconditions, resolves the target program from `PATH`, and requires the exact planned version before it creates owner-only recovery snapshots or changes the repository. It removes accepted package-local `node_modules` paths, journals removed and already-absent dependency state, runs the target installer without a shell or lifecycle scripts, retires source-only repository artifacts, and persists resolved executable plus redacted process evidence. Explicitly planned representative scripts then run without a shell under a fixed timeout. Cleanup and script-owned output outside planned mutation paths are intentionally not rollback-snapshotted. If repository or executable preconditions conflict, activate the exact pin or re-plan as appropriate. Preserve the returned run identifier once a run has begun.
 
 ## 5. Verify
 
@@ -136,7 +150,7 @@ The engine rechecks preconditions and creates owner-only recovery snapshots befo
 pkgshift verify <run-id> --state-dir .pkgshift/state --json --no-color
 ```
 
-Assess planned digests, the clean-install journal, source-artifact residue, target selection, lockfile behavior, installation completion, workspace behavior, integrations, explicitly selected representative-script records, and the source-to-target lock graph comparison. Graph comparison is skipped only when no source lockfile existed. Verification never selects or reruns representative scripts.
+Assess planned digests, exact target executable evidence, the clean-install journal, source-artifact residue, target selection, lockfile behavior, installation completion, workspace behavior, integrations, explicitly selected representative-script records, and the source-to-target lock graph comparison. `reachable-resolution-set-v3` applies the plan-bound target matrix and compatible or strict edge policy. Graph comparison is skipped only when no source lockfile existed. Verification never selects or reruns representative scripts.
 
 ## 6. Complete or Roll Back
 
@@ -166,6 +180,7 @@ A completed migration has:
 - A successful apply run journal.
 - A verification report tied to that run.
 - A passing lock graph comparison when a source lock graph exists.
+- A passing exact target executable check.
 - No unresolved blocking diagnostic.
 - A concise record of expected semantic drift, if any.
 - An explicit skipped-check record for capabilities outside the MVP boundary.

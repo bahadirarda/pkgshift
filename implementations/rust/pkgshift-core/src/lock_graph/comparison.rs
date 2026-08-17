@@ -5,6 +5,9 @@ use crate::model::{
     VerificationStatus,
 };
 use crate::util::{Result, short_digest};
+use crate::verification_policy::{
+    EdgeEquivalencePolicy, PackagePlatformConstraint, VerificationPolicy,
+};
 
 use super::extraction::split_locator;
 
@@ -18,6 +21,29 @@ fn resolution_integrities(graph: &LockGraph) -> BTreeMap<String, BTreeSet<String
         }
     }
     values
+}
+
+fn resolution_platforms(graph: &LockGraph) -> BTreeMap<String, Vec<&PackagePlatformConstraint>> {
+    let mut values = BTreeMap::<String, Vec<&PackagePlatformConstraint>>::new();
+    for node in &graph.nodes {
+        values
+            .entry(format!("{}@{}", node.name, node.version))
+            .or_default()
+            .push(&node.platform);
+    }
+    values
+}
+
+fn compatible_with_matrix(
+    constraints: &[&PackagePlatformConstraint],
+    policy: &VerificationPolicy,
+) -> bool {
+    constraints.iter().any(|constraint| {
+        policy
+            .target_platforms
+            .iter()
+            .any(|target| constraint.allows(target))
+    })
 }
 
 fn integrity_family(value: &str) -> &str {
@@ -245,6 +271,7 @@ fn compare_resolution_maps(
     pruned_target_resolutions: Vec<String>,
     optional_platform_differences: Vec<String>,
     reachability_issues: Vec<String>,
+    verification_policy: &VerificationPolicy,
 ) -> Result<LockGraphComparison> {
     const MAX_REPORTED_EDGE_CHANGES: usize = 100;
 
@@ -275,9 +302,23 @@ fn compare_resolution_maps(
         }
     }
 
+    let normalized_edges = |edges: &BTreeSet<LockGraphEdge>| {
+        edges
+            .iter()
+            .map(|edge| {
+                (
+                    edge.from.clone(),
+                    edge.dependency.clone(),
+                    edge.kind.clone(),
+                )
+            })
+            .collect::<BTreeSet<_>>()
+    };
+    let source_edges = normalized_edges(source_edges);
+    let target_edges = normalized_edges(target_edges);
     let mut edge_changes = source_edges
-        .symmetric_difference(target_edges)
-        .map(|edge| format!("{} -> {} ({})", edge.from, edge.dependency, edge.kind))
+        .symmetric_difference(&target_edges)
+        .map(|(from, dependency, kind)| format!("{from} -> {dependency} ({kind})"))
         .collect::<Vec<_>>();
     if edge_changes.len() > MAX_REPORTED_EDGE_CHANGES {
         let omitted = edge_changes.len() - MAX_REPORTED_EDGE_CHANGES;
@@ -291,6 +332,8 @@ fn compare_resolution_maps(
         && added_resolutions.is_empty()
         && removed_resolutions.is_empty()
         && integrity_mismatches.is_empty()
+        && (verification_policy.edge_equivalence != EdgeEquivalencePolicy::Strict
+            || edge_changes.is_empty())
     {
         VerificationStatus::Passed
     } else {
@@ -312,6 +355,7 @@ fn compare_resolution_maps(
             &pruned_target_resolutions,
             &optional_platform_differences,
             &reachability_issues,
+            verification_policy,
         ),
     )?;
     Ok(LockGraphComparison {
@@ -326,6 +370,7 @@ fn compare_resolution_maps(
         removed_resolutions,
         integrity_mismatches,
         edge_changes,
+        verification_policy: verification_policy.clone(),
         pruned_source_resolutions,
         pruned_target_resolutions,
         optional_platform_differences,
@@ -334,6 +379,7 @@ fn compare_resolution_maps(
 }
 
 pub fn compare_lock_graphs(source: &LockGraph, target: &LockGraph) -> Result<LockGraphComparison> {
+    let policy = VerificationPolicy::default();
     let source_map = resolution_integrities(source);
     let target_map = resolution_integrities(target);
     let source_edges = source.edges.iter().cloned().collect::<BTreeSet<_>>();
@@ -350,6 +396,7 @@ pub fn compare_lock_graphs(source: &LockGraph, target: &LockGraph) -> Result<Loc
         Vec::new(),
         Vec::new(),
         Vec::new(),
+        &policy,
     )
 }
 
@@ -358,8 +405,39 @@ pub fn compare_lock_graphs_for_project(
     target: &LockGraph,
     project_ir: &ProjectIr,
 ) -> Result<LockGraphComparison> {
+    compare_lock_graphs_for_project_with_policy(
+        source,
+        target,
+        project_ir,
+        &VerificationPolicy::default(),
+    )
+}
+
+pub fn compare_lock_graphs_for_project_with_policy(
+    source: &LockGraph,
+    target: &LockGraph,
+    project_ir: &ProjectIr,
+    verification_policy: &VerificationPolicy,
+) -> Result<LockGraphComparison> {
     if !graph_supports_reachability(source) || !graph_supports_reachability(target) {
-        return compare_lock_graphs(source, target);
+        let source_map = resolution_integrities(source);
+        let target_map = resolution_integrities(target);
+        let source_edges = source.edges.iter().cloned().collect::<BTreeSet<_>>();
+        let target_edges = target.edges.iter().cloned().collect::<BTreeSet<_>>();
+        return compare_resolution_maps(
+            source,
+            target,
+            "resolution-set-v1",
+            &source_map,
+            &target_map,
+            &source_edges,
+            &target_edges,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            verification_policy,
+        );
     }
 
     let roots = project_roots(project_ir);
@@ -379,6 +457,8 @@ pub fn compare_lock_graphs_for_project(
     let mut source_map = source_reachable.resolutions;
     let mut target_map = target_reachable.resolutions;
     let mut optional_platform_differences = Vec::new();
+    let source_platforms = resolution_platforms(source);
+    let target_platforms = resolution_platforms(target);
 
     let source_optional_only = source_reachable
         .optional
@@ -387,8 +467,16 @@ pub fn compare_lock_graphs_for_project(
         .cloned()
         .collect::<Vec<_>>();
     for resolution in source_optional_only {
-        source_map.remove(&resolution);
-        optional_platform_differences.push(format!("source-only:{resolution}"));
+        let tolerated = verification_policy.target_platforms.is_empty()
+            || source_platforms
+                .get(&resolution)
+                .is_some_and(|constraints| {
+                    !compatible_with_matrix(constraints, verification_policy)
+                });
+        if tolerated {
+            source_map.remove(&resolution);
+            optional_platform_differences.push(format!("source-only:{resolution}"));
+        }
     }
     let target_optional_only = target_reachable
         .optional
@@ -397,8 +485,16 @@ pub fn compare_lock_graphs_for_project(
         .cloned()
         .collect::<Vec<_>>();
     for resolution in target_optional_only {
-        target_map.remove(&resolution);
-        optional_platform_differences.push(format!("target-only:{resolution}"));
+        let tolerated = verification_policy.target_platforms.is_empty()
+            || target_platforms
+                .get(&resolution)
+                .is_some_and(|constraints| {
+                    !compatible_with_matrix(constraints, verification_policy)
+                });
+        if tolerated {
+            target_map.remove(&resolution);
+            optional_platform_differences.push(format!("target-only:{resolution}"));
+        }
     }
     optional_platform_differences.sort();
 
@@ -409,7 +505,7 @@ pub fn compare_lock_graphs_for_project(
     compare_resolution_maps(
         source,
         target,
-        "reachable-resolution-set-v2",
+        "reachable-resolution-set-v3",
         &source_map,
         &target_map,
         &source_reachable.edges,
@@ -418,5 +514,6 @@ pub fn compare_lock_graphs_for_project(
         target_reachable.pruned,
         optional_platform_differences,
         reachability_issues,
+        verification_policy,
     )
 }

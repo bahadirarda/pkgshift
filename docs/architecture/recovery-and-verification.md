@@ -4,7 +4,7 @@ title: Recovery and Verification
 description: Defines snapshot integrity, verification checks, rollback scope, and failure behavior for migration runs.
 tags: [architecture, recovery, verification, rollback, integrity]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-17T11:00:00Z}
+generated: { by: bahadirarda, at: 2026-08-17T15:14:32Z }
 sources:
   - id: transactional-decision
     resource: /decisions/transactional-migrations.md
@@ -32,6 +32,7 @@ Apply requires:
 - Exact `--approve <plan-id>` authorization.
 - Exclusive ownership of the repository-scoped transaction lock.
 - A current repository fingerprint equal to the plan baseline.
+- A target executable that resolves from `PATH` and reports the exact planned version.
 - Mutation paths whose current digests equal their planned before digests.
 - Writable journal and snapshot state.
 
@@ -46,6 +47,7 @@ Verify reads the plan, journal, and repository. It records these MVP checks:
 | Check | Blocking condition |
 | --- | --- |
 | Planned file digests | Any write or deletion differs from the plan. |
+| Target executable version | The resolved program, version, or package-manager pin differs from the exact plan requirement. |
 | Clean target install | A planned package-local dependency-state path has no matching removed or already-absent journal record. |
 | Target selection | Detection does not select the planned target. |
 | Target lockfile | No registered target lockfile exists. |
@@ -53,11 +55,11 @@ Verify reads the plan, journal, and repository. It records these MVP checks:
 | Workspace membership | Package paths differ from the source Project IR. |
 | Target install | The journaled install operation is not successful. |
 | Representative scripts | Any explicitly selected root script was not run, timed out, or exited unsuccessfully. The check is skipped when no script was selected. |
-| Dependency graph drift | Added or removed resolutions, comparable integrity mismatches, a missing non-empty target graph, or incomplete parsing. |
+| Dependency graph drift | Added or removed resolutions, comparable integrity mismatches, strict normalized edge drift, a missing non-empty target graph, or incomplete parsing. |
 
 A failed check moves the verification operation and run to `failed`. A successful report moves both to `succeeded`. Reports carry their own identity and integrity digest.
 
-The source graph is extracted before planning and persisted with the accepted plan. The target graph is extracted after installation. `reachable-resolution-set-v2` prunes topology-proven unreachable entries and tolerates package-name absence only on optional-only paths; reachable version and comparable integrity drift remain blocking. Formats without sufficient topology report and apply `resolution-set-v1`. Edge-shape differences remain non-blocking evidence. A dependency-free target may omit its lockfile only when the accepted source graph proves an empty resolved set. See [Lock Graph Proof](/architecture/lock-graph-proof.md).
+The source graph is extracted before planning and persisted with the accepted plan. The target graph is extracted after installation. `reachable-resolution-set-v3` prunes topology-proven unreachable entries and evaluates optional-only package-name absence against the plan's normalized target-platform matrix. Reachable version and comparable integrity drift remain blocking. Formats without sufficient topology report and apply `resolution-set-v1`. Edge-shape differences remain evidence in compatible mode and become blocking in strict mode. A dependency-free target may omit its lockfile only when the accepted source graph proves an empty resolved set. See [Lock Graph Proof](/architecture/lock-graph-proof.md) and [Platform, Edge, and Executable Verification](/architecture/verification-policies.md).
 
 # Representative Script Boundary
 

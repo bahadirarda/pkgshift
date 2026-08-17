@@ -10,6 +10,7 @@ use crate::model::{
     PackageManagerId, SCHEMA_VERSION,
 };
 use crate::util::{PkgshiftError, Result, digest_bytes, short_digest};
+use crate::verification_policy::PackagePlatformConstraint;
 
 fn graph_diagnostic(
     code: &str,
@@ -41,6 +42,38 @@ fn json_from_yaml(content: &str) -> std::result::Result<Value, String> {
 
 fn object<'a>(value: &'a Value, key: &str) -> Option<&'a serde_json::Map<String, Value>> {
     value.get(key).and_then(Value::as_object)
+}
+
+fn string_list(value: &Value, key: &str) -> Vec<String> {
+    let mut values = value.get(key).map_or_else(Vec::new, |entry| {
+        entry.as_array().map_or_else(
+            || {
+                entry
+                    .as_str()
+                    .map(str::to_ascii_lowercase)
+                    .into_iter()
+                    .collect()
+            },
+            |values| {
+                values
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_ascii_lowercase)
+                    .collect()
+            },
+        )
+    });
+    values.sort();
+    values.dedup();
+    values
+}
+
+fn platform_constraint(value: &Value) -> PackagePlatformConstraint {
+    PackagePlatformConstraint {
+        os: string_list(value, "os"),
+        cpu: string_list(value, "cpu"),
+        libc: string_list(value, "libc"),
+    }
 }
 
 fn has_lockfile_version(value: &Value) -> bool {
@@ -166,6 +199,7 @@ fn parse_npm(value: &Value) -> (Vec<LockGraphNode>, Vec<LockGraphEdge>) {
                 .get("integrity")
                 .and_then(Value::as_str)
                 .map(str::to_owned),
+            platform: platform_constraint(metadata),
         });
         dependency_edges(metadata, &parent, &mut edges);
     }
@@ -216,6 +250,7 @@ fn parse_pnpm(value: &Value) -> (Vec<LockGraphNode>, Vec<LockGraphEdge>) {
                 .and_then(|resolution| resolution.get("integrity"))
                 .and_then(Value::as_str)
                 .map(str::to_owned),
+            platform: platform_constraint(metadata),
         });
         let dependency_source = snapshots
             .and_then(|entries| entries.get(locator))
@@ -285,6 +320,7 @@ fn flush_yarn_classic(
         name,
         version,
         integrity: entry.integrity.take(),
+        platform: PackagePlatformConstraint::default(),
     });
     edges.extend(
         entry
@@ -400,6 +436,7 @@ fn parse_yarn_modern(value: &Value) -> (Vec<LockGraphNode>, Vec<LockGraphEdge>) 
                 .get("checksum")
                 .and_then(Value::as_str)
                 .map(|checksum| format!("yarn:{checksum}")),
+            platform: platform_constraint(metadata),
         });
         dependency_edges(metadata, &parent, &mut edges);
     }
@@ -496,6 +533,9 @@ fn parse_bun(value: &Value) -> (Vec<LockGraphNode>, Vec<LockGraphEdge>) {
             name,
             version,
             integrity: values.get(3).and_then(Value::as_str).map(str::to_owned),
+            platform: values
+                .get(2)
+                .map_or_else(PackagePlatformConstraint::default, platform_constraint),
         });
         if let Some(metadata) = values.get(2) {
             for (section, kind) in [
@@ -567,6 +607,7 @@ fn parse_deno_entry(
             .get("integrity")
             .and_then(Value::as_str)
             .map(str::to_owned),
+        platform: platform_constraint(&Value::Object(metadata.clone())),
     });
     for (section, kind) in [
         ("dependencies", "dependency"),
@@ -684,6 +725,7 @@ fn parse_vlt_checked(
             name: name.to_owned(),
             version,
             integrity: values.get(2).and_then(Value::as_str).map(str::to_owned),
+            platform: PackagePlatformConstraint::default(),
         });
     }
     Ok((nodes, Vec::new()))

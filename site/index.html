@@ -10,7 +10,7 @@
    >
     <meta
       name="keywords"
-      content="package manager migration, npm to pnpm, pnpm to bun, bun to deno, Bun.serve to Deno.serve, Hono Deno migration, vlt migration, yarn migration, JavaScript CLI, monorepo migration"
+      content="package manager migration, npm to pnpm, pnpm to bun, bun to deno, Bun.serve to Deno.serve, Hono Deno migration, vlt migration, yarn migration, lock graph verification, target platform matrix, JavaScript CLI, monorepo migration"
    >
     <meta name="author" content="bahadirarda">
     <meta name="robots" content="index, follow, max-image-preview:large">
@@ -110,7 +110,7 @@
             <h1>Change package managers.<br><em>Keep control.</em></h1>
             <p class="hero-lede">
               Transactional migrations for JavaScript repositories. pkgshift understands the project,
-              reports target readiness, creates an immutable plan, compares package-manager targets, moves supported Bun runtime APIs to Deno, waits for exact approval, and verifies every applied plan.
+              reports target readiness, creates an immutable plan, compares package-manager targets, moves supported Bun runtime APIs to Deno, waits for exact approval, validates the target executable, and verifies every applied plan.
             </p>
 
             <div class="hero-actions">
@@ -236,12 +236,12 @@
             </li>
             <li data-reveal>
               <span class="workflow-number">04</span>
-              <div><h3>Apply</h3><p>Recheck preconditions, snapshot affected files, remove source dependency state, and install the target from a clean local boundary.</p></div>
+              <div><h3>Apply</h3><p>Resolve the exact target executable, recheck preconditions, snapshot affected files, remove source dependency state, and install from a clean local boundary.</p></div>
               <span class="mode-badge mode-badge-active">write</span>
             </li>
             <li data-reveal>
               <span class="workflow-number">05</span>
-              <div><h3>Verify</h3><p>Prove clean-install evidence and zero source-only artifacts, then compare reachable lock resolutions, target selection, workspace membership, file digests, and installer completion.</p></div>
+              <div><h3>Verify</h3><p>Prove the executable and clean install, reject source residue, and compare reachable lock resolutions under the plan's platform matrix and edge policy.</p></div>
               <span class="mode-badge">read-only</span>
             </li>
           </ol>
@@ -259,7 +259,8 @@
             </p>
             <p><code>pkgshift doctor</code> assesses all seven adapters from one repository scan without ranking them; add <code>--to bun</code> for one target. Neither form creates a plan or changes the repository.</p>
             <p><code>pkgshift compare bun deno</code> binds both plans to one approval, runs each executable target in its own disposable copy, and reports evidence without inventing a winner.</p>
-            <p><code>pkgshift runtime to deno --deno-permission net</code> applies reviewed Bun API recipes under a separate source-content-redacted plan and rollback boundary.</p>
+            <p><code>pkgshift to bun --target-platform linux/x64/glibc --edge-equivalence strict</code> binds deployment compatibility and semantic dependency-edge parity to the exact plan.</p>
+            <p><code>pkgshift runtime to deno --deno-permission net</code> applies reviewed Bun API recipes—including safe SQLite and dax shell subsets—under a separate source-content-redacted plan and rollback boundary.</p>
             <p><code>pkgshift skill install --scope project --client codex</code> previews a digest-verified portable-skill installation and returns its exact approval action.</p>
             <p><code>pkgshift explain &lt;code-or-artifact-id&gt;</code> expands stable diagnostics or integrity-checks stored plan, run, and verification evidence without mutation.</p>
             <a class="text-link" href="https://github.com/bahadirarda/pkgshift/tree/main/skills/pkgshift">
@@ -287,7 +288,7 @@
           <div class="section-heading" data-reveal>
             <p class="section-index">04 / Package managers</p>
             <h2>Move between the tools your repository already uses.</h2>
-            <p>Seven production adapters support deterministic planning across every source-to-target direction and execute only inside their verified capability boundaries.</p>
+            <p>Seven production adapters support deterministic planning across every source-to-target direction. Execution requires the exact catalog pin and remains inside verified capability, platform, and graph boundaries.</p>
           </div>
 
           <div class="manager-grid" data-reveal>
