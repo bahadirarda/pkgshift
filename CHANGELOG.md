@@ -7,6 +7,12 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 
 ## [Unreleased]
 
+## [0.20260817.3] - 2026-08-17
+
+### Changed
+
+- Promote vlt and Deno dependency mode to capability-gated production adapters with bidirectional workspace and policy rendering, real installer execution, lock graph proof, 42-direction planning parity, and pinned real-world validation.
+
 ## [0.20260817.2] - 2026-08-17
 
 ### Changed
@@ -64,7 +70,8 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 - Added cross-platform GitHub Release archives, SHA-256 checksums, and build provenance attestations.
 - Added crates.io-ready package metadata and an explicitly approved publication workflow.
 
-[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.2...HEAD
+[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.3...HEAD
+[0.20260817.3]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.2...v0.20260817.3
 [0.20260817.2]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.1...v0.20260817.2
 [0.20260817.1]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.0...v0.20260817.1
 [0.20260817.0]: https://github.com/bahadirarda/pkgshift/compare/v0.20260816.0...v0.20260817.0
