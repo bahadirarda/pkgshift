@@ -7,6 +7,12 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 
 ## [Unreleased]
 
+## [0.20260817.5] - 2026-08-17
+
+### Changed
+
+- Remove package-local source dependency state before target installation, journal cleanup evidence, fail verification when clean-install proof or source-only artifact retirement is incomplete, and report Bun runtime references without deleting application semantics. Split the Rust planner, transformation, verification, and cleanup responsibilities into focused modules.
+
 ## [0.20260817.4] - 2026-08-17
 
 ### Changed
@@ -76,7 +82,8 @@ Releases use the Semantic Version-compatible calendar shape `0.YYYYMMDD.REVISION
 - Added cross-platform GitHub Release archives, SHA-256 checksums, and build provenance attestations.
 - Added crates.io-ready package metadata and an explicitly approved publication workflow.
 
-[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.4...HEAD
+[Unreleased]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.5...HEAD
+[0.20260817.5]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.4...v0.20260817.5
 [0.20260817.4]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.3...v0.20260817.4
 [0.20260817.3]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.2...v0.20260817.3
 [0.20260817.2]: https://github.com/bahadirarda/pkgshift/compare/v0.20260817.1...v0.20260817.2
