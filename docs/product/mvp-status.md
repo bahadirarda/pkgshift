@@ -5,7 +5,7 @@ description: Records the completed technical MVP, its validation evidence, and e
 tags: [product, mvp, status, delivery]
 status: draft
 stale_after: 2026-09-15
-generated: { by: bahadirarda, at: 2026-08-16T23:32:12Z}
+generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
 sources:
   - id: product-vision
     resource: /product/vision.md
@@ -37,6 +37,8 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - The `pkgshift pm to <target>` planning shortcut.
 - Versioned JSON results with artifacts, diagnostics, and side-effect metadata.
 - Deterministic target rendering and digest-bound file mutations.
+- Bidirectional vlt rendering for workspaces, catalogs, graph modifiers, public registry configuration, integrations, and package manager pins.
+- Deno dependency-mode rendering for workspaces, overrides, catalog expansion, isolated linking, preserved runtime configuration, integrations, and package manager pins.
 - Rust-primary npm and pnpm override plus Yarn resolution rendering for the deterministic selector subset, including policy detected in `pnpm-workspace.yaml`.
 - Rust-primary Plug and Play and isolated linker translation across pnpm, Yarn Modern, Bun, npm, and Yarn Classic target layouts.
 - Secret-safe `.npmrc` translation into Yarn Modern registry, scope, authentication-policy, and environment-token configuration.
@@ -56,14 +58,16 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Conflict detection and local-modification protection for skill uninstall.
 - End-to-end fixtures for guided interactive and noninteractive migrations, exact approval, success, failed installation, partial failure, tampering, verification, and rollback.
 - Real pnpm-to-Bun execution fixtures covering multi-package workspaces, workspace protocols, default and named catalogs, isolated linking, trusted dependencies, exclusion patterns, local dependencies, registry configuration, and CI, container, and documentation integrations.
-- Direction-matrix fixtures for every basic migration pair across the five production adapters.
+- Direction-matrix fixtures for every basic migration pair across the seven production adapters.
 - An OKF v0.2 knowledge bundle and a portable Agent Skill source.
 - A pinned Rust 1.97.1 workspace with separate core and CLI crates.
 - Digest-verified Rust plan and run envelopes, repository-scoped locking, byte-level snapshots, atomic mutations, installer output withholding, structural verification, and restored-fingerprint rollback.
-- Rust subprocess fixtures for pnpm-to-Bun-to-rollback, npm-to-pnpm, and npm-to-Yarn Modern registry and lifecycle conversion, plus 20-direction basic planning coverage.
+- Rust subprocess fixtures for pnpm-to-Bun-to-rollback, npm-to-pnpm, npm-to-Yarn Modern registry and lifecycle conversion, npm-to-vlt, and pnpm-to-Deno, plus 42-direction basic planning coverage.
 - Rust subprocess fixtures for isolated trial, native importer ordering, successful graph proof, intentional graph drift, and source repository preservation.
 - A real-installer Rust acceptance run for a multi-package pnpm workspace migrated to Bun and rolled back to its original fingerprint.
 - Real Bun 1.3.14 acceptance runs for dependency-bearing npm-to-Bun trial, apply, graph proof, and rollback.
+- Real vlt 1.0.2 and Deno 2.9.5 acceptance runs for dependency-bearing multi-package Bun workspaces, workspace protocols, target installation, and graph proof.
+- A pinned upstream corpus covering executable Bun-to-vlt and Bun-to-Deno plans, vlt-to-pnpm and accepted-lossy vlt-to-Deno plans, Vite capability blockers, external vlt installer failure, and strict Deno post-install graph rejection without source writes.
 - Sibling Rust and TypeScript engines under `implementations/`, with shared root orchestration for both implementations.
 
 # Delivery Gates
@@ -78,14 +82,14 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Isolated trial | MVP complete | Exact approval executes the accepted plan in a disposable copy and reports repository preservation plus nested verification. |
 | Rollback | MVP complete | Successful, failed, and partially applied runs restore repository files and verify the baseline fingerprint. |
 | Skill installer | MVP complete | Codex and Claude Code project destinations pass copy, link, conflict, status, and protected-uninstall fixtures. |
-| Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, and Bun produce executable plans when every observed feature has a safe implemented path. |
+| Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode produce executable plans when every observed feature has a safe implemented path. |
 | Rust primary path | MVP complete | Inspect, plan, exact approval, apply, verify, and rollback pass subprocess and real-installer acceptance coverage. |
 | Polyglot workspace | MVP complete | Cargo crates and the TypeScript reference run from isolated workspace boundaries under one CI contract. |
-| Advanced Rust renderer parity | Production parity complete | Override, resolution, package-extension, exact text-patch, linker, Yarn registry, and Bun/pnpm/Yarn lifecycle policy rendering pass Rust and TypeScript parity fixtures; preview and manual-only transformations remain fail-closed. |
+| Advanced Rust renderer parity | Production parity complete | Override, resolution, package-extension, exact text-patch, linker, registry, lifecycle, vlt, and Deno rendering pass Rust and TypeScript parity fixtures; unsupported and manual-only transformations remain fail-closed. |
 
 # Explicit Boundaries
 
-- vlt and Deno dependency mode remain preview, planning-only targets.
+- vlt and Deno dependency mode are production targets only inside their documented deterministic subsets; unsupported protocols, lifecycle policy, patching, package extensions, or configuration remain blocking.
 - Unknown, unsupported, or adapter-unimplemented transformations block apply.
 - Lossy decisions require `--accept-lossy` when the immutable plan is created.
 - Literal registry credentials, sensitive manifest fields, known token formats, and private keys cannot enter persisted plan content; environment references remain supported.
@@ -95,7 +99,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Resolution-set proof does not yet make dependency edges blocking because peer, optional, hoisting, and deduplication representations differ between managers.
 - Representative project scripts are not selected or executed automatically.
 - The Rust CLI does not yet own TypeScript reference commands for managed Agent Skill lifecycle or artifact explanation.
-- Preview-target and manual-only transformations emit blocking diagnostics instead of delegating edits to a model.
+- Unsupported and manual-only transformations emit blocking diagnostics instead of delegating edits to a model.
 - Registry tokens must use `${NAME}` references for Yarn Modern translation; literal credentials and unrecognized `.npmrc` settings fail closed without entering plan artifacts.
 - pnpm output uses the current `allowBuilds` map while inspection continues to accept legacy `onlyBuiltDependencies` input.
 - Yarn per-dependency build denials outside global allow-list mode remain blocking because other targets cannot preserve them safely.

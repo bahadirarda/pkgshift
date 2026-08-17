@@ -93,6 +93,30 @@ describe("Project IR", () => {
     expect(projectIr?.projectIrId).toStartWith("ir_");
   });
 
+  test("accepts UTF-8 BOM in workspace manifests", async () => {
+    const root = await createProject({
+      "package.json": `\uFEFF${JSON.stringify({
+        name: "fixture-root",
+        private: true,
+        packageManager: "npm@12.0.2",
+        workspaces: ["packages/*"],
+      })}`,
+      "packages/app/package.json": `\uFEFF${JSON.stringify({
+        name: "@fixture/app",
+        version: "1.0.0",
+      })}`,
+      "package-lock.json": "{}",
+    });
+
+    const inspection = await inspectProject(root);
+    const projectIr = await buildProjectIR(inspection);
+
+    expect(projectIr?.packages.map((entry) => entry.name)).toEqual([
+      "fixture-root",
+      "@fixture/app",
+    ]);
+  });
+
   test("blocks a target with a known unsupported capability", async () => {
     const root = await createProject({
       "package.json": JSON.stringify({

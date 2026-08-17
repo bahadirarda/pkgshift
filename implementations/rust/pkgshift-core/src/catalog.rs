@@ -68,20 +68,20 @@ pub const PACKAGE_MANAGERS: &[PackageManagerDefinition] = &[
     PackageManagerDefinition {
         id: PackageManagerId::Vlt,
         display_name: "vlt",
-        tier: SupportTier::PreviewTarget,
+        tier: SupportTier::ProductionTarget,
         aliases: &["vlt"],
         lockfiles: &["vlt-lock.json"],
-        configuration_files: &["vlt.json", ".npmrc"],
-        install_command: &["vlt", "install", "--ignore-scripts"],
+        configuration_files: &["vlt.json"],
+        install_command: &["vlt", "install"],
         package_manager_pin: "vlt@1.0.2",
     },
     PackageManagerDefinition {
         id: PackageManagerId::Deno,
         display_name: "Deno dependency mode",
-        tier: SupportTier::PreviewTarget,
+        tier: SupportTier::ProductionTarget,
         aliases: &["deno"],
         lockfiles: &["deno.lock"],
-        configuration_files: &["deno.json", "deno.jsonc"],
+        configuration_files: &["deno.json", "deno.jsonc", ".npmrc"],
         install_command: &["deno", "install"],
         package_manager_pin: "deno@2.9.5",
     },
@@ -154,13 +154,7 @@ pub fn native_import_strategy(
                 get_package_manager(target).install_command,
                 "Use npm's yarn.lock-aware installation path.",
             ),
-            (
-                PackageManagerId::Npm
-                | PackageManagerId::Pnpm
-                | PackageManagerId::YarnClassic
-                | PackageManagerId::YarnModern,
-                PackageManagerId::Deno,
-            ) => (
+            (PackageManagerId::Npm, PackageManagerId::Deno) => (
                 "deno-install-migration",
                 NativeImportMode::InstallIntegrated,
                 get_package_manager(target).install_command,

@@ -26,6 +26,8 @@
     "pnpm",
     "yarn",
     "bun",
+    "vlt",
+    "deno",
     "codemod",
     "agent-skill"
   ],

@@ -1,6 +1,6 @@
 ---
 name: pkgshift
-description: Inspect, plan, apply, verify, explain, or roll back JavaScript package manager migrations through the pkgshift CLI. Use when Codex needs to move a repository between npm, pnpm, Yarn Classic, Yarn Modern, Bun, or supported preview targets; assess migration feasibility; produce a reviewable migration plan; or operate the migration safely with explicit approval.
+description: Inspect, plan, apply, verify, explain, or roll back JavaScript package manager migrations through the pkgshift CLI. Use when Codex needs to move a repository between npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, or Deno dependency mode; assess migration feasibility; produce a reviewable migration plan; or operate the migration safely with explicit approval.
 ---
 
 # Package Manager Migration

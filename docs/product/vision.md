@@ -4,7 +4,7 @@ title: pkgshift Product Vision
 description: Defines an agent-first product for safe and explainable JavaScript package manager migrations.
 tags: [product, migration, package-management, agents]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-17T00:38:12Z}
 sources:
   - id: founding-discussion
     resource: "founding product discussion on 2026-08-15"
@@ -40,7 +40,7 @@ The command-line interface is optimized for coding agents while remaining comfor
 
 # MVP Scope
 
-The first production adapter set targets npm, pnpm, Yarn Classic, Yarn Modern, and Bun. vlt and Deno's npm-compatible dependency mode are preview targets. Deno runtime migration is not part of the package manager MVP.
+The production adapter set targets npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno's npm-compatible dependency mode. Each adapter is executable only inside its documented deterministic capability subset. Deno runtime migration is not part of the package manager MVP.
 
 The MVP covers:
 

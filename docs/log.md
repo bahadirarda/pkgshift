@@ -2,6 +2,12 @@
 
 ## 2026-08-17
 
+* **Adapters**: Promoted vlt 1.0.2 and Deno 2.9.5 dependency mode to capability-gated production targets in both engines, expanding basic planning coverage to all 42 directed adapter pairs.
+* **vlt**: Added workspace, workspace protocol, catalog, graph modifier, public registry and scope, integration command, installer, and v1 lock graph support.
+* **Deno**: Added workspace, override, catalog expansion, isolated linker, preserved runtime configuration, import-map evidence, `deno task`, installer, and v5 npm and JSR lock graph support without expanding into runtime migration.
+* **Acceptance**: Added pinned real vlt and Deno installer runs for dependency-bearing Bun workspaces and a real-world Hono, Vite, and vlt source corpus covering successful plans, capability blockers, external installer failure, graph rejection, and source preservation.
+* **Parsing**: Added UTF-8 BOM normalization, excluded local pnpm locators from the registry graph, and normalized Deno peer contexts before resolution comparison.
+* **CI**: Added a pinned adapter acceptance job for Node 22.22.0, vlt 1.0.2, Deno 2.9.5, Bun 1.3.14, and Rust 1.97.1.
 * **Parity**: Added validated `packageExtensions` translation among npm, pnpm, and Yarn Modern in both engines.
 * **Patching**: Added exact-version text patch conversion among Yarn Modern, pnpm, and Bun, including transitive Yarn resolutions and current pnpm workspace policy output.
 * **Safety**: Added fail-closed patch selector, path, format, and conflict diagnostics, and bound every project `.patch` file to repository fingerprints and exact approvals.

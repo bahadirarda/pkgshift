@@ -38,7 +38,8 @@ export async function readJsonObject(
   if (text === null) {
     return null;
   }
-  const parsed: unknown = JSON.parse(text);
+  const normalized = text.startsWith("\uFEFF") ? text.slice(1) : text;
+  const parsed: unknown = JSON.parse(normalized);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(`${path} does not contain a JSON object`);
   }

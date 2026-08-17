@@ -67,6 +67,16 @@ describe("target transformations", () => {
         "package.json": JSON.stringify({ name: "root", packageManager: "bun@1.3.14" }),
         "bun.lock": "{}\n",
       }],
+      ["vlt", {
+        "package.json": JSON.stringify({ name: "root", packageManager: "vlt@1.0.2" }),
+        "vlt.json": JSON.stringify({ config: { registry: "https://registry.npmjs.org/" } }),
+        "vlt-lock.json": JSON.stringify({ lockfileVersion: 1, nodes: {} }),
+      }],
+      ["deno", {
+        "package.json": JSON.stringify({ name: "root", packageManager: "deno@2.9.5" }),
+        "deno.json": JSON.stringify({}),
+        "deno.lock": JSON.stringify({ version: "5", npm: {} }),
+      }],
     ];
     const targets = sources.map(([source]) => source);
     let plannedDirections = 0;
@@ -82,7 +92,159 @@ describe("target transformations", () => {
         plannedDirections += 1;
       }
     }
-    expect(plannedDirections).toBe(20);
+    expect(plannedDirections).toBe(42);
+  });
+
+  test("renders npm workspaces, overrides, and public registries for vlt", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "npm@12.0.2",
+        workspaces: ["packages/*"],
+        overrides: { parent: { child: "2.0.0" } },
+      }),
+      "packages/app/package.json": JSON.stringify({ name: "app", version: "1.0.0" }),
+      "package-lock.json": "{}",
+      ".npmrc": "registry=https://registry.example.test/\n@internal:registry=https://scope.example.test/\n",
+    }, "vlt");
+
+    expect(plan.executable).toBeTrue();
+    const configurationMutation = mutations(plan).find((entry) => entry.path === "vlt.json");
+    const configuration = JSON.parse(configurationMutation?.content ?? "{}") as Record<string, unknown>;
+    expect(configuration).toEqual({
+      config: {
+        registry: "https://registry.example.test/",
+        "scoped-registries": { "@internal": "https://scope.example.test/" },
+      },
+      workspaces: ["packages/*"],
+      modifiers: { ":root > #parent > #child": "2.0.0" },
+    });
+    const rootMutation = mutations(plan).find((entry) => entry.path === "package.json");
+    const root = JSON.parse(rootMutation?.content ?? "{}") as Record<string, unknown>;
+    expect(root.packageManager).toBe("vlt@1.0.2");
+    expect(root.workspaces).toBeUndefined();
+    expect(root.overrides).toBeUndefined();
+    expect(mutations(plan).find((entry) => entry.path === ".npmrc")?.action).toBe("delete");
+    expect(plan.operations.find((entry) => entry.kind === "dependency.install-target")?.command)
+      .toEqual(["vlt", "install"]);
+  });
+
+  test("moves vlt workspaces, catalogs, modifiers, and registries to pnpm", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "vlt@1.0.2",
+      }),
+      "packages/app/package.json": JSON.stringify({
+        name: "app",
+        dependencies: { react: "catalog:", lib: "workspace:*" },
+      }),
+      "packages/lib/package.json": JSON.stringify({ name: "lib", version: "1.2.3" }),
+      "vlt.json": JSON.stringify({
+        config: {
+          registry: "https://registry.example.test/",
+          "scoped-registries": { "@internal": "https://scope.example.test/" },
+        },
+        workspaces: ["packages/*"],
+        catalog: { react: "^19.0.0" },
+        modifiers: { "#lodash": "4.17.21", ":root > #parent > #child": "2.0.0" },
+      }),
+      "vlt-lock.json": JSON.stringify({ lockfileVersion: 1, nodes: {} }),
+    }, "pnpm");
+
+    expect(plan.executable).toBeTrue();
+    const configurationMutation = mutations(plan).find((entry) => entry.path === "pnpm-workspace.yaml");
+    const configuration = Bun.YAML.parse(configurationMutation?.content ?? "") as Record<string, unknown>;
+    expect(configuration.packages).toEqual(["packages/*"]);
+    expect(configuration.catalog).toEqual({ react: "^19.0.0" });
+    expect(configuration.overrides).toEqual({ lodash: "4.17.21", "parent>child": "2.0.0" });
+    expect(mutations(plan).find((entry) => entry.path === ".npmrc")?.content)
+      .toBe("registry=https://registry.example.test/\n@internal:registry=https://scope.example.test/\n");
+  });
+
+  test("renders pnpm dependency mode for Deno and preserves npm overrides", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        private: true,
+        packageManager: "pnpm@11.21.0",
+        overrides: { parent: { child: "2.0.0" } },
+      }),
+      "packages/app/package.json": JSON.stringify({
+        name: "app",
+        dependencies: { react: "catalog:" },
+      }),
+      "pnpm-workspace.yaml": [
+        "packages:",
+        "  - packages/*",
+        "catalog:",
+        "  react: ^19.0.0",
+        "nodeLinker: isolated",
+        "",
+      ].join("\n"),
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    }, "deno", true);
+
+    expect(plan.executable).toBeTrue();
+    const denoMutation = mutations(plan).find((entry) => entry.path === "deno.json");
+    expect(JSON.parse(denoMutation?.content ?? "{}")).toEqual({
+      workspace: ["packages/*"],
+      nodeModulesDir: "manual",
+      nodeModulesLinker: "isolated",
+    });
+    const rootMutation = mutations(plan).find((entry) => entry.path === "package.json");
+    const root = JSON.parse(rootMutation?.content ?? "{}") as Record<string, unknown>;
+    expect(root.packageManager).toBe("deno@2.9.5");
+    expect(root.overrides).toEqual({ parent: { child: "2.0.0" } });
+    const appMutation = mutations(plan).find((entry) => entry.path === "packages/app/package.json");
+    expect(JSON.parse(appMutation?.content ?? "{}").dependencies.react).toBe("^19.0.0");
+  });
+
+  test("preserves Deno runtime configuration when moving dependency management to npm", async () => {
+    const { plan } = await planFixture({
+      "package.json": JSON.stringify({ name: "root", private: true, packageManager: "deno@2.9.5" }),
+      "packages/app/package.json": JSON.stringify({ name: "app", version: "1.0.0" }),
+      "deno.json": JSON.stringify({ workspace: ["packages/*"], tasks: { test: "deno test" } }),
+      "deno.lock": JSON.stringify({ version: "5", npm: {} }),
+      "README.md": "Run `deno task test`.\n",
+    }, "npm");
+
+    expect(plan.executable).toBeTrue();
+    const rootMutation = mutations(plan).find((entry) => entry.path === "package.json");
+    expect(JSON.parse(rootMutation?.content ?? "{}").workspaces).toEqual(["packages/*"]);
+    expect(mutations(plan).some((entry) => entry.path === "deno.json" && entry.action === "delete"))
+      .toBeFalse();
+    expect(mutations(plan).find((entry) => entry.path === "README.md")?.content)
+      .toBe("Run `npm run test`.\n");
+  });
+
+  test("fails closed for vlt registry credentials and unsupported Deno dependency surfaces", async () => {
+    const vlt = await planFixture({
+      "package.json": JSON.stringify({ name: "root", packageManager: "npm@12.0.2" }),
+      "package-lock.json": "{}",
+      ".npmrc": "registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n",
+    }, "vlt");
+    expect(vlt.plan.executable).toBeFalse();
+    expect(vlt.plan.diagnostics.map((entry) => entry.code)).toContain(
+      "VLT_REGISTRY_AUTH_MANUAL_REQUIRED",
+    );
+    expect(JSON.stringify(vlt.plan)).not.toContain("NPM_TOKEN");
+
+    const deno = await planFixture({
+      "package.json": JSON.stringify({
+        name: "root",
+        packageManager: "npm@12.0.2",
+        dependencies: { repository: "git+https://example.test/repository.git" },
+      }),
+      "package-lock.json": "{}",
+      "deno.json": JSON.stringify({ imports: { utility: "jsr:@std/path" } }),
+    }, "deno");
+    expect(deno.plan.executable).toBeFalse();
+    expect(deno.plan.diagnostics.map((entry) => entry.code)).toContain(
+      "DENO_DEPENDENCY_PROTOCOL_UNSUPPORTED",
+    );
   });
 
   test("expands pnpm workspace and catalog protocols for npm", async () => {

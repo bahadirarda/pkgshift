@@ -83,6 +83,63 @@ fn parse_yaml_list(content: &str, section: &str) -> Vec<String> {
     values
 }
 
+fn deno_workspace_patterns(configuration: &Map<String, Value>) -> Vec<String> {
+    let workspace = configuration.get("workspace");
+    let values = workspace.and_then(Value::as_array).or_else(|| {
+        workspace
+            .and_then(Value::as_object)
+            .and_then(|value| value.get("members"))
+            .and_then(Value::as_array)
+    });
+    values
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect()
+}
+
+fn vlt_workspace_patterns(configuration: &Map<String, Value>) -> Vec<String> {
+    let Some(workspaces) = configuration.get("workspaces") else {
+        return Vec::new();
+    };
+    if let Some(workspace) = workspaces.as_str() {
+        return vec![workspace.to_owned()];
+    }
+    if let Some(workspaces) = workspaces.as_array() {
+        return workspaces
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect();
+    }
+    workspaces
+        .as_object()
+        .into_iter()
+        .flat_map(|groups| groups.values())
+        .flat_map(|value| {
+            value.as_str().map_or_else(
+                || {
+                    value
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                },
+                |value| vec![value.to_owned()],
+            )
+        })
+        .collect()
+}
+
+fn json5_object(content: &str) -> Option<Map<String, Value>> {
+    json5::from_str::<Value>(content)
+        .ok()
+        .and_then(|value| value.as_object().cloned())
+}
+
 fn integration_kind(path: &str) -> IntegrationKind {
     let lowercase = path.to_ascii_lowercase();
     if path.starts_with(".github/workflows/")
@@ -198,6 +255,33 @@ pub fn inspect_project(path: &Path) -> Result<ProjectInspection> {
                 location: "pnpm-workspace.yaml".to_owned(),
                 patterns,
             });
+        }
+    }
+    for (location, parser) in [
+        (
+            "deno.json",
+            deno_workspace_patterns as fn(&Map<String, Value>) -> Vec<String>,
+        ),
+        ("deno.jsonc", deno_workspace_patterns),
+        ("vlt.json", vlt_workspace_patterns),
+    ] {
+        let Some(content) = read_text(&root.join(location))? else {
+            continue;
+        };
+        if let Some(configuration) = json5_object(&content) {
+            let patterns = parser(&configuration);
+            if !patterns.is_empty() {
+                sources.push(WorkspaceSource {
+                    location: location.to_owned(),
+                    patterns,
+                });
+            }
+        } else {
+            diagnostics.push(Diagnostic::blocking(
+                "CONFIGURATION_PARSE_FAILED",
+                format!("{location} could not be parsed as an object."),
+                vec![format!("Repair {location} before retrying inspection.")],
+            ));
         }
     }
     let workspace = WorkspaceInspection {
@@ -510,6 +594,15 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
     } else {
         Map::new()
     };
+    let vlt_configuration = read_text(&root.join("vlt.json"))?
+        .as_deref()
+        .and_then(json5_object)
+        .unwrap_or_default();
+    let deno_configuration = read_text(&root.join("deno.json"))?
+        .or(read_text(&root.join("deno.jsonc"))?)
+        .as_deref()
+        .and_then(json5_object)
+        .unwrap_or_default();
     if inspection.workspace.configured {
         add_feature(
             &mut features,
@@ -638,6 +731,73 @@ pub fn build_project_ir(inspection: &ProjectInspection) -> Result<Option<Project
     }
     if root.join("yarn.config.cjs").exists() {
         add_feature(&mut features, "policy.yarn-constraints", "yarn.config.cjs");
+    }
+    if !vlt_configuration.is_empty() {
+        if vlt_configuration
+            .get("catalog")
+            .or_else(|| vlt_configuration.get("catalogs"))
+            .is_some()
+        {
+            add_feature(&mut features, "policy.catalogs", "vlt.json#/catalog");
+        }
+        if let Some(modifiers) = vlt_configuration
+            .get("modifiers")
+            .and_then(Value::as_object)
+            .filter(|modifiers| !modifiers.is_empty())
+        {
+            add_feature(&mut features, "resolution.overrides", "vlt.json#/modifiers");
+            if modifiers.keys().any(|selector| selector.contains(" > ")) {
+                add_feature(
+                    &mut features,
+                    "resolution.nested-overrides",
+                    "vlt.json#/modifiers",
+                );
+            }
+        }
+        let vlt_cli_configuration = vlt_configuration
+            .get("config")
+            .and_then(Value::as_object)
+            .unwrap_or(&vlt_configuration);
+        if vlt_cli_configuration.get("registry").is_some()
+            || vlt_cli_configuration.get("scoped-registries").is_some()
+        {
+            add_feature(&mut features, "registry.npmrc", "vlt.json#/registry");
+        }
+    }
+    if !deno_configuration.is_empty() {
+        if deno_configuration
+            .get("allowScripts")
+            .is_some_and(|value| !value.is_null())
+        {
+            add_feature(
+                &mut features,
+                "lifecycle.trusted-dependencies",
+                "deno.json#/allowScripts",
+            );
+        }
+        if deno_configuration
+            .get("imports")
+            .or_else(|| deno_configuration.get("scopes"))
+            .and_then(Value::as_object)
+            .is_some_and(|value| !value.is_empty())
+        {
+            add_feature(
+                &mut features,
+                "dependency.deno-import-map",
+                "deno.json#/imports",
+            );
+        }
+        if deno_configuration
+            .get("nodeModulesLinker")
+            .and_then(Value::as_str)
+            == Some("isolated")
+        {
+            add_feature(
+                &mut features,
+                "install.isolated-linker",
+                "deno.json#/nodeModulesLinker",
+            );
+        }
     }
     if let Some(content) = read_text(&root.join("pnpm-workspace.yaml"))? {
         match noyalib::from_str::<Value>(&content) {
@@ -779,6 +939,31 @@ mod tests {
                 .expect("serialized inspection")
                 .contains("secret-value")
         );
+    }
+
+    #[test]
+    fn accepts_utf8_bom_in_workspace_manifests() {
+        let directory = tempdir().expect("temporary directory");
+        fs::create_dir_all(directory.path().join("packages/app")).expect("workspace directory");
+        fs::write(
+            directory.path().join("package.json"),
+            "\u{feff}{\"name\":\"fixture\",\"private\":true,\"packageManager\":\"npm@12.0.2\",\"workspaces\":[\"packages/*\"]}",
+        )
+        .expect("root manifest");
+        fs::write(
+            directory.path().join("packages/app/package.json"),
+            "\u{feff}{\"name\":\"@fixture/app\",\"version\":\"1.0.0\"}",
+        )
+        .expect("package manifest");
+        fs::write(directory.path().join("package-lock.json"), "{}").expect("lockfile");
+
+        let inspection = inspect_project(directory.path()).expect("inspection");
+        let ir = build_project_ir(&inspection)
+            .expect("IR build")
+            .expect("project IR");
+
+        assert_eq!(ir.packages.len(), 2);
+        assert_eq!(ir.packages[1].name.as_deref(), Some("@fixture/app"));
     }
 
     #[test]

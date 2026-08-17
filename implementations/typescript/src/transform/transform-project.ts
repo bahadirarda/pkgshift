@@ -8,6 +8,7 @@ import {
   sha256Text,
 } from "../core/files.ts";
 import { redactSensitiveText } from "../core/redaction.ts";
+import { parseJsoncObject } from "../core/jsonc.ts";
 import { safeProjectFilePath, UnsafeProjectPathError } from "../core/project-path.ts";
 import type {
   Diagnostic,
@@ -43,6 +44,11 @@ const IMPLEMENTED_TRANSFORMATIONS = new Set([
   "registry.npmrc-to-yarnrc",
   "lifecycle.to-pnpm-build-policy",
   "lifecycle.to-yarn-build-policy",
+  "workspace.to-vlt-workspace",
+  "workspace.to-deno-workspace",
+  "overrides.to-vlt-modifiers",
+  "resolutions.to-vlt-modifiers",
+  "registry.npmrc-to-vlt",
 ]);
 
 const SOURCE_CONFIGURATION: Record<PackageManagerId, string[]> = {
@@ -52,7 +58,7 @@ const SOURCE_CONFIGURATION: Record<PackageManagerId, string[]> = {
   "yarn-modern": [".yarnrc.yml", ".pnp.cjs", ".pnp.loader.mjs"],
   bun: ["bunfig.toml"],
   vlt: ["vlt.json"],
-  deno: ["deno.json", "deno.jsonc"],
+  deno: [],
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -233,9 +239,12 @@ function stringRecord(value: unknown): Record<string, string> {
 function catalogState(
   rootManifest: Record<string, unknown>,
   pnpmConfiguration: Record<string, unknown> | null,
+  vltConfiguration: Record<string, unknown> | null,
 ): CatalogState {
   const workspaces = isObject(rootManifest.workspaces) ? rootManifest.workspaces : {};
-  const namedSource = isObject(pnpmConfiguration?.catalogs)
+  const namedSource = isObject(vltConfiguration?.catalogs)
+    ? vltConfiguration.catalogs
+    : isObject(pnpmConfiguration?.catalogs)
     ? pnpmConfiguration.catalogs
     : isObject(workspaces.catalogs)
       ? workspaces.catalogs
@@ -244,6 +253,7 @@ function catalogState(
     default: {
       ...stringRecord(workspaces.catalog),
       ...stringRecord(pnpmConfiguration?.catalog),
+      ...stringRecord(vltConfiguration?.catalog),
     },
     named: Object.fromEntries(
       Object.entries(namedSource)
@@ -312,7 +322,7 @@ function transformDependencies(
         }
       } else if (
         value.startsWith("catalog:")
-        && !["pnpm", "bun"].includes(target)
+        && !["pnpm", "bun", "vlt"].includes(target)
       ) {
         const expanded = resolveCatalogSpecifier(value, name, catalogs);
         if (!expanded) {
@@ -358,11 +368,107 @@ function flattenNestedOverrides(
   return output;
 }
 
+function validBarePackageName(value: string): boolean {
+  return value.startsWith("@")
+    ? /^@[^/@\s]+\/[^/@\s]+$/.test(value)
+    : /^[^@/\s]+$/.test(value);
+}
+
+function vltModifiersToOverrides(
+  value: unknown,
+  diagnostics: Diagnostic[],
+): Record<string, unknown> {
+  if (!isObject(value)) return {};
+  const output: Record<string, unknown> = {};
+  for (const [selector, resolution] of Object.entries(value)) {
+    if (typeof resolution !== "string") {
+      diagnostics.push(diagnostic(
+        "VLT_MODIFIER_UNSUPPORTED",
+        "vlt modifiers must resolve to string dependency specifiers.",
+        "vlt.json",
+      ));
+      continue;
+    }
+    const bare = selector.match(/^#(.+)$/);
+    if (bare && validBarePackageName(bare[1]!)) {
+      const existing = output[bare[1]!];
+      if (isObject(existing)) existing["."] = resolution;
+      else output[bare[1]!] = resolution;
+      continue;
+    }
+    const contextual = selector.match(/^:root > #(.+) > #(.+)$/);
+    if (
+      contextual
+      && validBarePackageName(contextual[1]!)
+      && validBarePackageName(contextual[2]!)
+    ) {
+      const parent = contextual[1]!;
+      const child = contextual[2]!;
+      const existing = output[parent];
+      const nested = isObject(existing)
+        ? existing
+        : typeof existing === "string"
+          ? { ".": existing }
+          : {};
+      nested[child] = resolution;
+      output[parent] = nested;
+      continue;
+    }
+    diagnostics.push(diagnostic(
+      "VLT_MODIFIER_UNSUPPORTED",
+      `The vlt dependency selector ${selector} is outside the deterministic migration subset.`,
+      "vlt.json",
+    ));
+  }
+  return output;
+}
+
+function overridesToVltModifiers(
+  overrides: Record<string, unknown>,
+): Record<string, string> | null {
+  const output: Record<string, string> = {};
+  for (const [parent, value] of Object.entries(overrides)) {
+    if (!validBarePackageName(parent)) return null;
+    if (typeof value === "string") {
+      output[`#${parent}`] = value;
+      continue;
+    }
+    if (!isObject(value)) return null;
+    for (const [child, resolution] of Object.entries(value)) {
+      if (typeof resolution !== "string") return null;
+      if (child === ".") output[`#${parent}`] = resolution;
+      else if (validBarePackageName(child)) {
+        output[`:root > #${parent} > #${child}`] = resolution;
+      } else return null;
+    }
+  }
+  return output;
+}
+
+function resolutionsToVltModifiers(
+  resolutions: Record<string, unknown>,
+): Record<string, string> | null {
+  const output: Record<string, string> = {};
+  for (const [selector, resolution] of Object.entries(resolutions)) {
+    if (typeof resolution !== "string") return null;
+    if (validBarePackageName(selector)) {
+      output[`#${selector}`] = resolution;
+      continue;
+    }
+    const contextual = selector.match(/^([^@/\s]+)\/([^@/\s]+)$/);
+    if (!contextual) return null;
+    output[`:root > #${contextual[1]} > #${contextual[2]}`] = resolution;
+  }
+  return output;
+}
+
 function sourcePolicies(
   source: PackageManagerId,
   rootManifest: Record<string, unknown>,
   pnpmConfiguration: Record<string, unknown> | null,
   yarnConfiguration: Record<string, unknown> | null,
+  vltConfiguration: Record<string, unknown> | null,
+  diagnostics: Diagnostic[],
 ): {
   overrides: Record<string, unknown>;
   resolutions: Record<string, unknown>;
@@ -406,7 +512,9 @@ function sourcePolicies(
         .map(([name]) => name)
     : [];
   return {
-    overrides: isObject(pnpmConfiguration?.overrides)
+    overrides: source === "vlt"
+      ? vltModifiersToOverrides(vltConfiguration?.modifiers, diagnostics)
+      : isObject(pnpmConfiguration?.overrides)
       ? pnpmConfiguration.overrides
       : isObject(pnpmManifest.overrides)
         ? pnpmManifest.overrides
@@ -762,7 +870,11 @@ function configurePolicies(
   removeLifecyclePolicy(manifest, policies.yarnAllowList);
 
   let overrides = policies.overrides;
-  if (Object.keys(overrides).length === 0 && Object.keys(policies.resolutions).length > 0) {
+  if (
+    target !== "vlt"
+    && Object.keys(overrides).length === 0
+    && Object.keys(policies.resolutions).length > 0
+  ) {
     const compatible = compatibleResolutions(policies.resolutions);
     if (!compatible) {
       diagnostics.push(diagnostic(
@@ -775,7 +887,22 @@ function configurePolicies(
     }
   }
 
-  if (target === "pnpm") {
+  if (target === "vlt") {
+    const modifiers = Object.keys(policies.overrides).length > 0
+      ? overridesToVltModifiers(policies.overrides)
+      : resolutionsToVltModifiers(policies.resolutions);
+    if (!modifiers) {
+      diagnostics.push(diagnostic(
+        "VLT_MODIFIER_UNSUPPORTED",
+        "Dependency policy exceeds the deterministic vlt modifier selector subset.",
+        "package.json",
+      ));
+    } else if (Object.keys(modifiers).length > 0) {
+      targetConfiguration.modifiers = modifiers;
+    }
+    if (Object.keys(catalogs.default).length > 0) targetConfiguration.catalog = catalogs.default;
+    if (Object.keys(catalogs.named).length > 0) targetConfiguration.catalogs = catalogs.named;
+  } else if (target === "pnpm") {
     if (Object.keys(overrides).length > 0) {
       const flattened = flattenNestedOverrides(overrides, ">");
       if (!flattened) {
@@ -801,7 +928,7 @@ function configurePolicies(
     }
     if (Object.keys(catalogs.default).length > 0) targetConfiguration.catalog = catalogs.default;
     if (Object.keys(catalogs.named).length > 0) targetConfiguration.catalogs = catalogs.named;
-  } else if (target === "npm" || target === "bun") {
+  } else if (target === "npm" || target === "bun" || target === "deno") {
     if (Object.keys(overrides).length > 0) manifest.overrides = overrides;
     if (target === "npm" && Object.keys(policies.packageExtensions).length > 0) {
       manifest.packageExtensions = policies.packageExtensions;
@@ -879,6 +1006,12 @@ function configureWorkspaces(
   if (target === "pnpm") {
     delete manifest.workspaces;
     targetConfiguration.packages = projectIr.workspace.patterns;
+  } else if (target === "vlt") {
+    delete manifest.workspaces;
+    targetConfiguration.workspaces = projectIr.workspace.patterns;
+  } else if (target === "deno") {
+    delete manifest.workspaces;
+    targetConfiguration.workspace = projectIr.workspace.patterns;
   } else if (target === "bun" && (
     Object.keys(catalogs.default).length > 0 || Object.keys(catalogs.named).length > 0
   )) {
@@ -939,6 +1072,84 @@ function parseNpmrcForYarn(
   return output;
 }
 
+function parseNpmrcForVlt(
+  content: string | null,
+  diagnostics: Diagnostic[],
+): Record<string, unknown> {
+  const config: Record<string, unknown> = {
+    registry: "https://registry.npmjs.org/",
+  };
+  const scopes: Record<string, string> = {};
+  let reportedAuthentication = false;
+  for (const rawLine of content?.split(/\r?\n/) ?? []) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) continue;
+    const separator = line.indexOf("=");
+    if (separator < 1) continue;
+    const setting = line.slice(0, separator).trim();
+    const value = line.slice(separator + 1).trim();
+    if (setting === "registry") {
+      config.registry = value;
+    } else if (/^@[^:]+:registry$/.test(setting)) {
+      scopes[setting.slice(0, setting.indexOf(":"))] = value;
+    } else if (setting === "node-linker") {
+      continue;
+    } else if (
+      /(?:_authToken|_auth|_password|username)$/.test(setting)
+      || setting === "always-auth"
+    ) {
+      if (!reportedAuthentication) {
+        diagnostics.push(diagnostic(
+          "VLT_REGISTRY_AUTH_MANUAL_REQUIRED",
+          "vlt keeps registry credentials outside vlt.json; authenticate with vlt login after migration.",
+          ".npmrc",
+        ));
+        reportedAuthentication = true;
+      }
+    } else {
+      diagnostics.push(diagnostic(
+        "NPMRC_SETTING_UNSUPPORTED",
+        `vlt translation does not support the .npmrc setting ${setting}.`,
+        ".npmrc",
+      ));
+    }
+  }
+  if (Object.keys(scopes).length > 0) config["scoped-registries"] = scopes;
+  return { config };
+}
+
+function npmrcFromVlt(configuration: Record<string, unknown>): string | null {
+  const config = isObject(configuration.config) ? configuration.config : configuration;
+  const registry = typeof config.registry === "string"
+    ? config.registry
+    : null;
+  const scopes = stringRecord(config["scoped-registries"]);
+  if (!registry && Object.keys(scopes).length === 0) return null;
+  return [
+    ...(registry ? [`registry=${registry}`] : []),
+    ...Object.entries(scopes).map(([scope, value]) => `${scope}:registry=${value}`),
+    "",
+  ].join("\n");
+}
+
+function yarnRegistryFromVlt(configuration: Record<string, unknown>): Record<string, unknown> {
+  const config = isObject(configuration.config) ? configuration.config : configuration;
+  const output: Record<string, unknown> = {};
+  if (typeof config.registry === "string") {
+    output.npmRegistryServer = config.registry;
+  }
+  const scopes = stringRecord(config["scoped-registries"]);
+  if (Object.keys(scopes).length > 0) {
+    output.npmScopes = Object.fromEntries(
+      Object.entries(scopes).map(([scope, registry]) => [
+        scope.replace(/^@/, ""),
+        { npmRegistryServer: registry },
+      ]),
+    );
+  }
+  return output;
+}
+
 function bunConfiguration(
   before: string | null,
   isolated: boolean,
@@ -962,9 +1173,17 @@ function integrationContent(
   const sourceToken = source.startsWith("yarn-") ? "yarn" : source;
   const targetToken = target.startsWith("yarn-") ? "yarn" : target;
   if (sourceToken === targetToken) return content;
-  const expression = new RegExp(`\\b${sourceToken}\\s+(install|ci|run|add|remove)\\b`, "g");
+  const expression = new RegExp(`\\b${sourceToken}\\s+(install|ci|run|task|add|remove)\\b`, "g");
   return content.replace(expression, (_match, command: string) =>
-    `${targetToken} ${command === "ci" ? "install" : command}`
+    `${targetToken} ${
+      target === "deno" && (command === "run" || command === "task")
+        ? "task"
+        : source === "deno" && command === "task"
+          ? "run"
+          : command === "ci"
+            ? "install"
+            : command
+    }`
   );
 }
 
@@ -1041,8 +1260,50 @@ export async function transformProject(
       ));
     }
   }
-  const catalogs = catalogState(rootManifest, pnpmConfiguration);
-  const policies = sourcePolicies(source, rootManifest, pnpmConfiguration, yarnConfiguration);
+  const vltText = await readText(join(inspection.root, "vlt.json"));
+  let vltConfiguration: Record<string, unknown> | null = null;
+  if (vltText !== null) {
+    try {
+      const parsed: unknown = JSON.parse(vltText);
+      vltConfiguration = isObject(parsed) ? parsed : null;
+      if (!vltConfiguration) throw new Error("vlt.json root must be an object");
+    } catch (error) {
+      diagnostics.push(diagnostic(
+        "CONFIGURATION_PARSE_FAILED",
+        error instanceof Error ? error.message : "vlt.json could not be parsed.",
+        "vlt.json",
+      ));
+    }
+  }
+  const denoLocation = await pathExists(join(inspection.root, "deno.json"))
+    ? "deno.json"
+    : await pathExists(join(inspection.root, "deno.jsonc"))
+      ? "deno.jsonc"
+      : "deno.json";
+  let denoConfiguration: Record<string, unknown> = {};
+  const denoText = await readText(join(inspection.root, denoLocation));
+  if (denoText !== null) {
+    try {
+      denoConfiguration = denoLocation.endsWith(".jsonc")
+        ? parseJsoncObject(denoText)
+        : JSON.parse(denoText) as Record<string, unknown>;
+    } catch (error) {
+      diagnostics.push(diagnostic(
+        "CONFIGURATION_PARSE_FAILED",
+        error instanceof Error ? error.message : `${denoLocation} could not be parsed.`,
+        denoLocation,
+      ));
+    }
+  }
+  const catalogs = catalogState(rootManifest, pnpmConfiguration, vltConfiguration);
+  const policies = sourcePolicies(
+    source,
+    rootManifest,
+    pnpmConfiguration,
+    yarnConfiguration,
+    vltConfiguration,
+    diagnostics,
+  );
   if (!validPackageExtensions(policies.packageExtensions)) {
     diagnostics.push(diagnostic(
       "PACKAGE_EXTENSIONS_UNSUPPORTED",
@@ -1075,8 +1336,22 @@ export async function transformProject(
       "package.json",
     ));
   }
-  const targetConfiguration: Record<string, unknown> = {};
+  const targetConfiguration: Record<string, unknown> = target === "deno"
+    ? cloneObject(denoConfiguration)
+    : {};
   const targetDefinition = getPackageManager(target);
+
+  if (target === "deno") {
+    for (const dependency of projectIr.packages.flatMap((entry) => entry.dependencies)) {
+      if (["file", "link", "portal", "patch", "git", "url", "unknown"].includes(dependency.protocol)) {
+        diagnostics.push(diagnostic(
+          "DENO_DEPENDENCY_PROTOCOL_UNSUPPORTED",
+          `Deno package.json dependency mode cannot preserve ${dependency.protocol}: for ${dependency.name}.`,
+          dependency.evidence.location,
+        ));
+      }
+    }
+  }
 
   for (const packageEntry of projectIr.packages) {
     const current = await readJsonObject(join(inspection.root, packageEntry.manifestPath));
@@ -1137,6 +1412,9 @@ export async function transformProject(
     if (npmrc !== null) {
       Object.assign(targetConfiguration, parseNpmrcForYarn(npmrc, diagnostics));
     }
+    if (source === "vlt" && vltConfiguration) {
+      Object.assign(targetConfiguration, yarnRegistryFromVlt(vltConfiguration));
+    }
     const planned = await mutation(
       inspection.root,
       ".yarnrc.yml",
@@ -1156,6 +1434,51 @@ export async function transformProject(
         after,
         "Render Bun linker configuration.",
         capabilityAnalysis.decisions.map((decision) => decision.featureId),
+        diagnostics,
+      );
+      if (planned) result.configurationMutations.push(planned);
+    }
+  } else if (target === "vlt") {
+    const npmrc = await readText(join(inspection.root, ".npmrc"));
+    Object.assign(targetConfiguration, parseNpmrcForVlt(npmrc, diagnostics));
+    const planned = await mutation(
+      inspection.root,
+      "vlt.json",
+      json(targetConfiguration),
+      "Render vlt workspace, catalog, modifier, and registry configuration.",
+      capabilityAnalysis.decisions.map((decision) => decision.featureId),
+      diagnostics,
+    );
+    if (planned) result.configurationMutations.push(planned);
+  } else if (target === "deno") {
+    if (pnp || isolated) {
+      targetConfiguration.nodeModulesDir = "manual";
+      targetConfiguration.nodeModulesLinker = "isolated";
+    }
+    const planned = await mutation(
+      inspection.root,
+      denoLocation,
+      json(targetConfiguration),
+      "Render Deno dependency workspace and linker configuration while preserving runtime settings.",
+      capabilityAnalysis.decisions.map((decision) => decision.featureId),
+      diagnostics,
+    );
+    if (planned) result.configurationMutations.push(planned);
+  }
+
+  if (
+    source === "vlt"
+    && vltConfiguration
+    && ["npm", "pnpm", "yarn-classic", "bun", "deno"].includes(target)
+  ) {
+    const npmrc = npmrcFromVlt(vltConfiguration);
+    if (npmrc !== null) {
+      const planned = await mutation(
+        inspection.root,
+        ".npmrc",
+        npmrc,
+        "Render npm-compatible public registry configuration from vlt.json.",
+        ["registry.npmrc"],
         diagnostics,
       );
       if (planned) result.configurationMutations.push(planned);
@@ -1183,7 +1506,7 @@ export async function transformProject(
   );
   const sourceConfiguration = new Set([
     ...SOURCE_CONFIGURATION[source],
-    ...(target === "yarn-modern" ? [".npmrc"] : []),
+    ...(["yarn-modern", "vlt"].includes(target) ? [".npmrc"] : []),
   ]);
   for (const path of sourceConfiguration) {
     if (retainedConfiguration.has(path) || !(await pathExists(join(inspection.root, path)))) continue;

@@ -33,6 +33,14 @@ fn fake_package_managers(directory: &TempDir) -> PathBuf {
             "yarn",
             "printf '%s\\n' '__metadata:' '  version: 8' > yarn.lock",
         ),
+        (
+            "vlt",
+            "printf '%s\\n' '{\"lockfileVersion\":1,\"nodes\":{},\"edges\":{}}' > vlt-lock.json",
+        ),
+        (
+            "deno",
+            "printf '%s\\n' '{\"version\":\"5\",\"npm\":{}}' > deno.lock",
+        ),
     ] {
         let path = binary_directory.join(name);
         write(
@@ -44,6 +52,19 @@ fn fake_package_managers(directory: &TempDir) -> PathBuf {
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
             .expect("fake binary permissions");
     }
+    binary_directory
+}
+
+fn bunx_package_manager(directory: &TempDir, name: &str, package: &str) -> PathBuf {
+    let binary_directory = directory.path().join("real-bin");
+    fs::create_dir_all(&binary_directory).expect("real binary directory");
+    let path = binary_directory.join(name);
+    write(
+        &path,
+        &format!("#!/bin/sh\nexec bunx --bun {package} \"$@\"\n"),
+    );
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+        .expect("real wrapper permissions");
     binary_directory
 }
 
@@ -233,6 +254,235 @@ fn migrates_an_npm_workspace_to_pnpm() {
     assert!(
         manifest["packageManager"] == "pnpm@11.21.0",
         "target package manager pin should be rendered"
+    );
+}
+
+#[test]
+fn migrates_an_npm_workspace_to_vlt() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "npm-to-vlt-fixture",
+  "private": true,
+  "packageManager": "npm@12.0.2",
+  "workspaces": ["packages/*"],
+  "overrides": { "parent": { "child": "2.0.0" } }
+}
+"#,
+    );
+    write(
+        &root.join("packages/app/package.json"),
+        r#"{"name":"app","version":"1.0.0"}
+"#,
+    );
+    write(
+        &root.join("package-lock.json"),
+        "{\"lockfileVersion\":3,\"packages\":{\"\":{}}}\n",
+    );
+    write(
+        &root.join(".npmrc"),
+        "registry=https://registry.example.test/\n",
+    );
+
+    let applied = plan_and_apply(&root, &binaries, "vlt");
+    assert_eq!(applied["status"], "completed");
+    assert!(root.join("vlt-lock.json").is_file());
+    assert!(!root.join("package-lock.json").exists());
+    assert!(!root.join(".npmrc").exists());
+    let configuration: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("vlt.json")).expect("vlt configuration"),
+    )
+    .expect("vlt configuration JSON");
+    assert_eq!(
+        configuration["workspaces"],
+        serde_json::json!(["packages/*"])
+    );
+    assert_eq!(
+        configuration["modifiers"][":root > #parent > #child"],
+        "2.0.0"
+    );
+}
+
+#[test]
+fn migrates_a_pnpm_workspace_to_deno_dependency_mode() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = fake_package_managers(&directory);
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "pnpm-to-deno-fixture",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "overrides": { "parent": { "child": "2.0.0" } }
+}
+
+"#,
+    );
+    write(
+        &root.join("packages/app/package.json"),
+        r#"{"name":"app","version":"1.0.0"}
+"#,
+    );
+    write(
+        &root.join("pnpm-workspace.yaml"),
+        "packages:\n  - 'packages/*'\nnodeLinker: isolated\n",
+    );
+    write(
+        &root.join("pnpm-lock.yaml"),
+        "lockfileVersion: '9.0'\npackages: {}\nsnapshots: {}\n",
+    );
+    write(&root.join("README.md"), "Run `pnpm run test`.\n");
+
+    let applied = plan_and_apply(&root, &binaries, "deno");
+    assert_eq!(applied["status"], "completed");
+    assert!(root.join("deno.lock").is_file());
+    assert!(!root.join("pnpm-lock.yaml").exists());
+    assert!(!root.join("pnpm-workspace.yaml").exists());
+    let configuration: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("deno.json")).expect("Deno configuration"),
+    )
+    .expect("Deno configuration JSON");
+    assert_eq!(
+        configuration["workspace"],
+        serde_json::json!(["packages/*"])
+    );
+    assert_eq!(configuration["nodeModulesLinker"], "isolated");
+    assert!(
+        fs::read_to_string(root.join("README.md"))
+            .expect("migrated documentation")
+            .contains("deno task test")
+    );
+}
+
+#[test]
+#[ignore = "requires registry access and the pinned vlt package"]
+fn migrates_a_dependency_with_real_vlt() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = PathBuf::from(
+        std::env::var_os("PKGSHIFT_REAL_VLT_BIN")
+            .expect("PKGSHIFT_REAL_VLT_BIN must point to the pinned vlt bin directory"),
+    );
+    let root = directory.path().join("project");
+    let probe = directory.path().join("probe");
+    write(
+        &probe.join("package.json"),
+        r#"{"name":"vlt-runtime-probe","private":true,"dependencies":{"is-number":"7.0.0"}}
+"#,
+    );
+    write(
+        &probe.join("vlt.json"),
+        "{\"config\":{\"registry\":\"https://registry.npmjs.org/\"}}\n",
+    );
+    let probed = Command::new(binaries.join("vlt"))
+        .arg("install")
+        .current_dir(&probe)
+        .output()
+        .expect("vlt runtime probe");
+    assert!(
+        probed.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&probed.stdout),
+        String::from_utf8_lossy(&probed.stderr)
+    );
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "real-vlt-fixture",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "workspaces": ["packages/*"]
+}
+"#,
+    );
+    write(
+        &root.join("packages/app/package.json"),
+        r#"{"name":"@fixture/app","version":"1.0.0","dependencies":{"@fixture/lib":"workspace:*"}}
+"#,
+    );
+    write(
+        &root.join("packages/lib/package.json"),
+        r#"{"name":"@fixture/lib","version":"1.0.0","dependencies":{"is-number":"7.0.0"}}
+"#,
+    );
+    let installed = Command::new("bun")
+        .args(["install", "--ignore-scripts"])
+        .current_dir(&root)
+        .output()
+        .expect("Bun source installation");
+    assert!(
+        installed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&installed.stderr)
+    );
+
+    let applied = plan_and_apply(&root, &binaries, "vlt");
+    assert_eq!(applied["status"], "completed");
+    assert_eq!(applied["summary"]["runStatus"], "succeeded");
+    assert!(root.join("vlt-lock.json").is_file());
+    assert!(!root.join("bun.lock").exists());
+    let configuration: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("vlt.json")).expect("vlt workspace configuration"),
+    )
+    .expect("vlt workspace configuration JSON");
+    assert_eq!(
+        configuration["workspaces"],
+        serde_json::json!(["packages/*"])
+    );
+}
+
+#[test]
+#[ignore = "requires registry access and the pinned Deno package"]
+fn migrates_a_dependency_with_real_deno() {
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let binaries = bunx_package_manager(&directory, "deno", "deno@2.9.5");
+    let root = directory.path().join("project");
+    write(
+        &root.join("package.json"),
+        r#"{
+  "name": "real-deno-fixture",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "workspaces": ["packages/*"]
+}
+"#,
+    );
+    write(
+        &root.join("packages/app/package.json"),
+        r#"{"name":"@fixture/app","version":"1.0.0","dependencies":{"@fixture/lib":"workspace:*"}}
+"#,
+    );
+    write(
+        &root.join("packages/lib/package.json"),
+        r#"{"name":"@fixture/lib","version":"1.0.0","dependencies":{"is-number":"7.0.0"}}
+"#,
+    );
+    let installed = Command::new("bun")
+        .args(["install", "--ignore-scripts"])
+        .current_dir(&root)
+        .output()
+        .expect("Bun source installation");
+    assert!(
+        installed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&installed.stderr)
+    );
+
+    let applied = plan_and_apply(&root, &binaries, "deno");
+    assert_eq!(applied["status"], "completed");
+    assert_eq!(applied["summary"]["runStatus"], "succeeded");
+    assert!(root.join("deno.lock").is_file());
+    assert!(!root.join("bun.lock").exists());
+    let configuration: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("deno.json")).expect("Deno workspace configuration"),
+    )
+    .expect("Deno workspace configuration JSON");
+    assert_eq!(
+        configuration["workspace"],
+        serde_json::json!(["packages/*"])
     );
 }
 

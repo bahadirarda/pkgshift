@@ -60,15 +60,6 @@ fn unknown(summary: impl Into<String>) -> Outcome {
     outcome(CapabilityClassification::Unknown, "high", None, summary)
 }
 
-fn not_applicable(summary: impl Into<String>) -> Outcome {
-    outcome(
-        CapabilityClassification::NotApplicable,
-        "none",
-        None,
-        summary,
-    )
-}
-
 #[allow(clippy::too_many_lines)]
 fn rule(feature: &str, target: PackageManagerId) -> Outcome {
     use PackageManagerId::{Bun, Deno, Npm, Pnpm, Vlt, YarnClassic, YarnModern};
@@ -81,19 +72,23 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "workspace.to-deno-workspace",
                 "Deno requires workspace membership in Deno configuration.",
             ),
-            Vlt => unknown("The preview adapter has not verified workspace semantics."),
+            Vlt => transform(
+                "workspace.to-vlt-workspace",
+                "vlt requires workspace membership in vlt.json.",
+            ),
         },
         "workspace.negative-patterns" => match target {
             Pnpm | Bun => native("The target supports workspace exclusion patterns."),
             _ => unknown("Equivalent workspace exclusion behavior is not verified."),
         },
         "dependency.workspace-protocol" => match target {
-            Pnpm | YarnModern | Bun => native("The target supports workspace specifiers."),
+            Pnpm | YarnModern | Bun | Vlt | Deno => {
+                native("The target supports workspace specifiers.")
+            }
             Npm | YarnClassic => transform(
                 "workspace.expand-to-semver",
                 "Workspace specifiers must be expanded to semver ranges.",
             ),
-            Vlt | Deno => unknown("Workspace protocol parity is not verified."),
         },
         "dependency.catalog-protocol" | "policy.catalogs" => match target {
             Pnpm | Bun => native("The target natively represents dependency catalogs."),
@@ -105,7 +100,7 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "catalog.expand-to-range",
                 "Catalog references must be expanded for Deno dependency declarations.",
             ),
-            Vlt => unknown("Catalog behavior is not verified for the preview adapter."),
+            Vlt => native("vlt natively represents dependency catalogs."),
         },
         "dependency.patch-protocol" => match target {
             YarnModern => native("The target supports patch protocol dependencies."),
@@ -117,7 +112,7 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "patch.yarn-to-bun",
                 "Yarn patch entries require deterministic Bun policy rendering.",
             ),
-            Vlt => unknown("Patch protocol behavior is not verified."),
+            Vlt => unsupported("vlt has no supported patch protocol mapping in this adapter."),
             _ => unsupported("The target has no supported patch protocol equivalent."),
         },
         "dependency.portal-protocol" => match target {
@@ -130,14 +125,22 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "portal.to-link",
                 "Portal dependencies become link references.",
             ),
-            Bun | Vlt => unknown("Portal semantics are not verified for the target."),
+            Bun => unknown("Portal semantics are not verified for the target."),
+            Vlt => unsupported("vlt has no supported portal mapping in this adapter."),
             Deno => unsupported("Deno dependency mode has no portal equivalent."),
         },
         "dependency.link-protocol" => match target {
             Pnpm | YarnClassic | YarnModern => native("The target supports link references."),
             Npm => lossy("link.to-file", "Link references become file references."),
-            Bun | Vlt => unknown("Link protocol parity is not verified for the target."),
+            Bun => unknown("Link protocol parity is not verified for the target."),
+            Vlt => unsupported("vlt has no supported link protocol mapping in this adapter."),
             Deno => unsupported("Deno dependency mode has no link protocol equivalent."),
+        },
+        "dependency.deno-import-map" => match target {
+            Deno => native("Deno preserves imports and scopes in its runtime configuration."),
+            _ => {
+                unsupported("Deno import maps are outside the package-manager migration boundary.")
+            }
         },
         "resolution.overrides" => match target {
             Npm | Bun => native("The target natively supports dependency overrides."),
@@ -149,8 +152,11 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "overrides.to-resolutions",
                 "Overrides become Yarn resolutions with selector review.",
             ),
-            Vlt => unknown("Override selector parity is not verified."),
-            Deno => unsupported("Deno dependency mode has no override mapping."),
+            Vlt => transform(
+                "overrides.to-vlt-modifiers",
+                "Overrides require vlt graph modifier rendering.",
+            ),
+            Deno => native("Deno honors npm-compatible overrides in package.json."),
         },
         "resolution.nested-overrides" => match target {
             Npm => native("npm supports nested override objects."),
@@ -162,8 +168,12 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "overrides.nested-to-resolutions",
                 "Nested overrides lose selector fidelity as Yarn resolutions.",
             ),
-            Bun | Deno => unsupported("The target has no safe nested override mapping."),
-            Vlt => unknown("Nested override parity is not verified."),
+            Bun => unsupported("The target has no safe nested override mapping."),
+            Vlt => transform(
+                "overrides.to-vlt-modifiers",
+                "Nested overrides require contextual vlt dependency selectors.",
+            ),
+            Deno => native("Deno honors nested npm-compatible overrides in package.json."),
         },
         "resolution.resolutions" => match target {
             YarnClassic | YarnModern | Bun => {
@@ -177,12 +187,19 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "resolutions.to-pnpm-overrides",
                 "Resolutions require pnpm override rendering.",
             ),
-            Vlt => unknown("Resolution selector parity is not verified."),
-            Deno => unsupported("Deno dependency mode has no resolution policy mapping."),
+            Vlt => transform(
+                "resolutions.to-vlt-modifiers",
+                "Resolutions require vlt graph modifier rendering.",
+            ),
+            Deno => transform(
+                "resolutions.to-overrides",
+                "Resolutions require Deno-compatible npm override rendering.",
+            ),
         },
         "resolution.package-extensions" => match target {
             Npm | Pnpm | YarnModern => native("The target supports package extensions."),
-            Bun | Vlt => unknown("Package extension parity is not verified."),
+            Bun => unknown("Package extension parity is not verified."),
+            Vlt => unsupported("vlt has no supported package extensions mapping."),
             YarnClassic | Deno => unsupported("The target has no package extensions mechanism."),
         },
         "patch.patched-dependencies" => match target {
@@ -191,7 +208,7 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "patch.patched-to-yarn",
                 "Patched dependencies require Yarn patch protocol rendering.",
             ),
-            Vlt => unknown("Patched dependency behavior is not verified."),
+            Vlt => unsupported("vlt has no supported patched dependency mapping."),
             _ => unsupported("The target has no supported patched dependency mechanism."),
         },
         "install.pnp-linker" => match target {
@@ -204,8 +221,14 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "linker.pnp-to-isolated",
                 "The migration switches from Plug and Play to isolated linking.",
             ),
-            Vlt => unknown("Plug and Play behavior is not verified."),
-            Deno => not_applicable("Deno dependency mode has no Node linker."),
+            Vlt => lossy(
+                "linker.pnp-to-isolated",
+                "The migration switches from Plug and Play to vlt isolation.",
+            ),
+            Deno => lossy(
+                "linker.pnp-to-isolated",
+                "The migration switches from Plug and Play to Deno isolation.",
+            ),
         },
         "install.isolated-linker" => match target {
             Pnpm | Bun => native("The target supports isolated linking."),
@@ -217,17 +240,14 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "linker.isolated-to-hoisted",
                 "The migration switches to a hoisted node_modules layout.",
             ),
-            Vlt => unknown("Isolated linker behavior is not verified."),
-            Deno => not_applicable("Deno dependency mode has no Node linker."),
+            Vlt | Deno => native("The target supports isolated dependency linking."),
         },
         "policy.yarn-constraints" => match target {
             YarnModern => native("The target executes Yarn constraints."),
-            Vlt => unknown("Constraint policy behavior is not verified."),
             _ => unsupported("Arbitrary Yarn constraint logic cannot be translated safely."),
         },
         "hook.pnpmfile" => match target {
             Pnpm => native("The target executes pnpm hook modules."),
-            Vlt => unknown("Hook extensibility is not verified."),
             _ => unsupported("Arbitrary pnpm hook code cannot be translated safely."),
         },
         "registry.npmrc" => match target {
@@ -238,7 +258,11 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "registry.npmrc-to-yarnrc",
                 "Registry scopes require Yarn Modern configuration rendering.",
             ),
-            Vlt | Deno => unknown("Registry credential mapping is not verified."),
+            Vlt => transform(
+                "registry.npmrc-to-vlt",
+                "Public registry mappings require vlt.json rendering; credentials stay external.",
+            ),
+            Deno => native("Deno consumes npm-compatible registry configuration."),
         },
         "lifecycle.trusted-dependencies" => match target {
             Bun => native("Bun natively represents trusted dependencies."),
@@ -254,8 +278,9 @@ fn rule(feature: &str, target: PackageManagerId) -> Outcome {
                 "lifecycle.to-global-script-policy",
                 "Per-dependency lifecycle policy becomes a global script policy.",
             ),
-            Vlt => unknown("Lifecycle allow-list behavior is not verified."),
-            Deno => unsupported("Deno dependency mode has no lifecycle allow-list."),
+            Vlt | Deno => unsupported(
+                "The target lifecycle allow-list cannot be preserved with a script-free migration install.",
+            ),
         },
         _ => unknown(format!(
             "No capability rule is registered for {feature} on {target}."
@@ -936,7 +961,8 @@ fn yarn_patch_resolutions(patched_dependencies: &Map<String, Value>) -> Map<Stri
 
 fn render_pnpm_workspace(
     patterns: &[String],
-    root_manifest: &Map<String, Value>,
+    catalog: &Map<String, Value>,
+    catalogs: &Map<String, Value>,
     overrides: &Map<String, Value>,
     package_extensions: &Map<String, Value>,
     patched_dependencies: &Map<String, Value>,
@@ -951,7 +977,7 @@ fn render_pnpm_workspace(
             lines.push(format!("  - {}", yaml_single_quoted(pattern)));
         }
     }
-    if let Some(catalog) = root_manifest.get("catalog").and_then(Value::as_object) {
+    if !catalog.is_empty() {
         lines.push("catalog:".to_owned());
         for (name, value) in catalog {
             if let Some(value) = value.as_str() {
@@ -959,7 +985,7 @@ fn render_pnpm_workspace(
             }
         }
     }
-    if let Some(catalogs) = root_manifest.get("catalogs").and_then(Value::as_object) {
+    if !catalogs.is_empty() {
         lines.push("catalogs:".to_owned());
         for (catalog_name, value) in catalogs {
             lines.push(format!("  {catalog_name}:"));
@@ -1211,6 +1237,116 @@ fn npmrc_for_yarn(content: &str, diagnostics: &mut Vec<Diagnostic>) -> YarnRegis
     output
 }
 
+fn apply_vlt_registry_to_yarn(
+    configuration: &Map<String, Value>,
+    output: &mut YarnRegistryConfiguration,
+) {
+    let configuration = configuration
+        .get("config")
+        .and_then(Value::as_object)
+        .unwrap_or(configuration);
+    if let Some(registry) = configuration.get("registry").and_then(Value::as_str) {
+        output.registry_server = Some(registry.to_owned());
+    }
+    if let Some(scopes) = configuration
+        .get("scoped-registries")
+        .and_then(Value::as_object)
+    {
+        output
+            .scopes
+            .extend(scopes.iter().filter_map(|(scope, value)| {
+                Some((
+                    scope.strip_prefix('@')?.to_owned(),
+                    value.as_str()?.to_owned(),
+                ))
+            }));
+    }
+}
+
+fn npmrc_for_vlt(content: Option<&str>, diagnostics: &mut Vec<Diagnostic>) -> Map<String, Value> {
+    let mut configuration = Map::from_iter([(
+        "registry".to_owned(),
+        Value::String("https://registry.npmjs.org/".to_owned()),
+    )]);
+    let mut scopes = Map::new();
+    let mut reported_authentication = false;
+    for raw_line in content.into_iter().flat_map(str::lines) {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+        let Some((setting, value)) = line.split_once('=') else {
+            diagnostics.push(Diagnostic::blocking(
+                "NPMRC_SETTING_UNSUPPORTED",
+                "vlt translation found an unsupported .npmrc setting.",
+                vec!["Reduce .npmrc to registry and scope mappings before retrying.".to_owned()],
+            ));
+            continue;
+        };
+        let setting = setting.trim();
+        let value = value.trim();
+        if setting == "registry" {
+            configuration.insert("registry".to_owned(), Value::String(value.to_owned()));
+        } else if setting.starts_with('@') && setting.ends_with(":registry") {
+            scopes.insert(
+                setting.trim_end_matches(":registry").to_owned(),
+                Value::String(value.to_owned()),
+            );
+        } else if setting.ends_with("_authToken")
+            || setting.ends_with("_auth")
+            || setting.ends_with("_password")
+            || setting.ends_with("username")
+            || setting == "always-auth"
+        {
+            if !reported_authentication {
+                diagnostics.push(Diagnostic::blocking(
+                    "VLT_REGISTRY_AUTH_MANUAL_REQUIRED",
+                    "vlt keeps registry credentials outside vlt.json.",
+                    vec!["Authenticate with vlt login after the migration.".to_owned()],
+                ));
+                reported_authentication = true;
+            }
+        } else if setting != "node-linker" {
+            diagnostics.push(Diagnostic::blocking(
+                "NPMRC_SETTING_UNSUPPORTED",
+                "vlt translation found an unsupported .npmrc setting.",
+                vec!["Reduce .npmrc to registry and scope mappings before retrying.".to_owned()],
+            ));
+        }
+    }
+    if !scopes.is_empty() {
+        configuration.insert("scoped-registries".to_owned(), Value::Object(scopes));
+    }
+    Map::from_iter([("config".to_owned(), Value::Object(configuration))])
+}
+
+fn npmrc_from_vlt(configuration: &Map<String, Value>) -> Option<String> {
+    let configuration = configuration
+        .get("config")
+        .and_then(Value::as_object)
+        .unwrap_or(configuration);
+    let mut lines = Vec::new();
+    if let Some(registry) = configuration.get("registry").and_then(Value::as_str) {
+        lines.push(format!("registry={registry}"));
+    }
+    if let Some(scopes) = configuration
+        .get("scoped-registries")
+        .and_then(Value::as_object)
+    {
+        lines.extend(
+            scopes
+                .iter()
+                .filter_map(|(scope, value)| Some(format!("{scope}:registry={}", value.as_str()?))),
+        );
+    }
+    if lines.is_empty() {
+        None
+    } else {
+        lines.push(String::new());
+        Some(lines.join("\n"))
+    }
+}
+
 fn render_yarn_configuration(
     node_linker: &str,
     lifecycle_policy_present: bool,
@@ -1355,6 +1491,102 @@ fn compatible_resolutions(resolutions: &Map<String, Value>) -> Option<Map<String
     Some(overrides)
 }
 
+fn valid_bare_package_name(value: &str) -> bool {
+    if let Some(scoped) = value.strip_prefix('@') {
+        return scoped.split_once('/').is_some_and(|(scope, name)| {
+            !scope.is_empty()
+                && !name.is_empty()
+                && !scope.chars().any(|value| matches!(value, '@' | '/' | ' '))
+                && !name.chars().any(|value| matches!(value, '@' | '/' | ' '))
+        });
+    }
+    !value.is_empty()
+        && !value
+            .chars()
+            .any(|character| matches!(character, '@' | '/' | ' '))
+}
+
+fn vlt_modifiers_to_overrides(modifiers: &Map<String, Value>) -> Option<Map<String, Value>> {
+    let mut output = Map::new();
+    for (selector, resolution) in modifiers {
+        let resolution = resolution.as_str()?.to_owned();
+        if let Some(name) = selector.strip_prefix('#')
+            && !name.contains(" > ")
+            && valid_bare_package_name(name)
+        {
+            if let Some(existing) = output.get_mut(name).and_then(Value::as_object_mut) {
+                existing.insert(".".to_owned(), Value::String(resolution));
+            } else {
+                output.insert(name.to_owned(), Value::String(resolution));
+            }
+            continue;
+        }
+        let context = selector.strip_prefix(":root > #")?;
+        let (parent, child) = context.split_once(" > #")?;
+        if !valid_bare_package_name(parent) || !valid_bare_package_name(child) {
+            return None;
+        }
+        let existing = output.remove(parent);
+        let mut nested = match existing {
+            Some(Value::Object(value)) => value,
+            Some(Value::String(value)) => Map::from_iter([(".".to_owned(), Value::String(value))]),
+            Some(_) => return None,
+            None => Map::new(),
+        };
+        nested.insert(child.to_owned(), Value::String(resolution));
+        output.insert(parent.to_owned(), Value::Object(nested));
+    }
+    Some(output)
+}
+
+fn overrides_to_vlt_modifiers(overrides: &Map<String, Value>) -> Option<Map<String, Value>> {
+    let mut output = Map::new();
+    for (parent, value) in overrides {
+        if !valid_bare_package_name(parent) {
+            return None;
+        }
+        if let Some(resolution) = value.as_str() {
+            output.insert(format!("#{parent}"), Value::String(resolution.to_owned()));
+            continue;
+        }
+        for (child, resolution) in value.as_object()? {
+            let resolution = resolution.as_str()?;
+            let selector = if child == "." {
+                format!("#{parent}")
+            } else if valid_bare_package_name(child) {
+                format!(":root > #{parent} > #{child}")
+            } else {
+                return None;
+            };
+            output.insert(selector, Value::String(resolution.to_owned()));
+        }
+    }
+    Some(output)
+}
+
+fn resolutions_to_vlt_modifiers(resolutions: &Map<String, Value>) -> Option<Map<String, Value>> {
+    let mut output = Map::new();
+    for (selector, resolution) in resolutions {
+        let resolution = resolution.as_str()?;
+        if valid_bare_package_name(selector) {
+            output.insert(format!("#{selector}"), Value::String(resolution.to_owned()));
+            continue;
+        }
+        let (parent, child) = selector.split_once('/')?;
+        if parent.starts_with('@')
+            || !valid_bare_package_name(parent)
+            || !valid_bare_package_name(child)
+        {
+            return None;
+        }
+        output.insert(
+            format!(":root > #{parent} > #{child}"),
+            Value::String(resolution.to_owned()),
+        );
+    }
+    Some(output)
+}
+
 struct Transformation {
     manifest_mutations: Vec<PlannedFileMutation>,
     configuration_mutations: Vec<PlannedFileMutation>,
@@ -1394,6 +1626,11 @@ fn transform_project(
         "registry.npmrc-to-yarnrc",
         "lifecycle.to-pnpm-build-policy",
         "lifecycle.to-yarn-build-policy",
+        "workspace.to-vlt-workspace",
+        "workspace.to-deno-workspace",
+        "overrides.to-vlt-modifiers",
+        "resolutions.to-vlt-modifiers",
+        "registry.npmrc-to-vlt",
     ];
     for decision in &analysis.decisions {
         if matches!(
@@ -1425,13 +1662,43 @@ fn transform_project(
         .collect::<BTreeMap<_, _>>();
     let versions = package_version_by_name(project_ir);
     let mut manifest_mutations = Vec::new();
-    let mut root_manifest_after = None;
     let pnpm_workspace = read_text(&root.join("pnpm-workspace.yaml"))?;
-    let (pnpm_catalog, pnpm_catalogs) = pnpm_workspace
+    let (mut pnpm_catalog, mut pnpm_catalogs) = pnpm_workspace
         .as_deref()
         .map(parse_pnpm_catalogs)
         .unwrap_or_default();
     let root_manifest_before = read_json_object(&root.join("package.json"))?.unwrap_or_default();
+    if let Some(catalog) = root_manifest_before
+        .get("catalog")
+        .and_then(Value::as_object)
+    {
+        pnpm_catalog.extend(catalog.clone());
+    }
+    if let Some(catalogs) = root_manifest_before
+        .get("catalogs")
+        .and_then(Value::as_object)
+    {
+        pnpm_catalogs.extend(catalogs.clone());
+    }
+    let vlt_configuration = read_json_object(&root.join("vlt.json"))?.unwrap_or_default();
+    if let Some(catalog) = vlt_configuration.get("catalog").and_then(Value::as_object) {
+        pnpm_catalog.extend(catalog.clone());
+    }
+    if let Some(catalogs) = vlt_configuration.get("catalogs").and_then(Value::as_object) {
+        pnpm_catalogs.extend(catalogs.clone());
+    }
+    let deno_location = if root.join("deno.json").is_file() {
+        "deno.json"
+    } else if root.join("deno.jsonc").is_file() {
+        "deno.jsonc"
+    } else {
+        "deno.json"
+    };
+    let mut deno_configuration = read_text(&root.join(deno_location))?
+        .as_deref()
+        .and_then(|content| json5::from_str::<Value>(content).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
     let manifest_overrides = root_manifest_before
         .get("overrides")
         .and_then(Value::as_object)
@@ -1456,6 +1723,36 @@ fn transform_project(
         .package_manager
         .selected
         .expect("planning requires a selected source");
+    if target == PackageManagerId::Deno {
+        for dependency in project_ir
+            .packages
+            .iter()
+            .flat_map(|package| &package.dependencies)
+        {
+            if matches!(
+                dependency.protocol,
+                crate::model::DependencyProtocol::File
+                    | crate::model::DependencyProtocol::Link
+                    | crate::model::DependencyProtocol::Portal
+                    | crate::model::DependencyProtocol::Patch
+                    | crate::model::DependencyProtocol::Git
+                    | crate::model::DependencyProtocol::Url
+                    | crate::model::DependencyProtocol::Unknown
+            ) {
+                diagnostics.push(Diagnostic::blocking(
+                    "DENO_DEPENDENCY_PROTOCOL_UNSUPPORTED",
+                    format!(
+                        "Deno package.json dependency mode cannot preserve the specifier for {}.",
+                        dependency.name
+                    ),
+                    vec![
+                        "Move the dependency to a supported npm, JSR, workspace, or semver declaration before retrying."
+                            .to_owned(),
+                    ],
+                ));
+            }
+        }
+    }
     let mut package_extensions = source_package_extensions(
         source,
         &root_manifest_before,
@@ -1624,13 +1921,34 @@ fn transform_project(
             ],
         ));
     }
-    let source_overrides = pnpm_configuration
-        .get("overrides")
-        .and_then(Value::as_object)
-        .or_else(|| pnpm_manifest.get("overrides").and_then(Value::as_object))
-        .cloned()
-        .filter(|overrides| !overrides.is_empty())
-        .unwrap_or(manifest_overrides);
+    let source_overrides = if source == PackageManagerId::Vlt {
+        let modifiers = vlt_configuration
+            .get("modifiers")
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        if let Some(overrides) = vlt_modifiers_to_overrides(&modifiers) {
+            overrides
+        } else {
+            diagnostics.push(Diagnostic::blocking(
+                "VLT_MODIFIER_UNSUPPORTED",
+                "vlt modifiers exceed the deterministic selector subset.",
+                vec![
+                    "Use bare package or one-level :root parent-child selectors before retrying."
+                        .to_owned(),
+                ],
+            ));
+            Map::new()
+        }
+    } else {
+        pnpm_configuration
+            .get("overrides")
+            .and_then(Value::as_object)
+            .or_else(|| pnpm_manifest.get("overrides").and_then(Value::as_object))
+            .cloned()
+            .filter(|overrides| !overrides.is_empty())
+            .unwrap_or(manifest_overrides)
+    };
     let source_resolutions = root_manifest_before
         .get("resolutions")
         .and_then(Value::as_object)
@@ -1662,7 +1980,15 @@ fn transform_project(
         &source_overrides
     };
     let mut pnpm_overrides = Map::new();
+    let mut vlt_modifiers = Map::new();
     let rendered_policy = match target {
+        PackageManagerId::Vlt if !selected_policy.is_empty() => {
+            if source_overrides.is_empty() {
+                resolutions_to_vlt_modifiers(selected_policy)
+            } else {
+                overrides_to_vlt_modifiers(selected_policy)
+            }
+        }
         PackageManagerId::Pnpm if !selected_policy.is_empty() => {
             if source_overrides.is_empty() {
                 compatible_resolutions(selected_policy)
@@ -1675,10 +2001,14 @@ fn transform_project(
         {
             flatten_nested_overrides(selected_policy, "/")
         }
-        PackageManagerId::Npm if source_overrides.is_empty() && !source_resolutions.is_empty() => {
+        PackageManagerId::Npm | PackageManagerId::Deno
+            if source_overrides.is_empty() && !source_resolutions.is_empty() =>
+        {
             compatible_resolutions(selected_policy)
         }
-        PackageManagerId::Npm | PackageManagerId::Bun if !source_overrides.is_empty() => {
+        PackageManagerId::Npm | PackageManagerId::Bun | PackageManagerId::Deno
+            if !source_overrides.is_empty() =>
+        {
             Some(source_overrides.clone())
         }
         _ => Some(Map::new()),
@@ -1686,6 +2016,8 @@ fn transform_project(
     if let Some(policy) = rendered_policy.as_ref() {
         if target == PackageManagerId::Pnpm {
             pnpm_overrides = policy.clone();
+        } else if target == PackageManagerId::Vlt {
+            vlt_modifiers = policy.clone();
         }
     } else if source_overrides.is_empty() {
         diagnostics.push(Diagnostic::blocking(
@@ -1723,7 +2055,7 @@ fn transform_project(
                 }
             }
             match target {
-                PackageManagerId::Pnpm => {
+                PackageManagerId::Pnpm | PackageManagerId::Vlt => {
                     manifest.remove("overrides");
                     manifest.remove("resolutions");
                 }
@@ -1736,7 +2068,7 @@ fn transform_project(
                         manifest.insert("resolutions".to_owned(), Value::Object(policy.clone()));
                     }
                 }
-                PackageManagerId::Npm
+                PackageManagerId::Npm | PackageManagerId::Deno
                     if source_overrides.is_empty() && !source_resolutions.is_empty() =>
                 {
                     manifest.remove("resolutions");
@@ -1744,7 +2076,9 @@ fn transform_project(
                         manifest.insert("overrides".to_owned(), Value::Object(policy.clone()));
                     }
                 }
-                PackageManagerId::Npm | PackageManagerId::Bun if !source_overrides.is_empty() => {
+                PackageManagerId::Npm | PackageManagerId::Bun | PackageManagerId::Deno
+                    if !source_overrides.is_empty() =>
+                {
                     manifest.remove("resolutions");
                     if let Some(policy) = rendered_policy.as_ref() {
                         manifest.insert("overrides".to_owned(), Value::Object(policy.clone()));
@@ -1799,7 +2133,12 @@ fn transform_project(
                     resolutions.insert(selector.clone(), resolution.clone());
                 }
             }
-            if !project_ir.workspace_patterns.is_empty() && target != PackageManagerId::Pnpm {
+            if !project_ir.workspace_patterns.is_empty()
+                && !matches!(
+                    target,
+                    PackageManagerId::Pnpm | PackageManagerId::Vlt | PackageManagerId::Deno
+                )
+            {
                 manifest.insert(
                     "workspaces".to_owned(),
                     Value::Array(
@@ -1811,6 +2150,9 @@ fn transform_project(
                             .collect(),
                     ),
                 );
+            }
+            if matches!(target, PackageManagerId::Vlt | PackageManagerId::Deno) {
+                manifest.remove("workspaces");
             }
             if target == PackageManagerId::Bun {
                 if !pnpm_catalog.is_empty() {
@@ -1893,9 +2235,6 @@ fn transform_project(
             }
         }
         let content = json_content(&manifest)?;
-        if package.path == "." {
-            root_manifest_after = Some(manifest);
-        }
         if let Some(change) = mutation(
             root,
             &package.manifest_path,
@@ -1927,18 +2266,20 @@ fn transform_project(
     if target == PackageManagerId::Pnpm
         && (!project_ir.workspace_patterns.is_empty()
             || !pnpm_overrides.is_empty()
+            || !pnpm_catalog.is_empty()
+            || !pnpm_catalogs.is_empty()
             || !package_extensions.is_empty()
             || !patched_dependencies.is_empty()
             || pnpm_node_linker.is_some()
             || lifecycle_policy_present)
-        && let Some(root_manifest) = root_manifest_after.as_ref()
         && let Some(change) = mutation(
             root,
             "pnpm-workspace.yaml",
             MutationAction::Write,
             Some(render_pnpm_workspace(
                 &project_ir.workspace_patterns,
-                root_manifest,
+                &pnpm_catalog,
+                &pnpm_catalogs,
                 &pnpm_overrides,
                 &package_extensions,
                 &patched_dependencies,
@@ -1962,10 +2303,13 @@ fn transform_project(
     }
     if target == PackageManagerId::YarnModern {
         let npmrc = read_text(&root.join(".npmrc"))?;
-        let registry = npmrc
+        let mut registry = npmrc
             .as_deref()
             .map(|content| npmrc_for_yarn(content, &mut diagnostics))
             .unwrap_or_default();
+        if source == PackageManagerId::Vlt {
+            apply_vlt_registry_to_yarn(&vlt_configuration, &mut registry);
+        }
         let yarn_node_linker = if pnp {
             "pnp"
         } else if isolated {
@@ -2021,6 +2365,107 @@ fn transform_project(
             ));
         }
     }
+    if target == PackageManagerId::Vlt {
+        let npmrc = read_text(&root.join(".npmrc"))?;
+        let mut configuration = npmrc_for_vlt(npmrc.as_deref(), &mut diagnostics);
+        if !project_ir.workspace_patterns.is_empty() {
+            configuration.insert(
+                "workspaces".to_owned(),
+                Value::Array(
+                    project_ir
+                        .workspace_patterns
+                        .iter()
+                        .cloned()
+                        .map(Value::String)
+                        .collect(),
+                ),
+            );
+        }
+        if !pnpm_catalog.is_empty() {
+            configuration.insert("catalog".to_owned(), Value::Object(pnpm_catalog.clone()));
+        }
+        if !pnpm_catalogs.is_empty() {
+            configuration.insert("catalogs".to_owned(), Value::Object(pnpm_catalogs.clone()));
+        }
+        if !vlt_modifiers.is_empty() {
+            configuration.insert("modifiers".to_owned(), Value::Object(vlt_modifiers.clone()));
+        }
+        if let Some(change) = mutation(
+            root,
+            "vlt.json",
+            MutationAction::Write,
+            Some(json_content(&configuration)?),
+            "Render vlt workspace, catalog, modifier, and registry configuration.",
+            vec![
+                "workspace.manifest".to_owned(),
+                "policy.catalogs".to_owned(),
+                "resolution.overrides".to_owned(),
+                "registry.npmrc".to_owned(),
+            ],
+        )? {
+            configuration_mutations.push(change);
+        }
+    }
+    if target == PackageManagerId::Deno {
+        if !project_ir.workspace_patterns.is_empty() {
+            deno_configuration.insert(
+                "workspace".to_owned(),
+                Value::Array(
+                    project_ir
+                        .workspace_patterns
+                        .iter()
+                        .cloned()
+                        .map(Value::String)
+                        .collect(),
+                ),
+            );
+        }
+        if pnp || isolated {
+            deno_configuration.insert(
+                "nodeModulesDir".to_owned(),
+                Value::String("manual".to_owned()),
+            );
+            deno_configuration.insert(
+                "nodeModulesLinker".to_owned(),
+                Value::String("isolated".to_owned()),
+            );
+        }
+        if let Some(change) = mutation(
+            root,
+            deno_location,
+            MutationAction::Write,
+            Some(json_content(&deno_configuration)?),
+            "Render Deno dependency workspace and linker configuration while preserving runtime settings.",
+            vec![
+                "workspace.manifest".to_owned(),
+                "install.pnp-linker".to_owned(),
+                "install.isolated-linker".to_owned(),
+            ],
+        )? {
+            configuration_mutations.push(change);
+        }
+    }
+    if source == PackageManagerId::Vlt
+        && matches!(
+            target,
+            PackageManagerId::Npm
+                | PackageManagerId::Pnpm
+                | PackageManagerId::YarnClassic
+                | PackageManagerId::Bun
+                | PackageManagerId::Deno
+        )
+        && let Some(content) = npmrc_from_vlt(&vlt_configuration)
+        && let Some(change) = mutation(
+            root,
+            ".npmrc",
+            MutationAction::Write,
+            Some(content),
+            "Render npm-compatible public registry configuration from vlt.json.",
+            vec!["registry.npmrc".to_owned()],
+        )?
+    {
+        configuration_mutations.push(change);
+    }
 
     let source_command = match source {
         PackageManagerId::YarnClassic | PackageManagerId::YarnModern => "yarn".to_owned(),
@@ -2065,9 +2510,10 @@ fn transform_project(
         .chain(source_definition.configuration_files.iter())
         .copied()
     {
-        if target_artifacts.contains(path)
-            || (path == ".npmrc" && target != PackageManagerId::YarnModern)
-        {
+        if target_artifacts.contains(path) {
+            continue;
+        }
+        if source == PackageManagerId::Deno && matches!(path, "deno.json" | "deno.jsonc") {
             continue;
         }
         if let Some(change) = mutation(
@@ -2102,6 +2548,34 @@ fn replace_command_token(content: &str, source: &str, target: &str) -> String {
         };
         if boundary(before) && boundary(after) {
             output.push_str(target);
+            let suffix = &remainder[index + source.len()..];
+            let whitespace = suffix
+                .bytes()
+                .take_while(|value| matches!(value, b' ' | b'\t'))
+                .count();
+            let command_source = &suffix[whitespace..];
+            if whitespace > 0
+                && let Some(command) = ["install", "ci", "run", "task", "add", "remove"]
+                    .into_iter()
+                    .find(|command| {
+                        command_source.starts_with(command)
+                            && boundary(command_source[command.len()..].chars().next())
+                    })
+            {
+                output.push_str(&suffix[..whitespace]);
+                let mapped = if target == "deno" && matches!(command, "run" | "task") {
+                    "task"
+                } else if source == "deno" && command == "task" {
+                    "run"
+                } else if command == "ci" {
+                    "install"
+                } else {
+                    command
+                };
+                output.push_str(mapped);
+                remainder = &command_source[command.len()..];
+                continue;
+            }
         } else {
             output.push_str(source);
         }
@@ -2561,6 +3035,8 @@ mod tests {
             PackageManagerId::YarnClassic,
             PackageManagerId::YarnModern,
             PackageManagerId::Bun,
+            PackageManagerId::Vlt,
+            PackageManagerId::Deno,
         ];
         for source in production {
             for target in production {
@@ -2599,6 +3075,163 @@ mod tests {
                 assert!(plan.executable, "{source} to {target} should be executable");
             }
         }
+    }
+
+    #[test]
+    fn renders_vlt_workspace_modifiers_and_registry_configuration() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"npm@12.0.2","workspaces":["packages/*"],"overrides":{"parent":{"child":"2.0.0"}}}"#,
+                ),
+                (
+                    "packages/app/package.json",
+                    r#"{"name":"app","version":"1.0.0"}"#,
+                ),
+                ("package-lock.json", "{}"),
+                (
+                    ".npmrc",
+                    "registry=https://registry.example.test/\n@internal:registry=https://scope.example.test/\n",
+                ),
+            ],
+            PackageManagerId::Vlt,
+            false,
+        );
+
+        assert!(plan.executable);
+        let configuration: Value = serde_json::from_str(mutation_content(&plan, "vlt.json"))
+            .expect("vlt configuration JSON");
+        assert_eq!(configuration["workspaces"], json!(["packages/*"]));
+        assert_eq!(
+            configuration["modifiers"][":root > #parent > #child"],
+            "2.0.0"
+        );
+        assert_eq!(
+            configuration["config"]["scoped-registries"]["@internal"],
+            "https://scope.example.test/"
+        );
+        assert!(plan.operations.iter().any(|operation| {
+            operation.kind == "dependency.install-target" && operation.command == ["vlt", "install"]
+        }));
+    }
+
+    #[test]
+    fn renders_vlt_dependency_policy_back_to_pnpm() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"vlt@1.0.2"}"#,
+                ),
+                (
+                    "packages/app/package.json",
+                    r#"{"name":"app","dependencies":{"react":"catalog:","lib":"workspace:*"}}"#,
+                ),
+                (
+                    "packages/lib/package.json",
+                    r#"{"name":"lib","version":"1.2.3"}"#,
+                ),
+                (
+                    "vlt.json",
+                    r##"{"config":{"registry":"https://registry.example.test/"},"workspaces":["packages/*"],"catalog":{"react":"^19.0.0"},"modifiers":{"#lodash":"4.17.21",":root > #parent > #child":"2.0.0"}}"##,
+                ),
+                ("vlt-lock.json", r#"{"lockfileVersion":1,"nodes":{}}"#),
+            ],
+            PackageManagerId::Pnpm,
+            false,
+        );
+
+        assert!(plan.executable);
+        let configuration = mutation_content(&plan, "pnpm-workspace.yaml");
+        assert!(configuration.contains("'parent>child': '2.0.0'"));
+        assert!(configuration.contains("'lodash': '4.17.21'"));
+        assert!(
+            configuration.contains("  react: '^19.0.0'"),
+            "{configuration}"
+        );
+        assert_eq!(
+            mutation_content(&plan, ".npmrc"),
+            "registry=https://registry.example.test/\n"
+        );
+    }
+
+    #[test]
+    fn renders_deno_dependency_configuration_and_blocks_unsupported_protocols() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","private":true,"packageManager":"pnpm@11.21.0","overrides":{"parent":{"child":"2.0.0"}}}"#,
+                ),
+                (
+                    "packages/app/package.json",
+                    r#"{"name":"app","version":"1.0.0"}"#,
+                ),
+                ("pnpm-lock.yaml", "lockfileVersion: '9.0'\n"),
+                (
+                    "pnpm-workspace.yaml",
+                    "packages:\n  - 'packages/*'\nnodeLinker: isolated\n",
+                ),
+            ],
+            PackageManagerId::Deno,
+            false,
+        );
+        assert!(plan.executable);
+        let configuration: Value = serde_json::from_str(mutation_content(&plan, "deno.json"))
+            .expect("Deno configuration JSON");
+        assert_eq!(configuration["workspace"], json!(["packages/*"]));
+        assert_eq!(configuration["nodeModulesLinker"], "isolated");
+
+        let blocked = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","packageManager":"npm@12.0.2","dependencies":{"repository":"git+https://example.test/repository.git"}}"#,
+                ),
+                ("package-lock.json", "{}"),
+            ],
+            PackageManagerId::Deno,
+            false,
+        );
+        assert!(!blocked.executable);
+        assert!(
+            blocked
+                .diagnostics
+                .iter()
+                .any(|entry| entry.code == "DENO_DEPENDENCY_PROTOCOL_UNSUPPORTED")
+        );
+    }
+
+    #[test]
+    fn blocks_vlt_registry_credentials_without_persisting_them() {
+        let plan = plan_fixture(
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"fixture","packageManager":"npm@12.0.2"}"#,
+                ),
+                ("package-lock.json", "{}"),
+                (
+                    ".npmrc",
+                    "registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n",
+                ),
+            ],
+            PackageManagerId::Vlt,
+            false,
+        );
+
+        assert!(!plan.executable);
+        assert!(
+            plan.diagnostics
+                .iter()
+                .any(|entry| entry.code == "VLT_REGISTRY_AUTH_MANUAL_REQUIRED")
+        );
+        assert!(
+            !serde_json::to_string(&plan)
+                .expect("plan JSON")
+                .contains("NPM_TOKEN")
+        );
     }
 
     #[test]

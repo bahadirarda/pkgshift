@@ -75,7 +75,8 @@ pub fn read_json_object(path: &Path) -> Result<Option<Map<String, Value>>> {
     let Some(content) = read_text(path)? else {
         return Ok(None);
     };
-    let normalized = strip_json_comments_and_trailing_commas(&content);
+    let content = content.strip_prefix('\u{feff}').unwrap_or(&content);
+    let normalized = strip_json_comments_and_trailing_commas(content);
     let value: Value = serde_json::from_str(&normalized).map_err(|source| PkgshiftError::Json {
         path: path.to_path_buf(),
         source,
