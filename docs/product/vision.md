@@ -40,7 +40,7 @@ The command-line interface is optimized for coding agents while remaining comfor
 
 # MVP Scope
 
-The production adapter set targets npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno's npm-compatible dependency mode. Each adapter is executable only inside its documented deterministic capability subset. Deno runtime migration is not part of the package manager MVP.
+The production adapter set targets npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno's npm-compatible dependency mode. Each adapter is executable only inside its documented deterministic capability subset. Runtime conversion is never an implicit package-manager side effect; a separate Rust-owned Bun-to-Deno command applies only registered deterministic recipes under its own approval and recovery boundary.
 
 The MVP covers:
 
@@ -53,13 +53,14 @@ The MVP covers:
 - Approved isolated migration trials that execute outside the source repository.
 - Structured diagnostics, explanations, and rollback.
 - Project and user installation of a portable Agent Skill.
+- Dedicated, permission-aware Bun-to-Deno runtime recipes for verified source and script shapes.
 
 Representative project-script execution remains a post-MVP extension because it requires an explicit selection and trust policy. Configurable target-platform matrices and strict edge-equivalence policies extend the MVP's blocking reachable-resolution proof.
 
 # Non-goals
 
 - Rewriting application source merely to make a target package manager succeed.
-- Migrating the JavaScript runtime, framework, or build system as an implicit side effect.
+- Migrating the JavaScript runtime, framework, or build system as an implicit package-manager side effect.
 - Silently resolving dependency conflicts with unverifiable guesses.
 - Guaranteeing byte-identical dependency trees when package manager semantics differ.
 - Treating repository cleanliness as proof that a migration is safe.
@@ -79,5 +80,6 @@ Representative project-script execution remains a post-MVP extension because it 
 - [Migration Engine](/architecture/migration-engine.md)
 - [Agent Interface](/architecture/agent-interface.md)
 - [Package Manager Migration Workflow](/workflows/pkgshift.md)
+- [Bun to Deno Runtime Migration](/workflows/runtime-migration.md)
 
 [^founding-discussion]: Founding product discussion

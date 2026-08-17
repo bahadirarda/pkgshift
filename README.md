@@ -5,7 +5,7 @@
 <h1 align="center">pkgshift</h1>
 
 <p align="center">
-  Transactional package manager migrations for JavaScript repositories.
+  Transactional package manager and runtime migrations for JavaScript repositories.
 </p>
 
 <p align="center">
@@ -94,6 +94,14 @@ pkgshift compare bun deno vlt --verify-script test
 
 The first call is read-only and returns one aggregate comparison plan. After exact approval, each executable target runs in its own disposable repository copy. The report keeps passed, failed, and capability-blocked candidates separate, proves the source repository stayed unchanged, and does not invent a winner.
 
+Migrate supported Bun application runtime semantics separately from package-manager state:
+
+```bash
+pkgshift runtime to deno --deno-permission net
+```
+
+The runtime command converts only registered deterministic shapes such as an official Hono-style `Bun.serve` fetch handler, safe `bun:test` imports, Bun text and JSON reads, direct runtime scripts, and Bun type residue. Its first call is read-only, its Deno permissions are explicit and plan-bound, and its approved transaction has independent verification and `pkgshift runtime rollback`. It does not change `packageManager`, delete `bun.lock`, install dependencies, or ask a model to invent unsupported rewrites. SQLite and other APIs with runtime-specific semantics remain blocking until a narrower recipe can prove compatibility.
+
 Select representative root package scripts when application-level proof is required:
 
 ```bash
@@ -116,6 +124,7 @@ A package manager migration is larger than replacing a lockfile. Workspaces, dep
 | Verification | Proves a clean target install and zero source-only repository artifacts, compares reachable source and target lock resolutions, prunes only topology-proven stale entries, distinguishes optional-only platform absence, blocks version or comparable integrity drift, checks planned digests, target selection, workspace membership, and installer completion, and can run explicitly selected representative scripts. |
 | Isolated trial | Runs the exact accepted plan in a disposable repository copy and proves the source remained unchanged. |
 | Target comparison | Binds two or more target plans to one approval, trials every executable candidate in a separate disposable copy, and reports evidence without ranking by guesswork. |
+| Runtime recipes | Applies a dedicated, permission-aware Bun-to-Deno source plan, blocks unsupported API shapes, verifies zero supported Bun residue, and retains an integrity-checked rollback. |
 | Recovery | Restores repository files from integrity-checked snapshots and verifies the original fingerprint. |
 
 Unsupported, unknown, unsafe, or unimplemented semantics block execution. pkgshift does not hide uncertainty behind a successful exit code.
@@ -179,7 +188,9 @@ For target selection, agents can use `pkgshift compare bun deno --json --no-colo
 
 When a user asks for proof before mutation, the agent previews with `--trial`, obtains separate approval for its `process-execution` action, and reports the `trial-report`. A trial never authorizes the later repository-write action.
 
-The model does not author migration edits. Detection, capability analysis, transformation, execution, and verification are implemented by pkgshift.
+For Bun-to-Deno application conversion, agents use `pkgshift runtime to deno --deno-permission <name>` and follow the same exact-next-action boundary. Runtime and package-manager plans are separate approvals.
+
+The model does not author migration edits. Detection, capability analysis, recipe selection, transformation, execution, and verification are implemented by pkgshift.
 
 ## Package manager support
 
@@ -193,7 +204,7 @@ The model does not author migration edits. Detection, capability analysis, trans
 | vlt | Production target | `vlt@1.0.2` |
 | Deno dependency mode | Production target | `deno@2.9.5` |
 
-Both engines cover all 42 basic directions between the seven production adapters at planning level. vlt support includes workspaces, workspace protocols, catalogs, graph modifiers, public registry and scope configuration, command integration rewriting, installation, and vlt lock graph proof. Deno dependency mode includes workspaces, npm-compatible overrides and registry configuration, catalog expansion, isolated linking, preserved runtime configuration, `deno task` integration rewriting, installation, and Deno v5 lock graph proof. Deno runtime migration remains outside this package-manager boundary. Unsupported protocols, lifecycle policies, selectors, literal credentials, and configuration outside the deterministic subset fail closed. Rust subprocess fixtures execute vlt and Deno migrations, while pinned real installers validate multi-package workspace migration and lock graph equivalence. See the [real-world validation corpus](docs/support/real-world-corpus.md) for pinned upstream planning, installer, and verification evidence.
+Both engines cover all 42 basic directions between the seven production adapters at planning level. vlt support includes workspaces, workspace protocols, catalogs, graph modifiers, public registry and scope configuration, command integration rewriting, installation, and vlt lock graph proof. Deno dependency mode includes workspaces, npm-compatible overrides and registry configuration, catalog expansion, isolated linking, preserved runtime configuration, `deno task` integration rewriting, installation, and Deno v5 lock graph proof. Deno dependency mode remains separate from application runtime conversion; the Rust CLI owns the dedicated Bun-to-Deno recipe surface. Unsupported protocols, lifecycle policies, selectors, literal credentials, and configuration outside the deterministic subset fail closed. Rust subprocess fixtures execute vlt and Deno migrations, while pinned real installers validate multi-package workspace migration, lock graph equivalence, and a migrated Hono runtime on Deno 2.9.5. See the [real-world validation corpus](docs/support/real-world-corpus.md) for pinned upstream planning, installer, and verification evidence.
 
 See the full [support policy](docs/support/package-managers.md) and [capability matrix](docs/support/capability-matrix.md).
 
@@ -273,12 +284,14 @@ The `docs/` directory is an [Open Knowledge Format v0.2 bundle](docs/index.md):
 - [Agent interface](docs/architecture/agent-interface.md)
 - [Recovery and verification](docs/architecture/recovery-and-verification.md)
 - [Lock graph proof](docs/architecture/lock-graph-proof.md)
+- [Bun-to-Deno runtime recipes](docs/architecture/runtime-migration-recipes.md)
 - [Real-world validation corpus](docs/support/real-world-corpus.md)
 - [Package manager workflow](docs/workflows/pkgshift.md)
 - [Isolated migration trial](docs/workflows/isolated-trial.md)
+- [Bun-to-Deno runtime workflow](docs/workflows/runtime-migration.md)
 - [Release system](docs/governance/release-system.md)
 - [Website delivery](docs/governance/website-delivery.md)
 
 ## Current boundaries
 
-Automatic representative project-script execution is not part of the MVP. `reachable-resolution-set-v2` makes reachable version and comparable integrity drift blocking, prunes proven-unreachable entries, and tolerates only package-name absence on optional-only paths. Dependency edge-shape differences remain evidence, and topology-limited formats retain explicit `resolution-set-v1` behavior. Binary `bun.lockb` graph extraction fails closed until converted to text. vlt and Deno are production targets only for their documented deterministic subsets; unsupported repository semantics still block apply, and lossy decisions require explicit acceptance when the plan is created. Clean installation retires package-manager-generated dependency state and known source artifacts. Application runtime conversion remains outside the package-manager boundary: Bun-source plans deterministically report `@types/bun`, `bun-types`, Bun script commands, `Bun.*`, and `bun:*` references through `SOURCE_RUNTIME_REFERENCES_PRESERVED` and never delete them silently. The TypeScript reference remains the renderer parity oracle for future capability expansion.
+`reachable-resolution-set-v2` makes reachable version and comparable integrity drift blocking, prunes proven-unreachable entries, and tolerates only package-name absence on optional-only paths. Dependency edge-shape differences remain evidence, and topology-limited formats retain explicit `resolution-set-v1` behavior. Binary `bun.lockb` graph extraction fails closed until converted to text. vlt and Deno are production targets only for their documented deterministic subsets; unsupported repository semantics still block apply, and lossy decisions require explicit acceptance when the plan is created. Clean installation retires package-manager-generated dependency state and known source artifacts. Package-manager plans only report Bun application references; the separate Rust runtime command currently supports verified Bun-to-Deno shapes and blocks routes, WebSockets, Bun shell behavior, macros, advanced APIs, and `bunfig.toml`. The TypeScript reference remains the renderer parity oracle for future capability expansion.

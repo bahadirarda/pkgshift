@@ -410,7 +410,7 @@ async function validateWebsite(): Promise<void> {
   const index = await Bun.file("site/index.html").text();
   const requiredMarkup = [
     ['<html lang="en">', "English document language"],
-    ["<title>pkgshift — Transactional package manager migrations</title>", "descriptive title"],
+    ["<title>pkgshift — Transactional JavaScript migrations</title>", "descriptive title"],
     ['name="description"', "meta description"],
     [`rel="canonical" href="${canonicalUrl}"`, "canonical URL"],
     ['property="og:image"', "Open Graph image"],

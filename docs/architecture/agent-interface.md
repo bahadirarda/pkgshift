@@ -15,6 +15,9 @@ sources:
   - id: rust-primary-decision
     resource: /decisions/rust-primary-polyglot-monorepo.md
     title: Rust-Primary Polyglot Monorepo
+  - id: runtime-recipes
+    resource: /architecture/runtime-migration-recipes.md
+    title: Bun to Deno Runtime Recipes
 ---
 
 # Primary Command
@@ -35,7 +38,7 @@ Humans do not need to provide repository or state paths when running from the in
 
 # Implementation Availability
 
-The Rust CLI is the primary interface and implements `to`, isolated `to --trial`, isolated multi-target `compare`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, and `rollback`. The TypeScript reference preserves native-import planning and the established migration contract, and additionally retains `explain` plus managed `skill` lifecycle commands while their long-term ownership is decided. Isolated trial, multi-target comparison, and blocking lock-graph comparison are currently Rust-primary trust features.
+The Rust CLI is the primary interface and implements `to`, isolated `to --trial`, isolated multi-target `compare`, `inspect package-manager`, `plan package-manager`, `pm to`, `support`, `apply`, `verify`, `rollback`, dedicated `runtime to deno`, and `runtime rollback`. The TypeScript reference preserves native-import planning and the established package-manager migration contract, and additionally retains `explain` plus managed `skill` lifecycle commands while their long-term ownership is decided. Isolated trial, multi-target comparison, blocking lock-graph comparison, and Bun-to-Deno runtime recipes are currently Rust-primary trust features.
 
 # Agent Flow
 
@@ -61,6 +64,8 @@ pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
 pkgshift verify <run-id> --state-dir <path>
 pkgshift explain <diagnostic-code-or-artifact-id>
 pkgshift rollback <run-id> --state-dir <path> --approve <run-id>
+pkgshift runtime to deno [--deno-permission <name>]...
+pkgshift runtime rollback <runtime-run-id> --state-dir <path> --approve <runtime-run-id>
 pkgshift skill install --scope <project|user> --client <codex|claude> --mode <copy|link>
 pkgshift skill status --scope <project|user> --client <codex|claude>
 pkgshift skill doctor --scope <project|user> --client <codex|claude>
@@ -88,6 +93,7 @@ This shortcut is equivalent to `pkgshift plan package-manager --to bun`. Neither
 - Trial uses private state inside its temporary copy and never creates the default state directory in the source repository.
 - Advanced planning persists an artifact only when `--state-dir <path>` is explicitly supplied.
 - `--verify-script <name>` is accepted only by guided or staged planning commands, validates exact root script membership, and adds a bounded shell-free `verification.run-script` operation.
+- `--deno-permission <name>` is repeatable only on the dedicated runtime plan surface; normalized permissions participate in plan identity and render narrow Deno flags instead of `-A`.
 
 # Result Envelope
 
@@ -146,6 +152,8 @@ Apply persists the run journal, package-local dependency-state cleanup records, 
 Planning with a source lockfile also emits a redacted `source-lock-graph` artifact. Verification emits `lockGraphComparison` inside its report. Trial emits a `trial-report` containing withheld process records and nested verification.
 
 Multi-target comparison emits one `target-comparison-plan` before approval and one `target-comparison-report` afterward. Its aggregate plan identifier binds every normalized candidate plan. Each executable candidate owns an independent nested trial report; blocked candidates retain their plan diagnostics without process execution. Candidate failures are comparison data, so top-level completion means the report is trustworthy and the source stayed unchanged, not that every target passed.
+
+Runtime planning emits a content-redacted `runtime-migration-plan`; source mutation content is persisted only in an owner-readable envelope after exact approval. Apply emits a redacted `runtime-run-journal` and a `runtime-verification-report` that proves after-digests and Bun runtime residue. Runtime identifiers use `runtime_plan_` and `runtime_run_` prefixes so agents cannot confuse package-manager and runtime approval domains.
 
 # Approval Contract
 

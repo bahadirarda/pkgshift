@@ -1,9 +1,9 @@
 ---
 name: pkgshift
-description: Inspect, plan, apply, verify, explain, or roll back JavaScript package manager migrations through the pkgshift CLI. Use when Codex needs to move a repository between npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, or Deno dependency mode; assess migration feasibility; produce a reviewable migration plan; or operate the migration safely with explicit approval.
+description: Inspect, plan, apply, verify, explain, or roll back deterministic JavaScript repository migrations through the pkgshift CLI. Use when Codex needs to move a repository between npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, or Deno dependency mode; migrate supported Bun application runtime APIs to Deno; assess migration feasibility; produce a reviewable plan; or operate a migration safely with explicit approval.
 ---
 
-# Package Manager Migration
+# JavaScript Repository Migration
 
 Use pkgshift as the deterministic execution boundary. Prefer the guided `pkgshift to <target>` workflow and never replace a missing CLI with ad hoc migration edits. The CLI, not the model, performs repository detection, semantic analysis, transformation planning, mutation, and verification.
 
@@ -20,6 +20,7 @@ Map the request to the narrowest operation:
 - Produce independently stored stage artifacts: use the advanced plan, apply, and verify commands.
 - Investigate a code or failed artifact: explain.
 - Recover a failed run: explain, request approval, rollback, then verify the rollback.
+- Migrate supported Bun application APIs to Deno: use the dedicated runtime preview, explicit permissions, exact approval, runtime verification, and runtime rollback flow below.
 
 If the target is missing, inspect first. Suggest only targets compatible with the detected repository evidence and capability report.
 
@@ -107,6 +108,26 @@ pkgshift compare <target> <target>... --json --no-color --non-interactive
 The first call is read-only and returns one `target-comparison-plan`, aggregate plan identifier, and approval-bound next action. Present executable and blocked candidate counts plus each complete plan. After exact approval, execute the returned argv unchanged. Every executable candidate runs in its own disposable copy; blocked candidates run no process.
 
 Require `repositoryUnchanged: true` and read each candidate as `passed`, `failed`, or `blocked`. Top-level `completed` means the comparison report is trustworthy, not that every candidate passed. Do not calculate or assert a winner. Present evidence and obtain a separate ordinary migration preview after the user selects a target. Add `--verify-script` only for exact root scripts the user explicitly wants proven across candidates.
+
+## Migrate the Bun Runtime to Deno
+
+Keep application runtime conversion separate from package-manager selection. Preview the dedicated runtime plan with only permissions the user has reviewed:
+
+```text
+pkgshift runtime to deno --deno-permission net --json --no-color --non-interactive
+```
+
+Repeat `--deno-permission` for `read`, `write`, `net`, `env`, `run`, `sys`, `ffi`, or `hrtime` only when required. Never add `-A`, infer broad access, or treat a package-manager migration to Deno dependency mode as runtime approval. A safe `Bun.serve` recipe requires `net`, and Bun text and JSON reads require `read`. Missing permissions and unsupported Bun APIs produce blocking diagnostics.
+
+The first call is read-only. Review recipe identifiers, affected paths, before and after digests, permissions, diagnostics, and `nextActions[0].argv`. Runtime plan artifacts omit source contents intentionally. After exact approval, execute the returned argv unchanged. Require `status: completed`, a `runtime_run_` identifier, and a passing `runtime-verification-report` with both `planned-after-digests` and `bun-runtime-residue` passed.
+
+This command does not change `packageManager`, remove `bun.lock`, install dependencies, or execute project code. `Bun.serve` routes, WebSockets, two-argument handlers, Bun shell behavior, SQLite, macros, advanced APIs, symbolic-link source boundaries, oversized runtime inputs, and `bunfig.toml` remain blocking. Do not fill a missing recipe with model-authored edits inside this workflow.
+
+Use the approval-bound rollback action returned by apply, or:
+
+```text
+pkgshift runtime rollback <runtime-run-id> --state-dir .pkgshift/state --approve <runtime-run-id> --json --no-color --non-interactive
+```
 
 ## Request Approval
 

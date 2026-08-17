@@ -7,6 +7,8 @@ Use this reference when parsing a pkgshift result or deciding whether a follow-u
 ```text
 pkgshift to <target> [--dry-run|--trial] [--verify-script <name>]...
 pkgshift compare <target> <target>... [--verify-script <name>]...
+pkgshift runtime to deno [--deno-permission <name>]...
+pkgshift runtime rollback <runtime-run-id> --state-dir <path> --approve <runtime-run-id>
 pkgshift inspect [package-manager]
 pkgshift plan package-manager --to <target>
 pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
@@ -21,6 +23,8 @@ Add `--json --no-color --non-interactive` for agent operation. Prefer `pkgshift 
 The explicit `plan`, `apply`, and `verify` commands are the advanced staged interface. Persist an advanced plan with `--state-dir` before apply.
 
 Multi-target `compare` is an aggregate trial interface. Its preview binds every normalized candidate plan to one `plan_compare_...` identifier and process-execution approval. The approved command reports each candidate as passed, failed, or capability-blocked from an independent disposable copy. Top-level success means evidence collection completed and the source repository remained unchanged; it does not mean every candidate passed or select a winner.
+
+`runtime to deno` is a separate Bun application-runtime interface. Its first call is read-only and binds deterministic recipes, file digests, and sorted explicit Deno permissions to `runtime_plan_...`. The approved call writes only reviewed source, script, and type mutations; it does not select a package manager, install dependencies, or execute project code. Runtime results redact mutation content, use `runtime_run_...`, verify after-digests and Bun runtime residue, and return a separately approved `runtime rollback` action.
 
 ## Result Envelope
 
