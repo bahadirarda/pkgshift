@@ -66,6 +66,9 @@ pub enum CommandKind {
         scope: String,
         client: String,
     },
+    Explain {
+        identifier: String,
+    },
     Support,
 }
 
@@ -836,6 +839,7 @@ pub fn execute(options: &CommandOptions) -> CommandExecution {
         CommandKind::SkillStatus { .. } => "skill status".to_owned(),
         CommandKind::SkillDoctor { .. } => "skill doctor".to_owned(),
         CommandKind::SkillUninstall { .. } => "skill uninstall".to_owned(),
+        CommandKind::Explain { .. } => "explain".to_owned(),
         CommandKind::Support => "support".to_owned(),
     };
     let execution = match &options.command {
@@ -885,6 +889,7 @@ pub fn execute(options: &CommandOptions) -> CommandExecution {
             client,
             "copy",
         ),
+        CommandKind::Explain { identifier } => crate::explain::explain_command(options, identifier),
         CommandKind::Support => support_command(),
     };
     execution.unwrap_or_else(|error| failure(&command_name, &error))

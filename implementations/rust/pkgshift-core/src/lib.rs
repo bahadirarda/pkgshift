@@ -3,6 +3,7 @@ pub mod catalog;
 mod cleanup;
 pub mod command;
 pub mod detect;
+mod explain;
 pub mod inspect;
 pub mod lock_graph;
 pub mod model;

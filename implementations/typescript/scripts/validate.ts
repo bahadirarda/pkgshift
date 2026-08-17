@@ -559,6 +559,41 @@ async function validateRustModuleBoundaries(): Promise<number> {
   return productionPaths.length;
 }
 
+async function validateRustDiagnosticCatalog(): Promise<void> {
+  const catalogPaths = await filesMatching(
+    "implementations/rust/pkgshift-core/src/explain/catalog/**/*.rs",
+  );
+  const catalogCodes = new Set<string>();
+  for (const path of catalogPaths) {
+    const content = await Bun.file(path).text();
+    for (const match of content.matchAll(/"([A-Z][A-Z0-9_]{3,})"/g)) {
+      if (match[1]) catalogCodes.add(match[1]);
+    }
+  }
+  const nonDiagnosticConstants = new Set([
+    "BUN_INSTALL_IGNORE_SCRIPTS",
+    "HOME",
+    "LOCALAPPDATA",
+    "NPM_TOKEN",
+    "PKGSHIFT_DATA_DIR",
+    "USERPROFILE",
+    "XDG_DATA_HOME",
+    "YARN_ENABLE_SCRIPTS",
+  ]);
+  const sourcePaths = await filesMatching(
+    "implementations/rust/pkgshift-core/src/**/*.rs",
+  );
+  for (const path of sourcePaths.filter((path) => !path.includes("/explain/catalog/"))) {
+    const content = await Bun.file(path).text();
+    for (const match of content.matchAll(/"([A-Z][A-Z0-9_]{3,})"/g)) {
+      const code = match[1];
+      if (code && !nonDiagnosticConstants.has(code) && !catalogCodes.has(code)) {
+        errors.push(`${path}: diagnostic ${code} is missing from the Rust explain catalog`);
+      }
+    }
+  }
+}
+
 const conceptCount = await validateOkf();
 await validateSkill();
 const changesetCount = await validateChangesets();
@@ -567,6 +602,7 @@ await validateWebsite();
 await validateLinks("README.md", await Bun.file("README.md").text(), null);
 await validateEnglishOnly();
 const rustModuleCount = await validateRustModuleBoundaries();
+await validateRustDiagnosticCatalog();
 
 if (errors.length > 0) {
   console.error(errors.join("\n"));

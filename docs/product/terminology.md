@@ -53,7 +53,7 @@ pkgshift inspect
 pkgshift plan package-manager --to bun
 pkgshift apply <plan-id>
 pkgshift verify <run-id>
-pkgshift explain <diagnostic-code>
+pkgshift explain <diagnostic-code-or-artifact-id>
 pkgshift rollback <run-id>
 pkgshift runtime to deno --deno-permission net
 pkgshift runtime rollback <runtime-run-id>

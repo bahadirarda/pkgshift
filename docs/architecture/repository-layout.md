@@ -53,7 +53,7 @@ The primary runtime is Rust 1.97.1. `pkgshift-core` owns detection, Project IR, 
 
 Production Rust modules are limited to 1,000 physical lines by repository validation. Test-only modules are excluded from that mechanical limit and remain colocated under their owning module directory. A file below the limit must still represent one cohesive responsibility; the limit is a regression gate rather than a design target.
 
-The TypeScript engine remains under `implementations/typescript` as an executable reference implementation. It has no third-party runtime dependencies and uses Bun 1.3.14 for runtime, YAML parsing, building, and tests. It remains the behavior oracle for capability renderers and diagnostic explanation until those paths cross the Rust parity gate.
+The TypeScript engine remains under `implementations/typescript` as an executable reference implementation. It has no third-party runtime dependencies and uses Bun 1.3.14 for runtime, YAML parsing, building, and tests. It remains a behavior oracle for shared capability renderers, while the Rust primary owns production execution, runtime recipes, Skill lifecycle, and stored-artifact explanation.
 
 A Rust distribution compiles to one standalone CLI, but apply still requires the selected target package manager executable.
 
@@ -89,8 +89,9 @@ Tests create isolated temporary repositories and remove only generated fixtures.
 - Pinned upstream corpus runs covering executable plans, capability blockers, installer failures, post-install graph rejection, and source preservation.
 - TypeScript end-to-end guided and staged CLI plan, approval, apply, verify, and rollback.
 - Rust and TypeScript Codex and Claude Code skill copy, link, conflict, project/user confinement, read-only preview, and protected uninstall behavior.
+- Rust diagnostic catalog coverage plus package-manager and runtime artifact explanation, identity, tamper, bounded-scan, and traversal-refusal fixtures.
 - rustfmt, warning-free Clippy, strict TypeScript, OKF, link, Agent Skill, and English-only validation.
 
 # Post-MVP Extensions
 
-The next architecture slices port diagnostic explanation, add configurable target-platform matrices and edge-equivalence graph policies, expand runtime recipes beyond the verified Bun-to-Deno subset, and add target executable version resolution. These extensions must preserve [Migration Engine](/architecture/migration-engine.md), [Agent Interface](/architecture/agent-interface.md), and [Rust-Primary Polyglot Monorepo](/decisions/rust-primary-polyglot-monorepo.md).
+The next architecture slices add configurable target-platform matrices and edge-equivalence graph policies, expand runtime recipes beyond the verified Bun-to-Deno subset, and add target executable version resolution. These extensions must preserve [Migration Engine](/architecture/migration-engine.md), [Agent Interface](/architecture/agent-interface.md), and [Rust-Primary Polyglot Monorepo](/decisions/rust-primary-polyglot-monorepo.md).
