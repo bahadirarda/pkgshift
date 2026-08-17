@@ -2,6 +2,7 @@
 
 ## 2026-08-17
 
+* **Target comparison**: Added deterministic `pkgshift compare` planning, one aggregate process-execution approval, independent candidate sandboxes, nested trial evidence, capability-blocked candidates, explicit no-ranking semantics, and a passing real Bun 1.3.14 plus Deno 2.9.5 comparison run.
 * **Representative verification**: Added explicit repeatable root-script selection, immutable target argv, bounded shell-free execution, operation-bound withheld process records, verification checks that never rerun repository code, and a passing real pnpm-to-Bun acceptance run.
 * **Repository integrations**: Added context-aware package script, CI setup and command, cache lockfile, container, automation, Markdown, devcontainer, Volta, engine, `.tool-versions`, and mise migration with fail-closed ambiguous-command diagnostics.
 * **Module Boundaries**: Split lock graph extraction, comparison, and inspection tests into focused modules and added a blocking production Rust module-size validation gate.

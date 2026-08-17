@@ -4,7 +4,7 @@ title: Isolated Migration Trial
 description: Defines how to execute an approved migration in a disposable sandbox without changing or persisting state in the source repository.
 tags: [workflow, trial, sandbox, verification, agents]
 status: draft
-generated: { by: bahadirarda, at: 2026-08-16T19:53:18Z}
+generated: { by: bahadirarda, at: 2026-08-17T11:30:00Z}
 sources:
   - id: agent-interface
     resource: /architecture/agent-interface.md
@@ -34,6 +34,18 @@ pkgshift to bun --trial
 The first call remains read-only and presents the exact plan identifier. Approval authorizes process execution in the isolated sandbox, not repository mutation. A successful trial returns `status: completed`, a `trial-report` artifact, `repositoryUnchanged: true`, and no `runId`.
 
 Trial approval does not authorize apply. To perform the migration afterward, run the normal `pkgshift to bun` preview and approve its repository-write next action.
+
+# Multi-Target Comparison
+
+Compare two or more targets without choosing one first:
+
+```text
+pkgshift compare bun deno vlt
+```
+
+The initial call creates one read-only aggregate plan. Exact approval authorizes independent trials in separate disposable copies for every executable candidate. Capability-blocked candidates remain in the report without execution. The comparison returns passed, failed, and blocked counts plus nested trial evidence and `repositoryUnchanged`; it never selects a winner or authorizes later apply.
+
+Add the same repeatable `--verify-script <name>` selection when every executable target should prove named root scripts. Each target receives its own target-native command and process record.
 
 # Agent Workflow
 

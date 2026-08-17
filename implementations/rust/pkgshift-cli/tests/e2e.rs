@@ -10,6 +10,9 @@ use tempfile::TempDir;
 
 const TEXT_PATCH: &str = "diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-old\n+// pkgshift patch fixture\n+new\n";
 
+#[path = "e2e/comparison.rs"]
+mod comparison;
+
 fn write(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("fixture parent directory");

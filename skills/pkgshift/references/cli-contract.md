@@ -6,6 +6,7 @@ Use this reference when parsing a pkgshift result or deciding whether a follow-u
 
 ```text
 pkgshift to <target> [--dry-run|--trial] [--verify-script <name>]...
+pkgshift compare <target> <target>... [--verify-script <name>]...
 pkgshift inspect [package-manager]
 pkgshift plan package-manager --to <target>
 pkgshift apply <plan-id> --state-dir <path> --approve <plan-id>
@@ -18,6 +19,8 @@ pkgshift skill install|status|doctor|uninstall --scope <project|user> --client <
 Add `--json --no-color --non-interactive` for agent operation. Prefer `pkgshift to <target>` for an ordinary migration. Its first call is read-only and returns an approval-bound next action; the approved call persists, applies, and verifies without caller-supplied paths. `--trial` returns a separately approved process-execution action that runs in a disposable copy and never authorizes apply. Add repeatable `--verify-script <name>` values only for exact root scripts selected by the user; the returned next action preserves them. Use `--accept-lossy` only after the user accepts every lossy capability decision.
 
 The explicit `plan`, `apply`, and `verify` commands are the advanced staged interface. Persist an advanced plan with `--state-dir` before apply.
+
+Multi-target `compare` is an aggregate trial interface. Its preview binds every normalized candidate plan to one `plan_compare_...` identifier and process-execution approval. The approved command reports each candidate as passed, failed, or capability-blocked from an independent disposable copy. Top-level success means evidence collection completed and the source repository remained unchanged; it does not mean every candidate passed or select a winner.
 
 ## Result Envelope
 

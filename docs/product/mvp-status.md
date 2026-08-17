@@ -34,6 +34,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 - Real `inspect`, `support`, `plan`, `apply`, `verify`, `rollback`, `explain`, `skill`, and `help` commands.
 - A current-directory `pkgshift to <target>` workflow with read-only preview, interactive confirmation, hidden default state, apply, and verification orchestration.
 - An approved `--trial` workflow that executes the exact plan and verification in a disposable copy without persisting source repository state.
+- An aggregate `compare` workflow that binds two or more normalized target plans to one approval and runs each executable candidate in an independent disposable copy without ranking them.
 - The `pkgshift pm to <target>` planning shortcut.
 - Versioned JSON results with artifacts, diagnostics, and side-effect metadata.
 - Deterministic target rendering and digest-bound file mutations.
@@ -85,6 +86,7 @@ The repository contains a Rust-primary polyglot MVP. Rust owns the primary migra
 | Transaction executor | MVP complete | Recovery snapshots, precondition rechecks, atomic writes, journal transitions, and partial-failure fixtures pass. |
 | Verification | MVP complete | Planned digests, clean-install evidence, source-artifact residue, target selection, lockfile behavior, workspace membership, install completion, and reachable resolution-set parity are checked. |
 | Isolated trial | MVP complete | Exact approval executes the accepted plan in a disposable copy and reports repository preservation plus nested verification. |
+| Multi-target comparison | MVP complete | Aggregate approval binds candidate plan identities; independent disposable trials report passed, failed, and blocked evidence while preserving the source repository. |
 | Rollback | MVP complete | Successful, failed, and partially applied runs restore repository files and verify the baseline fingerprint. |
 | Skill installer | MVP complete | Codex and Claude Code project destinations pass copy, link, conflict, status, and protected-uninstall fixtures. |
 | Production target baseline | MVP complete | npm, pnpm, Yarn Classic, Yarn Modern, Bun, vlt, and Deno dependency mode produce executable plans when every observed feature has a safe implemented path. |

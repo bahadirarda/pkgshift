@@ -54,6 +54,8 @@ When the user requests a trial first, add `--trial` to the initial preview and e
 
 When the user names representative root scripts, add one `--verify-script <name>` per script to the initial preview. Do not infer defaults such as `test`, `lint`, or `build`. The returned next action preserves the selection, target argv, and timeout in the immutable plan.
 
+When the target is undecided, run `pkgshift compare <target> <target>...` instead of serial ad hoc trials. Present the aggregate plan and request its exact process-execution approval. Read each candidate's passed, failed, or blocked status from the comparison report; do not infer a winner. Create a separate ordinary preview and request repository-write approval only after the user selects a target.
+
 # Preconditions
 
 - Run from the intended repository root.

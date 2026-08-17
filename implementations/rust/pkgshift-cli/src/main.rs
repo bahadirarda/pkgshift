@@ -65,6 +65,15 @@ enum CliCommand {
         verify_script: Vec<String>,
     },
 
+    /// Compare two or more targets through independent isolated trials.
+    Compare {
+        #[arg(required = true, num_args = 2..)]
+        targets: Vec<String>,
+        /// Run a root package script in every executable target trial.
+        #[arg(long, value_name = "NAME", action = clap::ArgAction::Append)]
+        verify_script: Vec<String>,
+    },
+
     /// Inspect repository package manager evidence and normalized project semantics.
     Inspect {
         #[command(subcommand)]
@@ -131,6 +140,10 @@ fn command_kind(command: CliCommand) -> (CommandKind, Vec<String>) {
             target,
             verify_script,
         } => (CommandKind::To { target }, verify_script),
+        CliCommand::Compare {
+            targets,
+            verify_script,
+        } => (CommandKind::Compare { targets }, verify_script),
         CliCommand::Pm {
             command:
                 PackageManagerCommand::To {
@@ -194,19 +207,38 @@ fn interactive_approval(execution: &CommandExecution) -> io::Result<bool> {
         .get("source")
         .and_then(serde_json::Value::as_str)
         .unwrap_or("unknown");
-    let target = execution
-        .result
-        .summary
-        .get("target")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("unknown");
+    let target = execution.result.summary.get("target").map_or_else(
+        || {
+            execution
+                .result
+                .summary
+                .get("targets")
+                .and_then(serde_json::Value::as_array)
+                .map_or_else(
+                    || "unknown".to_owned(),
+                    |targets| {
+                        targets
+                            .iter()
+                            .filter_map(serde_json::Value::as_str)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    },
+                )
+        },
+        |target| target.as_str().unwrap_or("unknown").to_owned(),
+    );
     let trial = execution
         .result
         .summary
         .get("trial")
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
-    if trial {
+    if execution.result.command == "compare" {
+        eprintln!(
+            "Plan {plan_id} will compare {source} across {target} in independent isolated sandboxes."
+        );
+        eprint!("Run this exact comparison plan? [y/N] ");
+    } else if trial {
         eprintln!("Plan {plan_id} will trial {source} to {target} in an isolated sandbox.");
         eprint!("Run this exact trial plan? [y/N] ");
     } else {
@@ -224,7 +256,10 @@ fn interactive_approval(execution: &CommandExecution) -> io::Result<bool> {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let is_guided = matches!(cli.command, CliCommand::To { .. });
+    let is_guided = matches!(
+        cli.command,
+        CliCommand::To { .. } | CliCommand::Compare { .. }
+    );
     let (command, verification_scripts) = command_kind(cli.command);
     let mut options = CommandOptions::new(command, cli.cwd);
     options.state_directory = cli.state_dir;

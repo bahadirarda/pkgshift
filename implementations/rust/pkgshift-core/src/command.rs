@@ -18,9 +18,12 @@ use crate::transaction::{
 };
 use crate::util::{PkgshiftError, Result, resolve_root};
 
+mod comparison;
+
 #[derive(Debug, Clone)]
 pub enum CommandKind {
     Inspect,
+    Compare { targets: Vec<String> },
     Plan { target: String },
     To { target: String },
     Apply { plan_id: String },
@@ -967,6 +970,7 @@ fn support_command() -> Result<CommandExecution> {
 pub fn execute(options: &CommandOptions) -> CommandExecution {
     let command_name = match &options.command {
         CommandKind::Inspect => "inspect package-manager".to_owned(),
+        CommandKind::Compare { .. } => "compare".to_owned(),
         CommandKind::Plan { .. } => "plan package-manager".to_owned(),
         CommandKind::To { target } => format!("to {target}"),
         CommandKind::Apply { .. } => "apply".to_owned(),
@@ -976,6 +980,7 @@ pub fn execute(options: &CommandOptions) -> CommandExecution {
     };
     let execution = match &options.command {
         CommandKind::Inspect => inspect_command(&options.cwd),
+        CommandKind::Compare { targets } => comparison::comparison_command(options, targets),
         CommandKind::Plan { target } => plan_command(options, target),
         CommandKind::To { target } => guided_command(options, target),
         CommandKind::Apply { plan_id } => apply_command(options, plan_id),

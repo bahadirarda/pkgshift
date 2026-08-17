@@ -45,6 +45,10 @@ The implementation may add codes while preserving the following baseline familie
 | `VERIFICATION_SCRIPT_INVALID` | A requested representative root script name cannot be stored safely in the plan. |
 | `VERIFICATION_SCRIPT_NOT_FOUND` | The root package does not define the explicitly requested representative script. |
 | `SCRIPT_VERIFICATION_EXECUTION_FAILED` | The approved representative script process could not be started, observed, or bounded safely. |
+| `COMPARISON_TARGET_COUNT_INVALID` | Fewer than two distinct target adapters remain after normalization. |
+| `COMPARISON_CANDIDATE_BLOCKED` | A candidate remains visible in comparison evidence but cannot execute its isolated trial. |
+| `COMPARISON_NO_EXECUTABLE_TARGETS` | Every candidate target plan is capability-blocked. |
+| `COMPARISON_REPOSITORY_CHANGED` | Source repository evidence changed while isolated candidate trials were running. |
 | `LOCK_GRAPH_PARSE_FAILED` | A source or target lockfile could not produce a trustworthy normalized graph. |
 | `LOCK_GRAPH_FORMAT_UNSUPPORTED` | The lockfile format, including binary `bun.lockb`, cannot be proven safely. |
 | `PLAN_PRECONDITION_FAILED` | Repository evidence changed after planning. |

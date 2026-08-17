@@ -135,3 +135,8 @@ jobs:
         run: >-
           cargo test --package pkgshift --test e2e
           migrates_a_dependency_with_real_deno -- --ignored
+
+      - name: Compare real Bun and Deno trials
+        run: >-
+          cargo test --package pkgshift --test e2e
+          comparison::compares_real_bun_and_deno_trials -- --ignored --exact
