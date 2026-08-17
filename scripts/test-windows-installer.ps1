@@ -58,10 +58,26 @@ public static class PkgshiftInstallerFixture
     }
 }
 '@
-  Add-Type `
-    -TypeDefinition $fakeBinarySource `
-    -OutputAssembly (Join-Path $staging "pkgshift.exe") `
-    -OutputType ConsoleApplication
+  $fakeBinarySourcePath = Join-Path $root "pkgshift-installer-fixture.cs"
+  Set-Content -LiteralPath $fakeBinarySourcePath -Value $fakeBinarySource
+  $compilerCandidates = @(
+    (Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319\csc.exe"),
+    (Join-Path $env:WINDIR "Microsoft.NET\Framework\v4.0.30319\csc.exe")
+  )
+  $compiler = $compilerCandidates | Where-Object {
+    Test-Path -LiteralPath $_ -PathType Leaf
+  } | Select-Object -First 1
+  if (-not $compiler) {
+    throw "Windows installer test requires the .NET Framework C# compiler."
+  }
+  & $compiler `
+    /nologo `
+    /target:exe `
+    "/out:$(Join-Path $staging 'pkgshift.exe')" `
+    $fakeBinarySourcePath
+  if ($LASTEXITCODE -ne 0) {
+    throw "Windows installer fixture compilation failed."
+  }
   Set-Content -LiteralPath (Join-Path $skillSource "SKILL.md") -Value @"
 ---
 name: pkgshift
